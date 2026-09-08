@@ -1,6 +1,6 @@
 # Implementation and verification report
 
-Branch: `codex/emailsystem-platform`. Review: [PR #1](https://github.com/rahmon-tech/emailsystem/pull/1). The PR Checks tab identifies the exact current head and its CI result. The implementation is held on this review branch; `main` has not been updated.
+Branch: `main`. [PR #1](https://github.com/rahmon-tech/emailsystem/pull/1) was merged as `b1fda1ed437f86afbba2c245794dfc99b22a5c07`, preserving the verified application head `a59bc4391623dbaca76393645e4b2c5c69c456c7`. [Main branch CI runs](https://github.com/rahmon-tech/emailsystem/actions?query=branch%3Amain) record verification for subsequent commits.
 
 ## Architecture and implemented features
 
@@ -28,7 +28,7 @@ All SMTP connections use Nodemailer TLS/authentication verification and a separa
 
 ## Executed tests
 
-The code checkpoint `9e154e9e77c360be9fd2ddb96a0e6554e2ec4b0f` is recorded by [CI run 34267560407](https://github.com/rahmon-tech/emailsystem/actions/runs/34267560407). Subsequent review-branch updates run the same complete gates; use the current PR checks for the final head.
+The verified code checkpoint `a59bc4391623dbaca76393645e4b2c5c69c456c7` passed [CI run 34268761333](https://github.com/rahmon-tech/emailsystem/actions/runs/34268761333). The merge preserves that application tree. Subsequent documentation updates and main-branch pushes run the same complete gates; inspect the run for the exact commit selected for deployment.
 
 | Gate | Scope and result |
 | --- | --- |
@@ -39,7 +39,7 @@ The code checkpoint `9e154e9e77c360be9fd2ddb96a0e6554e2ec4b0f` is recorded by [C
 | Lint/type checking | Both pass. |
 | Production build | Next.js compilation, type checking and static generation pass. |
 | Fresh migrations | Both SQL migrations apply to fresh PostgreSQL; schema drift check passes. |
-| Production containers | Build, fresh database migrations, web/worker startup and dependency-aware readiness are exercised in CI. |
+| Production containers | Caddy configuration validation, image build, fresh database migrations, web/worker startup and dependency-aware readiness all pass. |
 
 Total: **101 automated tests**. Browser screenshots and failure traces are published as CI artifacts. The current workflow also validates the mounted Caddy configuration before starting production containers.
 
@@ -54,10 +54,10 @@ Unknown outcomes remain held for reconciliation. Imported Outlook conditional bl
 
 ## Exact first-deployment commands
 
-Use the review branch until its merge is approved. Replace `mail.your-domain.com` with the domain pointing to the VPS. The private repository requires normal GitHub access on that host.
+Deploy from `main`. Replace `mail.your-domain.com` with the domain pointing to the VPS. The private repository requires normal GitHub access on that host.
 
 ```sh
-git clone --branch codex/emailsystem-platform https://github.com/rahmon-tech/emailsystem.git
+git clone --branch main https://github.com/rahmon-tech/emailsystem.git
 cd emailsystem
 docker run --rm -u "$(id -u):$(id -g)" -v "$PWD:/app" -w /app node:24.19.0-bookworm-slim node --experimental-strip-types scripts/setup-env.ts mail.your-domain.com
 chmod 600 .env

@@ -2,7 +2,7 @@
 
 ## Repository and review
 
-The private repository `rahmon-tech/emailsystem` was originally empty. The directive is preserved in MASTER_DIRECTIVE.md. The application is on `codex/emailsystem-platform`, with [draft PR #1](https://github.com/rahmon-tech/emailsystem/pull/1). Automatic approval review rejected updating the default branch because publishing to `main` had not been explicitly authorized; the review branch provides the concrete implementation for approval.
+The private repository `rahmon-tech/emailsystem` was originally empty. The directive is preserved in MASTER_DIRECTIVE.md. After the user authorized continuation of the merge, [PR #1](https://github.com/rahmon-tech/emailsystem/pull/1) was merged into `main` as `b1fda1ed437f86afbba2c245794dfc99b22a5c07`. Its verified source head was `a59bc4391623dbaca76393645e4b2c5c69c456c7`. The earlier default-branch approval block is resolved.
 
 ## Implemented
 
@@ -10,15 +10,15 @@ Authentication and ownership; both PostgreSQL migrations; encrypted catalog conn
 
 ## Verification
 
-The recorded application checkpoint is `9e154e9e77c360be9fd2ddb96a0e6554e2ec4b0f`, [CI run 34267560407](https://github.com/rahmon-tech/emailsystem/actions/runs/34267560407). It passes 87 unit tests, 13 real PostgreSQL/Redis integration tests, one complete HTTPS browser workflow, type checking, lint, both fresh migrations/schema drift and the production Next.js build. The browser covers five requested viewport widths and proves work progresses after the worker restarts.
+The verified application checkpoint is `a59bc4391623dbaca76393645e4b2c5c69c456c7`, [CI run 34268761333](https://github.com/rahmon-tech/emailsystem/actions/runs/34268761333). It passes 87 unit tests, 13 real PostgreSQL/Redis integration tests, one complete HTTPS browser workflow, type checking, lint, both fresh migrations/schema drift, the production Next.js build, Caddy validation and Docker web/worker readiness. The browser captures populated screens at all five requested widths and proves work progresses after the worker restarts.
 
-Subsequent review changes preserve loaded recipient pages during polling, add populated-screen captures, validate the production Caddy configuration and complete the verification/deployment report. The current PR head runs the full CI workflow again. Consult its Checks tab for the exact head status; a prior passing commit does not stand in for that result.
+The merged application also preserves loaded recipient pages during polling. This documentation checkpoint changes only project status and deployment instructions to reflect `main`. Pushes to `main` run the complete CI workflow; [branch runs](https://github.com/rahmon-tech/emailsystem/actions?query=branch%3Amain) identify each resulting SHA and its exact verification status.
 
 See [VERIFICATION](VERIFICATION.md) for test scope, architecture, provider methods, production container checks, verification boundaries and exact deployment commands.
 
 ## Remaining external work
 
-Approval to merge the review branch; actual provider credentials/sending identities/controlled recipients for live acceptance and authenticated delivery proof; and VPS/domain access for a real deployment. No live provider or unseen VPS is claimed verified.
+Actual provider credentials/sending identities/controlled recipients are needed for live acceptance and authenticated delivery proof, along with VPS/domain access for a real deployment. No live provider or unseen VPS is claimed verified. The next external step is deployment and controlled live-provider onboarding using DEPLOYMENT.md and PROVIDERS.md.
 
 ## Continuation decisions
 
