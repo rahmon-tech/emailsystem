@@ -14,7 +14,7 @@ import {
   finishCampaigns,
   recoverStalled,
 } from "@emailsystem/core/engine";
-import { saveProvider } from "@emailsystem/core/providers";
+import { saveProvider, testProvider } from "@emailsystem/core/providers";
 import { importRecipients } from "@emailsystem/core/imports";
 import {
   getSafetySettings,
@@ -430,4 +430,44 @@ test("no healthy providers stop claims with a durable explanation, without failu
     }),
     1,
   );
+});
+
+test("controlled test sends consume safety capacity without entering campaign statistics", async () => {
+  const f = await fixture(1, { accountDaily: 1 });
+  await testProvider(f.user.id, f.provider.id, "controlled@example.net");
+  await assert.rejects(
+    () => testProvider(f.user.id, f.provider.id, "second@example.net"),
+    /Daily safety limit/,
+  );
+  await rebuildSafety(f.user.id);
+  const capacity = await safetyCapacity(f.user.id, f.input.from, f.campaign.id);
+  assert.equal(capacity.usage.find((b) => b.scope === "account")!.used, 1);
+  assert.equal(
+    capacity.usage.find((b) => b.scope.startsWith("campaign:"))!.used,
+    0,
+  );
+  await processDelivery(f.deliveries[0].id);
+  assert.equal(
+    await db.deliveryAttempt.count({ where: { userId: f.user.id } }),
+    0,
+  );
+});
+test("the minimum sample crossing on a later acceptance evaluates earlier complaints", async () => {
+  const f = await acceptedFixture(100);
+  const last = f.deliveries[99];
+  await db.deliveryAttempt.deleteMany({ where: { deliveryId: last.id } });
+  await db.delivery.update({
+    where: { id: last.id },
+    data: { state: "PENDING", acceptedAt: null },
+  });
+  await ingestEvent(f.provider.id, {
+    eventKey: "early-complaint",
+    messageId: f.deliveries[0].id,
+    recipient: f.deliveries[0].email,
+    kind: "complaint",
+    occurredAt: new Date(),
+  });
+  assert.equal((await getSafetySettings(f.user.id)).pausedReason, null);
+  await processDelivery(last.id);
+  assert.match((await getSafetySettings(f.user.id)).pausedReason!, /Complaint/);
 });

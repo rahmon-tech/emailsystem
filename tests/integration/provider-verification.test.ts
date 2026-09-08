@@ -1,5 +1,6 @@
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
+import { redis } from "@emailsystem/core/redis";
 import { db } from "@emailsystem/db";
 import {
   saveProvider,
@@ -26,6 +27,7 @@ before(async () => {
 after(async () => {
   if (userId) await db.user.delete({ where: { id: userId } });
   await db.$disconnect();
+  await redis.quit();
 });
 const responses: Record<string, unknown> = {
   resend: { data: [{ name: "example.com", status: "verified" }] },
