@@ -1,6 +1,6 @@
 # Implementation and verification report
 
-Branch: `main`. [PR #1](https://github.com/rahmon-tech/emailsystem/pull/1) was merged as `b1fda1ed437f86afbba2c245794dfc99b22a5c07`, preserving the verified application head `a59bc4391623dbaca76393645e4b2c5c69c456c7`. [Main branch CI runs](https://github.com/rahmon-tech/emailsystem/actions?query=branch%3Amain) record verification for subsequent commits.
+Branch: `main`. The platform was merged in [PR #1](https://github.com/rahmon-tech/emailsystem/pull/1); the provider addendum was merged in [PR #2](https://github.com/rahmon-tech/emailsystem/pull/2) as `6fbdf14e75608374c9ad1d40ca35b63696365250`. Its verified application source is `cc99461660d77163be6cea5aa915111f975c1177`, [CI run 34279952929](https://github.com/rahmon-tech/emailsystem/actions/runs/34279952929). [Main branch CI runs](https://github.com/rahmon-tech/emailsystem/actions?query=branch%3Amain) identify subsequent exact commits for deployment.
 
 ## Architecture and implemented features
 
@@ -30,24 +30,22 @@ All SMTP connections use Nodemailer TLS/authentication verification and a separa
 
 The catalog now owns credential help, typed authentication, explicit SMTP port/TLS pairs, regional routing, verification strategies and test capabilities. Both Postmark SMTP modes/hosts are covered. Brevo format-only validation and explicit Resend tests have distinct behavior. A third additive migration records controlled-test mode without guessing historical values. New database integration cases verify each provider's persisted state, encryption, pool eligibility and isolated test records. Browser coverage exercises all ten provider forms and Postmark credential changes.
 
-Local lint/type checks and 117 unit tests pass. The branch's GitHub Actions run is the authority for PostgreSQL/Redis integration, fresh migration/schema drift, production browser and container gates. Results below describe the previous released checkpoint until the new run completes.
+## Executed tests
 
-## Previous released checkpoint
-
-The verified code checkpoint `a59bc4391623dbaca76393645e4b2c5c69c456c7` passed [CI run 34268761333](https://github.com/rahmon-tech/emailsystem/actions/runs/34268761333). The merge preserves that application tree. Subsequent documentation updates and main-branch pushes run the same complete gates; inspect the run for the exact commit selected for deployment.
+The verified application source above passes the complete workflow. Subsequent documentation changes preserve the application code and run the same gates.
 
 | Gate | Scope and result |
 | --- | --- |
-| Unit tests | **87 passed.** Domain transitions, HTML isolation, cryptography, every provider's API/SMTP contracts and verification, safe errors, signatures, recipient event correlation and SMTP deadlines. Provider transports are mocked. |
-| Integration tests | **13 passed.** Real PostgreSQL and Redis; MockProvider or injected transport outcomes. Concurrent claims, idempotent start, tenant isolation/CSRF, cancel during sends, early/duplicate events, retry, unknown recovery, suppression, XLSX import, shared rate/concurrency/fairness and quota reservations. |
-| Browser workflow | **1 passed.** Real production Next.js/HTTPS, PostgreSQL, Redis and workers with MockProvider. Login, invalid-form feedback, provider setup/verification/test, CSV deduplication, rich text/HTML import, mobile/desktop preview, pre-flight, delivered events, pause/resume/cancel, export and worker restart followed by confirmed progress. |
+| Unit tests | **117 passed.** Domain transitions, HTML isolation, cryptography, every provider's API/SMTP contracts and verification, safe errors, signatures, recipient event correlation and SMTP deadlines. Exact API/SMTP hosts, auth, regions, every port/TLS pairing, Postmark modes and unsupported native-test rejection are included. Provider transports are mocked. |
+| Integration tests | **36 passed.** Real PostgreSQL and Redis; MockProvider or injected transport outcomes. Concurrent claims, idempotent start, tenant isolation/CSRF, cancel during sends, early/duplicate events, retry, unknown recovery, suppression, XLSX import, shared rate/concurrency/fairness and quota reservations. New cases verify saved credentials/state for every provider, SMTP no-send verification, pool exclusion and independent test records. |
+| Browser workflow | **1 passed.** Real production Next.js/HTTPS, PostgreSQL, Redis and workers with MockProvider. Login, invalid-form feedback, all ten provider forms, Postmark credential/stream modes, provider setup/verification/test, CSV deduplication, rich text/HTML import, mobile/desktop preview, pre-flight, delivered events, pause/resume/cancel, export and worker restart followed by confirmed progress. |
 | Responsive UI | Providers, Blast and Activity checked at **390, 430, 768, 1366 and 1536 px**, with overflow assertions and screenshots. |
 | Lint/type checking | Both pass. |
 | Production build | Next.js compilation, type checking and static generation pass. |
-| Fresh migrations | Both SQL migrations apply to fresh PostgreSQL; schema drift check passes. |
+| Fresh migrations | All three SQL migrations apply to fresh PostgreSQL; schema drift check passes. |
 | Production containers | Caddy configuration validation, image build, fresh database migrations, web/worker startup and dependency-aware readiness all pass. |
 
-Total: **101 automated tests**. Browser screenshots and failure traces are published as CI artifacts. The current workflow also validates the mounted Caddy configuration before starting production containers.
+Total: **154 automated tests**. Browser screenshots and failure traces are published as CI artifacts. The current workflow also validates the mounted Caddy configuration before starting production containers.
 
 ## Verification boundaries
 

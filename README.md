@@ -70,3 +70,4 @@ Implementation and verification status are recorded in [CURRENT_WORK](docs/CURRE
 - [Security and operational limits](docs/SECURITY.md)
 - [Deployment, migration, backup and restore](docs/DEPLOYMENT.md)
 - [Original engineering directive](docs/MASTER_DIRECTIVE.md)
+- [Provider catalog addendum](docs/PROVIDER_CATALOG_ADDENDUM.md)

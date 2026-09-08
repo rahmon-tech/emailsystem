@@ -1,29 +1,31 @@
 # Current work
 
-## Repository and review
+## Repository and completed changes
 
-The private repository `rahmon-tech/emailsystem` was originally empty. The directive is preserved in MASTER_DIRECTIVE.md. After the user authorized continuation of the merge, [PR #1](https://github.com/rahmon-tech/emailsystem/pull/1) was merged into `main` as `b1fda1ed437f86afbba2c245794dfc99b22a5c07`. Its verified source head was `a59bc4391623dbaca76393645e4b2c5c69c456c7`. The earlier default-branch approval block is resolved.
+EmailSystem is maintained in the private repository `rahmon-tech/emailsystem`. The original platform was merged in [PR #1](https://github.com/rahmon-tech/emailsystem/pull/1). The provider catalog addendum is integrated and merged in [PR #2](https://github.com/rahmon-tech/emailsystem/pull/2), merge commit `6fbdf14e75608374c9ad1d40ca35b63696365250`.
+
+The verified application source is `cc99461660d77163be6cea5aa915111f975c1177`, [CI run 34279952929](https://github.com/rahmon-tech/emailsystem/actions/runs/34279952929). Subsequent documentation commits preserve that application and run the same full workflow. [Main branch runs](https://github.com/rahmon-tech/emailsystem/actions?query=branch%3Amain) identify the exact SHA to deploy.
 
 ## Implemented
 
-Authentication and ownership; all PostgreSQL migrations; encrypted catalog connections and all required API/SMTP adapters; native verification and controlled tests; imports and deduplication; rich text/source composer and sanitized immutable snapshots; durable preparation and BullMQ dispatch; weighted Redis limits, quota reservation, cooldowns and bounded retries; unknown reconciliation; authenticated webhooks, suppression and unsubscribe; Activity, controls, filtering and export; production Docker/Caddy configuration; documentation and CI.
+Authentication and ownership; three PostgreSQL migrations; encrypted catalog connections and all required API/SMTP adapters; provider verification and controlled tests; imports and deduplication; rich text/source composer and sanitized immutable snapshots; durable preparation and BullMQ dispatch; weighted Redis limits, quota reservation, cooldowns and bounded retries; unknown reconciliation; authenticated webhooks, suppression and unsubscribe; Activity, controls, filtering and export; production Docker/Caddy configuration; documentation and CI.
+
+The provider addendum adds central typed authentication/credential fields and help links, regional endpoints, explicit SMTP port/TLS pairs, native verification strategies and test capabilities. Both Postmark SMTP hosts and credential modes are supported; campaigns remain Broadcast-only. Resend Save & Verify never sends. Brevo sandbox validates format without establishing send permission. Controlled-test mode is persisted separately from campaign statistics, with unknown mode retained for historical test rows. Rate limits, enforcement, missing permission and invalid credentials have distinct verification outcomes.
+
+The directives are preserved in MASTER_DIRECTIVE.md and PROVIDER_CATALOG_ADDENDUM.md. PROVIDERS.md contains setup instructions, current official references and documented differences, including the unconfirmed advanced SMTP2GO TLS port 443.
 
 ## Verification
 
-The verified application checkpoint is `a59bc4391623dbaca76393645e4b2c5c69c456c7`, [CI run 34268761333](https://github.com/rahmon-tech/emailsystem/actions/runs/34268761333). It passes 87 unit tests, 13 real PostgreSQL/Redis integration tests, one complete HTTPS browser workflow, type checking, lint, both fresh migrations/schema drift, the production Next.js build, Caddy validation and Docker web/worker readiness. The browser captures populated screens at all five requested widths and proves work progresses after the worker restarts.
+**154 automated tests pass:** 117 unit tests, 36 integration tests using real PostgreSQL/Redis, and one production HTTPS browser workflow. Provider transports are mocked. Tests cover literal API/SMTP endpoints, credentials, regions, TLS pairings, no-send verification, persisted provider states, ownership-bound encryption, eligibility, independent controlled tests and the complete campaign workflow.
 
-The merged application also preserves loaded recipient pages during polling. This documentation checkpoint changes only project status and deployment instructions to reflect `main`. Pushes to `main` run the complete CI workflow; [branch runs](https://github.com/rahmon-tech/emailsystem/actions?query=branch%3Amain) identify each resulting SHA and its exact verification status.
+Lint/type checking, three fresh migrations and schema drift, production Next.js build, Caddy validation, Docker image build and web/worker readiness pass. Browser checks exercise all ten provider forms, Postmark credential/stream changes and populated Providers/Blast/Activity pages at 390, 430, 768, 1366 and 1536 pixels. Worker restart/recovery remains covered.
 
-See [VERIFICATION](VERIFICATION.md) for test scope, architecture, provider methods, production container checks, verification boundaries and exact deployment commands.
+See VERIFICATION.md for exact scope and the deployment commands.
 
 ## Remaining external work
 
-Actual provider credentials/sending identities/controlled recipients are needed for live acceptance and authenticated delivery proof, along with VPS/domain access for a real deployment. No live provider or unseen VPS is claimed verified. The next external step is deployment and controlled live-provider onboarding using DEPLOYMENT.md and PROVIDERS.md.
+Live account credentials, verified sending identities, quota, notification configuration and controlled recipients are needed to prove real provider acceptance and delivery. VPS/domain access is needed for an actual deployment. No live provider or unseen VPS is claimed verified. Follow DEPLOYMENT.md and PROVIDERS.md for that onboarding.
 
 ## Continuation decisions
 
-PostgreSQL owns durable truth; Redis coordinates work. Unknown sends stop for reconciliation. Provider acceptance and confirmed delivery are separate. SMTP has a whole-operation deadline below its concurrency lease. Authenticated recipient notifications and unsubscribe are idempotent. Imported HTML remains HTML; unsupported Outlook conditional blocks are removed with a warning. Mock connections require explicit configuration. TypeScript 6/ESLint 9 are pinned for the installed Next.js lint dependencies. Repository-backed code is maintained in GitHub.
-
-## Provider catalog addendum (2026-09-08)
-
-Integrated into the existing application: typed centralized auth/credential metadata and help links; exact SMTP port/TLS pairs including Mailjet alternatives; both Postmark SMTP hosts and credential modes; explicit Resend testing; Brevo format-only sandbox validation; persisted controlled-test mode; and deterministic endpoint/auth/region plus real-database verification-state coverage. Transactional Postmark connections stay outside campaign routing. The addendum is preserved in PROVIDER_CATALOG_ADDENDUM.md and setup/deviations are documented in PROVIDERS.md. Full CI verifies this follow-up before publication to main.
+PostgreSQL owns durable truth; Redis coordinates work. Unknown sends stop for reconciliation. Provider acceptance and confirmed delivery are separate. SMTP has an overall deadline below its concurrency lease and requires validated TLS. Recipient events and unsubscribe remain idempotent. Imported HTML remains HTML; unsupported Outlook conditional blocks are removed with a warning. Mock connections require explicit configuration. Repository-backed code is maintained in GitHub.
