@@ -1,6 +1,7 @@
 name: Verify EmailSystem
 on:
   push:
+    branches: [main]
   pull_request:
 permissions:
   contents: read
@@ -18,13 +19,13 @@ jobs:
           POSTGRES_DB: emailsystem_test
           POSTGRES_USER: emailsystem
           POSTGRES_PASSWORD: ephemeral-ci-only
-        ports: ['5432:5432']
+        ports: ["5432:5432"]
         options: >-
           --health-cmd "pg_isready -U emailsystem -d emailsystem_test"
           --health-interval 5s --health-timeout 5s --health-retries 15
       redis:
         image: redis:7.4-alpine
-        ports: ['6379:6379']
+        ports: ["6379:6379"]
         options: >-
           --health-cmd "redis-cli ping"
           --health-interval 5s --health-timeout 5s --health-retries 15
@@ -32,15 +33,15 @@ jobs:
       DATABASE_URL: postgresql://emailsystem:ephemeral-ci-only@localhost:5432/emailsystem_test
       REDIS_URL: redis://localhost:6379
       APP_URL: https://localhost:3443
-      ALLOW_MOCK_PROVIDER: 'true'
-      NEXT_TELEMETRY_DISABLED: '1'
+      ALLOW_MOCK_PROVIDER: "true"
+      NEXT_TELEMETRY_DISABLED: "1"
       NODE_ENV: test
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '24.19.0'
+          node-version: "24.19.0"
           cache: pnpm
       - name: Generate ephemeral application keys
         run: |

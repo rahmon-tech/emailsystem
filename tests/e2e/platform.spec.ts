@@ -14,6 +14,11 @@ test("login, provider setup, HTML import, preview, test, campaign controls, reco
   await expect(page.getByText("No providers configured yet.")).toBeVisible();
   await page.getByRole("button", { name: /Development Mock/ }).click();
   await page.getByLabel("Connection name").fill("Browser verification");
+  await page.getByLabel("From email").fill("invalid-address");
+  await page
+    .getByRole("button", { name: "Save & Verify", exact: true })
+    .click();
+  await expect(page.getByRole("alert")).toContainText(/email/i);
   await page.getByLabel("From email").fill("sender@example.com");
   await page
     .getByRole("button", { name: "Save & Verify", exact: true })
@@ -29,7 +34,9 @@ test("login, provider setup, HTML import, preview, test, campaign controls, reco
   await page
     .getByRole("button", { name: "Send Test Email", exact: true })
     .click();
-  await expect(page.getByText("accepted", { exact: true })).toBeVisible();
+  await expect(
+    page.getByText("Provider accepted the test", { exact: true }),
+  ).toBeVisible();
   await page.getByRole("button", { name: "Close", exact: true }).click();
   await page.goto("/blast");
   await page.getByLabel("Recipient file").setInputFiles({
@@ -142,12 +149,25 @@ test("login, provider setup, HTML import, preview, test, campaign controls, reco
     .poll(() => Number(readFileSync("/tmp/emailsystem-e2e-worker.pid", "utf8")))
     .not.toBe(oldPid);
   await page.reload();
+  const acceptedBefore = (
+    await (await context.request.get("/api/campaigns/" + started.id)).json()
+  ).acceptedCount;
   await page
     .getByRole("button", { name: "Resume campaign", exact: true })
     .click();
   await expect(
     page.getByRole("button", { name: "Pause campaign", exact: true }),
   ).toBeVisible();
+  await expect
+    .poll(
+      async () =>
+        (
+          await (
+            await context.request.get("/api/campaigns/" + started.id)
+          ).json()
+        ).acceptedCount,
+    )
+    .toBeGreaterThan(acceptedBefore);
   await page
     .getByRole("button", { name: "Cancel campaign", exact: true })
     .click();

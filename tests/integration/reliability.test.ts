@@ -392,3 +392,21 @@ test("quota reservations across connections prevent concurrent overspending", as
     2,
   );
 });
+
+test("repeated one-click unsubscribe preserves one event and an unsubscribed recipient state", async () => {
+  const f = await fixture();
+  const d = f.deliveries[0];
+  await processDelivery(d.id);
+  await unsubscribe(d.unsubscribeToken);
+  await unsubscribe(d.unsubscribeToken);
+  assert.equal(
+    (await db.delivery.findUniqueOrThrow({ where: { id: d.id } })).state,
+    "UNSUBSCRIBED",
+  );
+  assert.equal(
+    await db.activityEvent.count({
+      where: { deliveryId: d.id, kind: "UNSUBSCRIBED" },
+    }),
+    1,
+  );
+});

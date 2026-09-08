@@ -200,7 +200,7 @@ export function normalizeWebhook(
     entries = [JSON.parse(text(outer.Message))];
     requestId = text(outer.MessageId);
   }
-  for (const [i, value] of entries.entries()) {
+  for (const value of entries) {
     const event = obj(value);
     let name = "",
       id = "",
@@ -209,6 +209,7 @@ export function normalizeWebhook(
       attempt = "",
       stamp: unknown;
     let bounceType = "";
+    let eventRecipients: string[] = [];
     if (type === "resend") {
       const d = obj(event.data);
       name = text(event.type).replace("email.", "");
@@ -234,7 +235,7 @@ export function normalizeWebhook(
       eventId = text(event.sg_event_id);
       attempt = text(event.es_attempt);
       stamp = event.timestamp;
-      bounceType = text(event.type);
+      bounceType = /^5/.test(text(event.status)) ? "hard" : text(event.type);
     } else if (type === "postmark") {
       name = text(event.RecordType).toLowerCase();
       id = text(event.MessageID);
@@ -281,6 +282,11 @@ export function normalizeWebhook(
       const recipients = list(obj(event.bounce).bouncedRecipients).concat(
         list(obj(event.complaint).complainedRecipients),
       );
+      eventRecipients = recipients.length
+        ? recipients.map((r) => text(obj(r).emailAddress))
+        : list(obj(event.delivery).recipients).length
+          ? list(obj(event.delivery).recipients).map(text)
+          : list(obj(event.mail).destination).map(text);
       recipient = text(
         obj(recipients[0]).emailAddress ??
           list(obj(event.delivery).recipients)[0] ??
@@ -294,6 +300,21 @@ export function normalizeWebhook(
       attempt = text(event.attemptId);
       stamp = event.timestamp;
     }
+    const rfcId =
+      type === "ses"
+        ? text(obj(obj(event.mail).commonHeaders).messageId) ||
+          text(
+            obj(
+              list(obj(event.mail).headers).find(
+                (h) => text(obj(h).name).toLowerCase() === "message-id",
+              ),
+            ).value,
+          )
+        : text(event["message-id"]) || id;
+    attempt ||=
+      rfcId.match(
+        /^<?([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})@[^>\s]+>?$/i,
+      )?.[1] ?? "";
     const map: Record<string, EventKind> = {
       sent: type === "elastic" || type === "mailjet" ? "delivered" : "accepted",
       send: "accepted",
@@ -338,16 +359,21 @@ export function normalizeWebhook(
     const key =
       eventId ||
       createHash("sha256")
-        .update([type, id, recipient, name, text(stamp), String(i)].join("|"))
+        .update([type, id, recipient, name, text(stamp)].join("|"))
         .digest("hex");
-    output.push({
-      eventKey: key,
-      messageId: id,
-      recipient: recipient ? recipient.toLowerCase() : undefined,
-      attemptId: attempt || undefined,
-      kind,
-      occurredAt,
-    });
+    for (const address of eventRecipients.length
+      ? [...new Set(eventRecipients)]
+      : [recipient])
+      output.push({
+        eventKey: eventRecipients.length
+          ? key + ":" + address.toLowerCase()
+          : key,
+        messageId: id,
+        recipient: address ? address.toLowerCase() : undefined,
+        attemptId: attempt || undefined,
+        kind,
+        occurredAt,
+      });
   }
   return output;
 }

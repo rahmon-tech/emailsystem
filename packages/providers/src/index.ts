@@ -8,6 +8,7 @@ import {
   SendEmailCommand,
 } from "@aws-sdk/client-sesv2";
 import { lookup } from "node:dns/promises";
+import { Socket } from "node:net";
 import ipaddr from "ipaddr.js";
 import { catalog, connectionSchema, endpoints, definition } from "./catalog";
 import type { Connection } from "./catalog";
@@ -385,12 +386,54 @@ export async function publicSmtpAddress(host: string) {
     throw new Error("SMTP host resolves to a non-public network");
   return addresses[0].address;
 }
-async function smtp(c: Connection, deps: Dependencies) {
-  if (deps.smtp) return deps.smtp();
-  const ep = endpoints(c);
-  if (!ep.smtpHost) throw new Error("Missing SMTP hostname");
-  const address = await publicSmtpAddress(ep.smtpHost);
-  return nodemailer.createTransport(buildSmtpOptions(c, address));
+async function withSmtp<T>(
+  c: Connection,
+  deps: Dependencies,
+  operation: (
+    transport: ReturnType<typeof nodemailer.createTransport>,
+  ) => Promise<T>,
+): Promise<T> {
+  // SMTP inactivity timers alone allow a slow peer to outlive the 120s lease.
+  // Bound the whole operation, including DNS, and tear down the actual socket.
+  let socket: Socket | undefined;
+  let transport: ReturnType<typeof nodemailer.createTransport> | undefined;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 90000);
+  timer.unref();
+  const expired = new Promise<never>((_, reject) => {
+    controller.signal.addEventListener(
+      "abort",
+      () => {
+        socket?.destroy();
+        reject(new Error("SMTP operation exceeded its deadline"));
+      },
+      { once: true },
+    );
+  });
+  try {
+    return await Promise.race([
+      expired,
+      (async () => {
+        if (deps.smtp) transport = deps.smtp();
+        else {
+          const ep = endpoints(c);
+          if (!ep.smtpHost) throw new Error("Missing SMTP hostname");
+          const address = await publicSmtpAddress(ep.smtpHost);
+          controller.signal.throwIfAborted();
+          socket = new Socket();
+          transport = nodemailer.createTransport({
+            ...buildSmtpOptions(c, address),
+            socket,
+          });
+        }
+        return operation(transport);
+      })(),
+    ]);
+  } finally {
+    clearTimeout(timer);
+    socket?.destroy();
+    transport?.close();
+  }
 }
 export function buildSmtpOptions(
   c: Connection,
@@ -507,8 +550,7 @@ export async function send(
       return { status: "accepted", providerMessageId: "mock-" + ctx.attemptId };
     }
     if (c.transport === "smtp") {
-      const transport = await smtp(c, deps);
-      try {
+      return await withSmtp(c, deps, async (transport) => {
         const result = await transport.sendMail(mailOptions(m, ctx, c));
         const accepted = (result.accepted ?? []).map((v: unknown) =>
           typeof v === "string" ? v : obj(v).address,
@@ -519,9 +561,7 @@ export async function send(
             error: normalizeError(accepted.length ? undefined : 550),
           };
         return { status: "accepted", providerMessageId: result.messageId };
-      } finally {
-        transport.close();
-      }
+      });
     }
     if (c.type === "ses") {
       const raw = await new MailComposer(mailOptions(m, ctx, c))
@@ -653,8 +693,7 @@ export async function verifyConnection(
       );
     }
     if (c.transport === "smtp") {
-      const transport = await smtp(c, deps);
-      try {
+      return await withSmtp(c, deps, async (transport) => {
         await transport.verify();
         return result(
           "HEALTHY",
@@ -670,9 +709,7 @@ export async function verifyConnection(
             "SMTP authentication does not prove sender or recipient acceptance. Use Send Test Email.",
           ),
         );
-      } finally {
-        transport.close();
-      }
+      });
     }
     if (c.type === "ses") {
       const client = ses(c, deps, 5000);

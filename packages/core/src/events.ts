@@ -123,6 +123,17 @@ export async function applyEvent(id: string) {
       where: { id: delivery.id },
       data: {
         state,
+        ...([
+          "accepted",
+          "delivered",
+          "hard_bounce",
+          "soft_bounce",
+          "complaint",
+          "open",
+          "click",
+        ].includes(event.kind)
+          ? { acceptedAt: delivery.acceptedAt ?? event.occurredAt }
+          : {}),
         ...(state === "DELIVERED"
           ? {
               deliveredAt: event.occurredAt,
@@ -134,7 +145,17 @@ export async function applyEvent(id: string) {
           : {}),
       },
     });
-    if (["accepted", "delivered"].includes(event.kind))
+    if (
+      [
+        "accepted",
+        "delivered",
+        "hard_bounce",
+        "soft_bounce",
+        "complaint",
+        "open",
+        "click",
+      ].includes(event.kind)
+    )
       await tx.deliveryAttempt.update({
         where: { id: attempt.id },
         data: {
@@ -191,6 +212,9 @@ export async function unsubscribe(token: string) {
   await db.$transaction(async (tx) => {
     await lockCampaign(tx, d.campaignId);
     await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${d.userId + ":" + d.email},0))::text`;
+    const existed = await tx.suppression.findUnique({
+      where: { userId_email: { userId: d.userId, email: d.email } },
+    });
     await tx.suppression.upsert({
       where: { userId_email: { userId: d.userId, email: d.email } },
       create: { userId: d.userId, email: d.email, reason: "unsubscribe" },
@@ -204,6 +228,14 @@ export async function unsubscribe(token: string) {
       },
       data: { state: "SUPPRESSED" },
     });
+    const current = await tx.delivery.findUniqueOrThrow({
+      where: { id: d.id },
+    });
+    await tx.delivery.update({
+      where: { id: d.id },
+      data: { state: deliveryAfterEvent(current.state, "unsubscribe") },
+    });
+    if (existed?.reason === "unsubscribe") return;
     await tx.activityEvent.create({
       data: {
         userId: d.userId,

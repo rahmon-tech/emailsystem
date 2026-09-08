@@ -191,3 +191,23 @@ test("HTTP validation errors never use SMTP temporary classification", () => {
     "temporary",
   );
 });
+test("SMTP exceeding the overall deadline is unknown and is closed before the worker lease expires", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  let closed = 0;
+  const pending = send(
+    { ...connection("smtp"), transport: "smtp" },
+    message,
+    { attemptId: "deadline", idempotencyKey: "deadline" },
+    {
+      smtp: () => ({
+        sendMail: () => new Promise(() => {}),
+        close: () => closed++,
+      }),
+    } as unknown as Dependencies,
+  );
+  t.mock.timers.tick(90000);
+  const result = await pending;
+  assert.equal(result.status, "unknown");
+  assert.equal(result.error?.category, "unknown");
+  assert.equal(closed, 1);
+});

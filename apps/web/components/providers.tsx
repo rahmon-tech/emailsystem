@@ -802,21 +802,22 @@ function TestDialog({
             value={recipient}
             onChange={(e) => setRecipient(e.target.value)}
           />
-          {["mailgun", "mailjet"].includes(row.type) && (
-            <FormControlLabel
-              control={
-                <Switch
-                  checked={testMode}
-                  onChange={(_, checked) => setTestMode(checked)}
-                />
-              }
-              label={
-                row.type === "mailgun"
-                  ? "Use non-delivery test mode (may be billed)"
-                  : "Use Sandbox Mode (no delivery)"
-              }
-            />
-          )}{" "}
+          {row.transport === "api" &&
+            ["mailgun", "mailjet"].includes(row.type) && (
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={testMode}
+                    onChange={(_, checked) => setTestMode(checked)}
+                  />
+                }
+                label={
+                  row.type === "mailgun"
+                    ? "Use non-delivery test mode (may be billed)"
+                    : "Use Sandbox Mode (no delivery)"
+                }
+              />
+            )}{" "}
           {result && (
             <Alert
               severity={result.status === "accepted" ? "success" : "warning"}
