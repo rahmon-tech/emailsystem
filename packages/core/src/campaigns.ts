@@ -153,14 +153,9 @@ export async function preflight(userId: string, input: unknown) {
       availableUnits: Math.min(
         safety.available,
         campaignLimit ?? Infinity,
-        Math.max(
-          0,
-          ...safety.providerUsage
-            .filter((b) =>
-              providers.some((p) => b.scope === "provider:" + p.id),
-            )
-            .map((b) => b.limit! - b.used),
-        ),
+        safety.providerUsage
+          .filter((b) => providers.some((p) => b.scope === "provider:" + p.id))
+          .reduce((total, b) => total + Math.max(0, b.limit! - b.used), 0),
       ),
       campaignDaily: campaignLimit,
     },

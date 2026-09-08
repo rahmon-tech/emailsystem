@@ -107,7 +107,7 @@ for _,r in ipairs(cjson.decode(ARGV[2])) do
   if r.token then pending[r.token]={at=r.at,cost=r.cost,scopes=r.scopes} end
  end
 end
-redis.call('HSET',key,'ready','1');persist();return 1
+redis.call('HSET',key,'ready',now);persist();return 1
 `;
 export class RollingGovernor {
   readonly key: string;
@@ -122,7 +122,8 @@ export class RollingGovernor {
     return this.clock ? String(this.clock()) : "";
   }
   async ready() {
-    return Boolean(await this.client.hget(this.key, "ready"));
+    const built = Number(await this.client.hget(this.key, "ready"));
+    return built > (this.clock?.() ?? Date.now()) - WINDOW_MS;
   }
   async restore(rows: RestoredUsage[]) {
     await this.client.eval(

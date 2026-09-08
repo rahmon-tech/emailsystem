@@ -286,3 +286,13 @@ export async function safetyCapacity(
     { timeout: 60000 },
   );
 }
+
+export async function wakeSafetyWaiters(
+  tx: Prisma.TransactionClient,
+  userId: string,
+) {
+  await tx.campaign.updateMany({
+    where: { userId, safetyWaitReason: DAILY_WAIT },
+    data: { safetyWaitUntil: null, safetyWaitReason: null },
+  });
+}

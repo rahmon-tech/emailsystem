@@ -15,6 +15,7 @@ import {
   commonBudgets,
   senderDomain,
   waitForSafety,
+  wakeSafetyWaiters,
 } from "./safety";
 import { safetySettings, messageCost } from "./safety-config";
 import type { Candidate } from "./dispatcher";
@@ -52,6 +53,7 @@ export async function processDelivery(
   let candidate: Candidate | undefined;
   let quotaPeers: string[] = [];
   let transmitted = false;
+  let permitAt = 0;
   try {
     const claimed = await db.$transaction(
       async (tx) => {
@@ -205,6 +207,7 @@ export async function processDelivery(
             (p.settings as ConnectionInput["settings"]).region,
           ),
         }));
+        permitAt = Date.now();
         const chosen = await acquireProvider(
           initial.userId,
           candidates,
@@ -321,6 +324,7 @@ export async function processDelivery(
         });
         if (
           a.state !== "RESERVED" ||
+          Date.now() - permitAt > 20000 ||
           !["QUEUED", "SENDING"].includes(c.state) ||
           user.safetyPausedReason ||
           c.safetyPausedReason ||
@@ -546,9 +550,11 @@ export async function processDelivery(
               data: { quotaRemaining: { increment: cost } },
             });
             await ensureGovernor(tx, initial.userId, clock, true);
+            await wakeSafetyWaiters(tx, initial.userId);
           } else if (!a) {
             const governor = await ensureGovernor(tx, initial.userId, clock);
-            await governor.release(attemptId);
+            if (await governor.release(attemptId))
+              await wakeSafetyWaiters(tx, initial.userId);
           }
         },
         { timeout: 60000 },
@@ -627,6 +633,7 @@ export async function recoverStalled() {
           data: { quotaRemaining: { increment: reserved.messageUnits } },
         });
         await ensureGovernor(tx, d.userId, undefined, true);
+        await wakeSafetyWaiters(tx, d.userId);
         return;
       }
       const n = await tx.delivery.updateMany({
