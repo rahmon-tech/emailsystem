@@ -41,6 +41,7 @@ test("login, provider setup, HTML import, preview, test, campaign controls, reco
   await page.screenshot({
     path: "test-results/provider-connected.png",
     fullPage: true,
+    animations: "disabled",
   });
   await page.goto("/blast");
   await page.getByLabel("Recipient file").setInputFiles({
@@ -90,6 +91,7 @@ test("login, provider setup, HTML import, preview, test, campaign controls, reco
   await page.screenshot({
     path: "test-results/blast-preflight.png",
     fullPage: true,
+    animations: "disabled",
   });
   await page
     .getByRole("button", { name: "Send campaign", exact: true })
@@ -111,6 +113,7 @@ test("login, provider setup, HTML import, preview, test, campaign controls, reco
   await page.screenshot({
     path: "test-results/activity-delivered.png",
     fullPage: true,
+    animations: "disabled",
   });
   const exported = await context.request.get(
     `/api/campaigns/${campaignId}/export`,
@@ -204,9 +207,18 @@ test("login, provider setup, HTML import, preview, test, campaign controls, reco
         await expect(
           page.getByRole("log", { name: "Campaign events" }),
         ).toContainText("DELIVERED");
+      else if (route === "/providers")
+        await expect(
+          page.getByText("Browser verification", { exact: true }),
+        ).toBeVisible();
+      else
+        await expect(page.getByLabel("From email")).toHaveValue(
+          "sender@example.com",
+        );
       await page.screenshot({
         path: `test-results/${route.slice(1)}-${width}.png`,
         fullPage: true,
+        animations: "disabled",
       });
       expect(
         await page.evaluate(
