@@ -51,6 +51,11 @@ type Flight = {
   problems: string[];
   warnings: string[];
   count: number;
+  safety: {
+    campaignUnits: number;
+    availableUnits: number;
+    campaignDaily: number | null;
+  };
   providers: { id: string; name: string }[];
   previewHtml: string;
   text: string;
@@ -705,6 +710,16 @@ export function Blast() {
                     </Typography>
                   )}
                 </Alert>
+              )}
+              {flight && (
+                <Typography variant="body2" color="text.secondary">
+                  {flight.safety.campaignUnits.toLocaleString()} campaign units
+                  · {flight.safety.availableUnits.toLocaleString()} available
+                  now
+                  {flight.safety.campaignUnits > flight.safety.availableUnits
+                    ? ". Remaining recipients queue as capacity becomes available."
+                    : "."}
+                </Typography>
               )}
               {flight?.warnings.map((w) => (
                 <Alert key={w} severity="info">

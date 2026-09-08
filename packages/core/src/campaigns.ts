@@ -1,3 +1,5 @@
+import { lockSafety, safetyCapacity } from "./safety";
+import { dailyBudget, messageCost } from "./safety-config";
 import { db } from "@emailsystem/db";
 import type { CampaignState, Prisma } from "@emailsystem/db";
 import { z } from "zod";
@@ -44,6 +46,7 @@ export const messageInput = z
       )
       .max(5)
       .default([]),
+    dailyBudget: dailyBudget.nullable().optional(),
     scheduledAt: z.iso.datetime().optional(),
     startKey: z.uuid().optional(),
     tags: z.array(headerText.max(40)).max(10).default([]),
@@ -103,6 +106,19 @@ export async function preflight(userId: string, input: unknown) {
     problems.push(
       "Verify at least one provider configured with this From address.",
     );
+  const safety = await safetyCapacity(userId, data.from);
+  const campaignLimit =
+    data.dailyBudget === undefined ? safety.campaignDefault : data.dailyBudget;
+  const cost = messageCost(data);
+  if (
+    [...safety.usage.map((b) => b.limit), campaignLimit].some(
+      (limit) => limit !== null && limit < cost,
+    )
+  )
+    problems.push(
+      "A safety budget is too small for one message and its copies. Raise it or remove copies.",
+    );
+  if (safety.pausedReason) problems.push(safety.pausedReason);
   const snapshot = normalizeEmail(data.html, data.preheader);
   if (!snapshot.text.trim())
     problems.push("The email body is empty after safety checks.");
@@ -132,6 +148,22 @@ export async function preflight(userId: string, input: unknown) {
         : []),
     ],
     count,
+    safety: {
+      campaignUnits: count * cost,
+      availableUnits: Math.min(
+        safety.available,
+        campaignLimit ?? Infinity,
+        Math.max(
+          0,
+          ...safety.providerUsage
+            .filter((b) =>
+              providers.some((p) => b.scope === "provider:" + p.id),
+            )
+            .map((b) => b.limit! - b.used),
+        ),
+      ),
+      campaignDaily: campaignLimit,
+    },
     providers: providers.map((p) => ({ id: p.id, name: p.name })),
     message,
     previewHtml: renderSnapshot(
@@ -161,6 +193,7 @@ export async function createCampaign(userId: string, input: unknown) {
           name: result.data.name,
           state: "PREPARING",
           message: json(result.message),
+          dailyBudget: result.safety.campaignDaily,
           importId: result.data.importId,
           intendedRecipientCount: result.count,
           startKey: key,
@@ -189,10 +222,18 @@ export async function lockCampaign(
 export async function prepareCampaign(id: string) {
   return db.$transaction(
     async (tx) => {
+      const owner = await tx.campaign.findUnique({
+        where: { id },
+        select: { userId: true },
+      });
+      if (!owner) return;
+      await lockSafety(tx, owner.userId);
       await lockCampaign(tx, id);
       const c = await tx.campaign.findUnique({ where: { id } });
       if (!c || c.preparedAt || !["PREPARING", "CANCELLING"].includes(c.state))
         return;
+      const user = await tx.user.findUniqueOrThrow({ where: { id: c.userId } });
+      const paused = c.safetyPausedReason ?? user.safetyPausedReason;
       const batch = await tx.importRecipient.findMany({
         where: {
           importId: c.importId,
@@ -228,7 +269,15 @@ export async function prepareCampaign(id: string) {
           ...(finished
             ? {
                 preparedAt: new Date(),
-                state: c.state === "CANCELLING" ? "CANCELLED" : "QUEUED",
+                state:
+                  c.state === "CANCELLING"
+                    ? "CANCELLED"
+                    : paused
+                      ? "PAUSED"
+                      : "QUEUED",
+                ...(paused
+                  ? { safetyPausedReason: paused, safeError: paused }
+                  : {}),
                 ...(c.state === "CANCELLING"
                   ? { completedAt: new Date() }
                   : {}),
@@ -266,9 +315,29 @@ export async function controlCampaign(
   action: "pause" | "resume" | "cancel",
 ) {
   return db.$transaction(async (tx) => {
+    await lockSafety(tx, userId);
     await lockCampaign(tx, id, userId);
     const c = await tx.campaign.findFirst({ where: { id, userId } });
     if (!c) throw new AppError(404, "NOT_FOUND", "Campaign not found.");
+    if (action === "resume") {
+      const user = await tx.user.findUniqueOrThrow({ where: { id: userId } });
+      if (user.safetyPausedReason || c.safetyPausedReason)
+        throw new AppError(
+          409,
+          "SAFETY_REVIEW",
+          "Administrator safety review is required before resuming.",
+        );
+      if (
+        await tx.providerConnection.count({
+          where: { userId, health: "POLICY_BLOCKED" },
+        })
+      )
+        throw new AppError(
+          409,
+          "POLICY",
+          "Resolve the provider enforcement block before resuming.",
+        );
+    }
     let state: CampaignState;
     try {
       state = transitionCampaign(c.state, action);
@@ -328,6 +397,8 @@ export async function campaignSummary(userId: string, id: string) {
       startedAt: true,
       completedAt: true,
       safeError: true,
+      message: true,
+      safetyPausedReason: true,
     },
   });
   if (!c) throw new AppError(404, "NOT_FOUND", "Campaign not found.");
@@ -346,8 +417,15 @@ export async function campaignSummary(userId: string, id: string) {
       where: { campaignId: id, userId, acceptedAt: { not: null } },
     }),
   ]);
+  const safety = await safetyCapacity(
+    userId,
+    (c.message as { from: string }).from,
+    id,
+  );
+  const summary = { ...c, message: undefined };
   return {
-    ...c,
+    ...summary,
+    safety,
     acceptedCount,
     counts: Object.fromEntries(counts.map((r) => [r.state, r._count])),
     providers,

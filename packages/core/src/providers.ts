@@ -1,3 +1,10 @@
+import {
+  lockSafety,
+  ensureGovernor,
+  commonBudgets,
+  senderDomain,
+} from "./safety";
+import { safetySettings } from "./safety-config";
 import { randomUUID } from "node:crypto";
 import { db } from "@emailsystem/db";
 import type { Prisma } from "@emailsystem/db";
@@ -247,9 +254,56 @@ export async function testProvider(
     })
   )
     throw new AppError(422, "SUPPRESSED", "This test recipient is suppressed.");
-  const test = await db.providerTestDelivery.create({
-    data: { providerId: id, recipient, status: "PROCESSING", testMode },
-  });
+  const test = await db.$transaction(
+    async (tx) => {
+      await lockSafety(tx, userId);
+      const user = await tx.user.findUniqueOrThrow({ where: { id: userId } });
+      if (user.safetyPausedReason)
+        throw new AppError(409, "SAFETY_REVIEW", user.safetyPausedReason);
+      const settings = safetySettings.parse(user.safetySettings),
+        token = crypto.randomUUID();
+      const governor = await ensureGovernor(tx, userId);
+      const domain = senderDomain(c.settings.fromEmail);
+      const current = await tx.providerConnection.findFirstOrThrow({
+        where: { id, userId },
+      });
+      const reservation = await governor.reserve(
+        token,
+        [
+          ...commonBudgets(settings, domain),
+          {
+            scope: "provider:" + id,
+            limit: current.dailyBudgetOverride ?? settings.providerDaily,
+          },
+        ],
+        1,
+      );
+      if (!reservation.allowed)
+        throw new AppError(
+          429,
+          "SAFETY_BUDGET",
+          "Daily safety limit reached. Try the test after capacity becomes available.",
+        );
+      if (!(await governor.commit(token)))
+        throw new AppError(
+          409,
+          "SAFETY_BUDGET",
+          "Test reservation expired. Try again.",
+        );
+      return tx.providerTestDelivery.create({
+        data: {
+          id: token,
+          providerId: id,
+          recipient,
+          status: "PROCESSING",
+          testMode,
+          safetyAt: new Date(),
+          senderDomain: domain,
+        },
+      });
+    },
+    { timeout: 60000 },
+  );
   const m: ProviderMessage = message ?? {
     from: c.settings.fromEmail,
     fromName: c.settings.fromName,
