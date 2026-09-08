@@ -14,19 +14,25 @@ API and SMTP adapters are implemented for Resend, Amazon SES, Mailgun, SendGrid,
 
 | Provider | Implemented API verification |
 | --- | --- |
-| Resend | Domain lookup; sending-only keys use Resend's documented safe recipient with a unique idempotency key. |
+| Resend | Domain lookup; sending-only keys require an explicit controlled test. Save & Verify never sends. |
 | SES | Official SDK GetAccount/GetEmailIdentity, sandbox and sending-policy checks, rate and remaining-quota checks. |
 | Mailgun | Regional domain lookup and a separate controlled test for send permission. |
 | SendGrid | Native scopes lookup requiring `mail.send`. |
-| Brevo | Native account and SMTP relay checks, followed by a controlled test where required. |
-| Postmark | Actual server-token lookup and Broadcast message-stream validation. |
+| Brevo | Native account/relay checks and format-only sandbox validation, followed by a delivery-capable controlled test. |
+| Postmark | Actual server-token lookup, Sandbox detection and Broadcast message-stream validation. |
 | Mailjet | Native Send API SandboxMode validation with the supplied credentials. |
 | SMTP2GO | Authenticated native email summary lookup and a separate controlled test where required. |
 | Elastic Email | Native domain lookup and a separate controlled test where required. |
 
 All SMTP connections use Nodemailer TLS/authentication verification and a separate test email to establish sender acceptance. SMTP authentication does not establish inbox delivery. [Provider setup and official references](PROVIDERS.md) document credentials, regions, native notifications and known deviations.
 
-## Executed tests
+## Provider catalog addendum
+
+The catalog now owns credential help, typed authentication, explicit SMTP port/TLS pairs, regional routing, verification strategies and test capabilities. Both Postmark SMTP modes/hosts are covered. Brevo format-only validation and explicit Resend tests have distinct behavior. A third additive migration records controlled-test mode without guessing historical values. New database integration cases verify each provider's persisted state, encryption, pool eligibility and isolated test records. Browser coverage exercises all ten provider forms and Postmark credential changes.
+
+Local lint/type checks and 117 unit tests pass. The branch's GitHub Actions run is the authority for PostgreSQL/Redis integration, fresh migration/schema drift, production browser and container gates. Results below describe the previous released checkpoint until the new run completes.
+
+## Previous released checkpoint
 
 The verified code checkpoint `a59bc4391623dbaca76393645e4b2c5c69c456c7` passed [CI run 34268761333](https://github.com/rahmon-tech/emailsystem/actions/runs/34268761333). The merge preserves that application tree. Subsequent documentation updates and main-branch pushes run the same complete gates; inspect the run for the exact commit selected for deployment.
 

@@ -27,7 +27,7 @@ for (const type of [
   "smtp2go",
   "elastic",
 ] as const) {
-  test(`${type} verification: real credential, documented probe and usable outcome`, async () => {
+  test(`${type} verification: supplied credential, documented probe and usable outcome`, async () => {
     const c = connection(type);
     const requests: {
       url: string;
@@ -44,7 +44,9 @@ for (const type of [
         return Response.json(
           String(url).includes("/message-streams/")
             ? { MessageStreamType: "Broadcast" }
-            : responses[type],
+            : type === "brevo" && String(url).endsWith("/smtp/email")
+              ? { messageId: "sandbox-id" }
+              : responses[type],
         );
       },
     });
@@ -82,22 +84,23 @@ for (const type of [
     assert.notEqual(denied.status, "AUTH_ERROR");
   });
 }
-test("Resend sending-only verification uses its safe recipient and unique idempotency key", async () => {
-  const c = connection("resend");
-  let recipient = "";
-  let key = "";
-  const v = await verifyConnection(c, {
-    fetch: async (url, init) => {
-      if (String(url).endsWith("/domains"))
-        return new Response("{}", { status: 403 });
-      recipient = JSON.parse(String(init?.body)).to[0];
-      key = new Headers(init?.headers).get("Idempotency-Key") ?? "";
-      return Response.json({ id: "safe-test-id" });
-    },
-  });
-  assert.equal(v.usable, true);
-  assert.equal(recipient, "delivered@resend.dev");
-  assert(key.length > 30);
+test("Resend sending-only Save & Verify never sends email", async () => {
+  for (const [status, name] of [
+    [401, "restricted_api_key"],
+    [403, "unknown"],
+  ] as const) {
+    const methods: string[] = [];
+    const v = await verifyConnection(connection("resend"), {
+      fetch: async (url, init) => {
+        assert.equal(url, "https://api.resend.com/domains");
+        methods.push(init?.method ?? "GET");
+        return Response.json({ name }, { status });
+      },
+    });
+    assert.equal(v.usable, false);
+    assert.equal(v.status, "UNVERIFIED");
+    assert.deepEqual(methods, ["GET"]);
+  }
 });
 test("Resend unverified domain and SendGrid missing mail.send require action", async () => {
   assert.equal(
@@ -187,4 +190,105 @@ test("Mailjet native sandbox succeeds without inventing a provider message ID", 
   );
   assert.equal(result.status, "accepted");
   assert.equal(result.providerMessageId, null);
+});
+
+test("Resend invalid keys are classified from the documented error name", async () => {
+  const v = await verifyConnection(connection("resend"), {
+    fetch: async () =>
+      Response.json(
+        { name: "invalid_api_key", message: "token-secret" },
+        { status: 403 },
+      ),
+  });
+  assert.equal(v.status, "AUTH_ERROR");
+  assert(!JSON.stringify(v).includes("token-secret"));
+});
+test("Brevo account plus sandbox validates format without establishing send permission", async () => {
+  const methods: string[] = [];
+  const v = await verifyConnection(connection("brevo"), {
+    fetch: async (url, init) => {
+      methods.push(init?.method ?? "GET");
+      if (String(url).endsWith("/account"))
+        return Response.json({ relay: { enabled: true } });
+      assert.equal(url, "https://api.brevo.com/v3/smtp/email");
+      const payload = JSON.parse(String(init?.body));
+      assert.equal(payload.headers["X-Sib-Sandbox"], "drop");
+      assert.deepEqual(payload.to, [{ email: "sender@example.com" }]);
+      assert.equal(new Headers(init?.headers).get("X-Sib-Sandbox"), null);
+      return Response.json({ messageId: "sandbox-id" }, { status: 201 });
+    },
+  });
+  assert.equal(v.status, "UNVERIFIED");
+  assert.equal(v.usable, false);
+  assert.deepEqual(methods, ["GET", "POST"]);
+  assert(
+    v.checks.some((c) => c.name === "Sandbox format" && c.status === "passed"),
+  );
+});
+test("SES enforcement shutdown blocks sending even with contradictory SendingEnabled", async () => {
+  const v = await verifyConnection(connection("ses"), {
+    ses: {
+      send: async () => ({
+        SendingEnabled: true,
+        EnforcementStatus: "SHUTDOWN",
+      }),
+    },
+  });
+  assert.equal(v.status, "POLICY_BLOCKED");
+  assert.equal(v.usable, false);
+});
+test("malformed successful API responses cannot enable a connection", async () => {
+  for (const type of [
+    "resend",
+    "mailgun",
+    "sendgrid",
+    "brevo",
+    "postmark",
+    "mailjet",
+    "smtp2go",
+    "elastic",
+  ] as const) {
+    const v = await verifyConnection(connection(type), {
+      fetch: async () => new Response("not-json-secret", { status: 200 }),
+    });
+    assert.equal(v.usable, false);
+    assert(!JSON.stringify(v).includes("not-json-secret"));
+  }
+});
+
+test("Postmark sandbox servers cannot become campaign eligible", async () => {
+  const v = await verifyConnection(connection("postmark"), {
+    fetch: async () => Response.json({ ID: 123, DeliveryType: "Sandbox" }),
+  });
+  assert.equal(v.status, "SANDBOX");
+  assert.equal(v.usable, false);
+});
+
+test("verification preserves rate limits and account enforcement guidance", async () => {
+  for (const [status, data, expected] of [
+    [429, { message: "Rate limit exceeded" }, "THROTTLED"],
+    [
+      403,
+      { message: "Account suspended due to enforcement" },
+      "POLICY_BLOCKED",
+    ],
+  ] as const) {
+    const v = await verifyConnection(connection("resend"), {
+      fetch: async () => Response.json(data, { status }),
+    });
+    assert.equal(v.status, expected);
+    assert.equal(v.usable, false);
+    assert(!JSON.stringify(v).includes("Run a controlled test send"));
+  }
+});
+test("SendGrid documented scope-authorization denial is distinct from invalid credentials", async () => {
+  const v = await verifyConnection(connection("sendgrid"), {
+    fetch: async () =>
+      Response.json(
+        { errors: [{ message: "authorization required" }] },
+        { status: 401 },
+      ),
+  });
+  assert.equal(v.status, "MISSING_PERMISSION");
+  assert.equal(v.usable, false);
 });

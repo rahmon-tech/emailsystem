@@ -12,6 +12,81 @@ test("login, provider setup, HTML import, preview, test, campaign controls, reco
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await expect(page).toHaveURL(/providers/);
   await expect(page.getByText("No providers configured yet.")).toBeVisible();
+  for (const [provider, credential] of [
+    ["Resend", "API key"],
+    ["Amazon SES", "Access Key ID"],
+    ["Mailgun", "API key"],
+    ["SendGrid", "API key"],
+    ["Brevo", "API key"],
+    ["Postmark", "Server token"],
+    ["Mailjet", "Public API key"],
+    ["SMTP2GO", "API key"],
+    ["Elastic Email", "API key (SendHttp)"],
+  ]) {
+    await page.getByRole("button", { name: new RegExp(provider) }).click();
+    const dialog = page.getByRole("dialog");
+    // Required labels include the MUI asterisk. Restrict matching to inputs so
+    // credential-help links with descriptive aria-labels cannot collide.
+    const input = (label: string) =>
+      dialog.getByLabel(label).and(dialog.locator("input"));
+    await expect(input(credential)).toBeVisible();
+    await expect(
+      dialog.getByRole("link", { name: new RegExp("Where do I get") }).first(),
+    ).toHaveAttribute("href", /^https:/);
+    await expect(dialog.getByLabel("SMTP hostname")).toHaveCount(0);
+    await dialog.getByRole("button", { name: "SMTP", exact: true }).click();
+    if (provider === "Brevo") {
+      await expect(input("SMTP key")).toBeVisible();
+      await expect(input("API key")).toHaveCount(0);
+    }
+    if (provider === "Postmark") {
+      await expect(input("Stream SMTP access key")).toBeVisible();
+      await dialog.getByLabel("SMTP credential type").click();
+      await page
+        .getByRole("option", { name: "Server token as username and password" })
+        .click();
+      await expect(input("Server token")).toBeVisible();
+      await expect(input("Stream SMTP access key")).toHaveCount(0);
+      await dialog.getByLabel("Message Stream type").click();
+      await page
+        .getByRole("option", { name: "Transactional — test only" })
+        .click();
+      await expect(input("Message Stream ID")).toHaveValue("outbound");
+      await expect(
+        dialog.getByText(/Campaigns require a Broadcast stream/),
+      ).toBeVisible();
+      await page.setViewportSize({ width: 390, height: 844 });
+      await page.screenshot({
+        path: "test-results/postmark-credentials-mobile.png",
+        animations: "disabled",
+      });
+      await page.setViewportSize({ width: 1280, height: 720 });
+    }
+    await dialog
+      .getByRole("button", { name: "Sending limits and webhooks" })
+      .click();
+    await expect(dialog.getByLabel("Port and security")).toBeVisible();
+    await expect(
+      dialog.getByLabel("Connection timeout (milliseconds)"),
+    ).toBeVisible();
+    if (provider === "Mailjet") {
+      await dialog.getByLabel("Port and security").click();
+      await expect(
+        page.getByRole("option", { name: "588 · STARTTLS", exact: true }),
+      ).toBeVisible();
+      await page
+        .getByRole("option", { name: "465 · Implicit TLS", exact: true })
+        .click();
+    }
+    await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
+  }
+  await page.getByRole("button", { name: /Custom SMTP/ }).click();
+  await expect(page.getByLabel("SMTP hostname")).toBeVisible();
+  await page
+    .getByRole("button", { name: "Sending limits and webhooks" })
+    .click();
+  await expect(page.getByLabel("Security", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Cancel", exact: true }).click();
   await page.getByRole("button", { name: /Development Mock/ }).click();
   await page.getByLabel("Connection name").fill("Browser verification");
   await page.getByLabel("From email").fill("invalid-address");

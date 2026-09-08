@@ -36,7 +36,12 @@ import {
   DeleteOutlined,
   Close,
 } from "@mui/icons-material";
-import { catalog, definition } from "@emailsystem/providers/catalog";
+import {
+  catalog,
+  definition,
+  credentialFields,
+  supportsTestMode,
+} from "@emailsystem/providers/catalog";
 import type { ProviderType } from "@emailsystem/providers/catalog";
 import { api, date } from "./api-client";
 import { PageTitle, Status, Loading, Failure } from "./shared";
@@ -52,6 +57,8 @@ export interface ProviderRow {
     region?: string;
     domain?: string;
     messageStream?: string;
+    messageStreamType?: "broadcast" | "transactional";
+    postmarkCredentialMode?: "smtp_token" | "server_token";
     host?: string;
     port?: number;
     security?: string;
@@ -445,6 +452,14 @@ function ProviderForm({
       replyTo: row?.settings.replyTo ?? "",
       region: row?.settings.region ?? d.regions?.[0],
       messageStream: row?.settings.messageStream ?? "broadcast",
+      ...(type === "postmark"
+        ? {
+            messageStreamType:
+              row?.settings.messageStreamType ?? ("broadcast" as const),
+            postmarkCredentialMode:
+              row?.settings.postmarkCredentialMode ?? ("smtp_token" as const),
+          }
+        : {}),
       timeout: row?.settings.timeout ?? 20000,
       mockMode: row?.settings.mockMode ?? "success",
     }),
@@ -455,14 +470,7 @@ function ProviderForm({
     [concurrency, setConcurrency] = useState(row?.concurrency ?? 1),
     [busy, setBusy] = useState(false),
     [error, setError] = useState("");
-  const fields =
-    transport === "api"
-      ? d.apiFields
-      : ["resend", "sendgrid"].includes(type)
-        ? ["apiKey"]
-        : type === "mailjet"
-          ? ["apiKey", "secretKey"]
-          : ["username", "password"];
+  const fields = credentialFields(type, transport, settings);
   const change = (key: string, value: unknown) =>
     setSettings((s) => ({ ...s, [key]: value }));
   return (
@@ -544,11 +552,55 @@ function ProviderForm({
             />
           )}
           {type === "postmark" && (
-            <TextField
-              label="Broadcast Message Stream ID"
-              value={settings.messageStream}
-              onChange={(e) => change("messageStream", e.target.value)}
-            />
+            <>
+              <TextField
+                select
+                label="Message Stream type"
+                value={settings.messageStreamType ?? "broadcast"}
+                onChange={(e) => {
+                  change("messageStreamType", e.target.value);
+                  change(
+                    "messageStream",
+                    e.target.value === "broadcast" ? "broadcast" : "outbound",
+                  );
+                }}
+              >
+                <MenuItem value="broadcast">Broadcast — campaigns</MenuItem>
+                <MenuItem value="transactional">
+                  Transactional — test only
+                </MenuItem>
+              </TextField>
+              <TextField
+                label="Message Stream ID"
+                value={settings.messageStream}
+                onChange={(e) => change("messageStream", e.target.value)}
+                required
+              />
+              {settings.messageStreamType === "transactional" && (
+                <Alert severity="info">
+                  Campaigns require a Broadcast stream. This connection can be
+                  used for explicit test emails.
+                </Alert>
+              )}
+              {transport === "smtp" && (
+                <TextField
+                  select
+                  label="SMTP credential type"
+                  value={settings.postmarkCredentialMode ?? "smtp_token"}
+                  onChange={(e) => {
+                    change("postmarkCredentialMode", e.target.value);
+                    setSecrets({});
+                  }}
+                >
+                  <MenuItem value="smtp_token">
+                    Stream access key and secret key
+                  </MenuItem>
+                  <MenuItem value="server_token">
+                    Server token as username and password
+                  </MenuItem>
+                </TextField>
+              )}
+            </>
           )}
           {type === "smtp" && (
             <TextField
@@ -564,22 +616,33 @@ function ProviderForm({
               secrets are never displayed.
             </Alert>
           )}
-          {fields.map((field) => {
-            const key = field.replace("?", "");
-            return (
-              <TextField
-                key={key}
-                label={labels[key] ?? key}
-                type="password"
-                autoComplete="new-password"
-                required={!field.endsWith("?")}
-                value={secrets[key] ?? ""}
-                onChange={(e) =>
-                  setSecrets({ ...secrets, [key]: e.target.value })
-                }
-              />
-            );
-          })}
+          {fields.map((field) => (
+            <TextField
+              key={field.key}
+              label={field.label}
+              type="password"
+              autoComplete="new-password"
+              required={!field.optional}
+              value={secrets[field.key] ?? ""}
+              onChange={(e) =>
+                setSecrets({ ...secrets, [field.key]: e.target.value })
+              }
+              helperText={
+                field.helpUrl ? (
+                  <a
+                    href={field.helpUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    aria-label={`Where do I get ${field.label}?`}
+                  >
+                    Where do I get this?
+                  </a>
+                ) : (
+                  "Use the credentials supplied by your mail service."
+                )
+              }
+            />
+          ))}
           <Typography sx={{ fontWeight: 700 }}>Sending identity</Typography>
           <TextField
             label="From email"
@@ -665,11 +728,40 @@ function ProviderForm({
                 </Box>
                 {transport === "smtp" && (
                   <>
+                    {d.smtp ? (
+                      <TextField
+                        select
+                        label="Port and security"
+                        value={settings.port ?? d.smtp.port}
+                        onChange={(e) => {
+                          change("port", Number(e.target.value));
+                          change("security", undefined);
+                        }}
+                      >
+                        {d.smtp.ports.map((p) => (
+                          <MenuItem key={p.port} value={p.port}>
+                            {p.port} ·{" "}
+                            {p.security === "tls" ? "Implicit TLS" : "STARTTLS"}
+                            {p.port === d.smtp!.port ? " (recommended)" : ""}
+                          </MenuItem>
+                        ))}
+                      </TextField>
+                    ) : (
+                      <TextField
+                        label="Port"
+                        type="number"
+                        value={settings.port ?? 587}
+                        onChange={(e) => change("port", Number(e.target.value))}
+                      />
+                    )}
                     <TextField
-                      label="Port"
+                      label="Connection timeout (milliseconds)"
                       type="number"
-                      value={settings.port ?? d.smtp?.port ?? 587}
-                      onChange={(e) => change("port", Number(e.target.value))}
+                      value={settings.timeout}
+                      slotProps={{ htmlInput: { min: 5000, max: 60000 } }}
+                      onChange={(e) =>
+                        change("timeout", Number(e.target.value))
+                      }
                     />
                     {type === "smtp" && (
                       <TextField
@@ -776,10 +868,13 @@ function TestDialog({
   onClose: () => void;
   onResult: () => Promise<void>;
 }) {
-  const [recipient, setRecipient] = useState(""),
+  const [recipient, setRecipient] = useState(
+      definition(row.type).capabilities.safeTestRecipient ?? "",
+    ),
     [testMode, setTestMode] = useState(false),
     [result, setResult] = useState<{
       status: string;
+      testMode?: boolean | null;
       providerMessageId?: string;
       safeError?: string;
       createdAt: string;
@@ -802,34 +897,45 @@ function TestDialog({
             value={recipient}
             onChange={(e) => setRecipient(e.target.value)}
           />
-          {row.transport === "api" &&
-            ["mailgun", "mailjet"].includes(row.type) && (
-              <FormControlLabel
-                control={
-                  <Switch
-                    checked={testMode}
-                    onChange={(_, checked) => setTestMode(checked)}
-                  />
-                }
-                label={
-                  row.type === "mailgun"
-                    ? "Use non-delivery test mode (may be billed)"
+          {definition(row.type).capabilities.safeTestRecipient && (
+            <Typography sx={{ fontSize: 13 }} color="text.secondary">
+              Resend’s test address is selected. Email is sent only when you
+              click Send Test Email.
+            </Typography>
+          )}
+          {supportsTestMode(row) && (
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={testMode}
+                  onChange={(_, checked) => setTestMode(checked)}
+                />
+              }
+              label={
+                row.type === "mailgun"
+                  ? "Use non-delivery test mode (may be billed)"
+                  : row.type === "brevo"
+                    ? "Validate format only (no delivery)"
                     : "Use Sandbox Mode (no delivery)"
-                }
-              />
-            )}{" "}
+              }
+            />
+          )}{" "}
           {result && (
             <Alert
               severity={result.status === "accepted" ? "success" : "warning"}
             >
               <Typography sx={{ fontWeight: 600 }}>
                 {result.status === "accepted"
-                  ? "Provider accepted the test"
+                  ? result.testMode
+                    ? "Provider validated the test without delivery"
+                    : "Provider accepted the test"
                   : result.status}
               </Typography>
               <Typography sx={{ fontSize: 13 }}>
                 {result.safeError ??
-                  "Acceptance does not yet confirm mailbox delivery."}
+                  (result.testMode
+                    ? "No email was delivered. Sandbox validation does not confirm mailbox delivery."
+                    : "Acceptance does not yet confirm mailbox delivery.")}
               </Typography>
               {result.providerMessageId && (
                 <Typography sx={{ fontSize: 12 }}>
@@ -863,7 +969,11 @@ function TestDialog({
             }
           }}
         >
-          {busy ? "Sending…" : "Send Test Email"}
+          {busy
+            ? "Testing…"
+            : testMode
+              ? "Run Non-Delivery Test"
+              : "Send Test Email"}
         </Button>
       </DialogActions>
     </Dialog>
