@@ -74,6 +74,7 @@ jobs:
         run: |
           node --import tsx scripts/setup-env.ts ci.example.com
           docker compose config --quiet
+          docker compose run --rm --no-deps proxy caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
           docker compose build web
           docker compose up -d postgres redis
           docker compose run --rm web node node_modules/prisma/build/index.js migrate deploy

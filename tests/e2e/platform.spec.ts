@@ -38,6 +38,10 @@ test("login, provider setup, HTML import, preview, test, campaign controls, reco
     page.getByText("Provider accepted the test", { exact: true }),
   ).toBeVisible();
   await page.getByRole("button", { name: "Close", exact: true }).click();
+  await page.screenshot({
+    path: "test-results/provider-connected.png",
+    fullPage: true,
+  });
   await page.goto("/blast");
   await page.getByLabel("Recipient file").setInputFiles({
     name: "contacts.csv",
@@ -83,6 +87,10 @@ test("login, provider setup, HTML import, preview, test, campaign controls, reco
     .getByRole("button", { name: "Run pre-flight", exact: true })
     .click();
   await expect(page.getByText("Ready to send", { exact: true })).toBeVisible();
+  await page.screenshot({
+    path: "test-results/blast-preflight.png",
+    fullPage: true,
+  });
   await page
     .getByRole("button", { name: "Send campaign", exact: true })
     .click();
@@ -100,6 +108,10 @@ test("login, provider setup, HTML import, preview, test, campaign controls, reco
       return s.counts.DELIVERED;
     })
     .toBe(2);
+  await page.screenshot({
+    path: "test-results/activity-delivered.png",
+    fullPage: true,
+  });
   const exported = await context.request.get(
     `/api/campaigns/${campaignId}/export`,
   );
@@ -185,7 +197,13 @@ test("login, provider setup, HTML import, preview, test, campaign controls, reco
   for (const width of [390, 430, 768, 1366, 1536]) {
     await page.setViewportSize({ width, height: 900 });
     for (const route of ["/providers", "/blast", "/activity"]) {
-      await page.goto(route);
+      await page.goto(
+        route === "/activity" ? route + "?campaignId=" + campaignId : route,
+      );
+      if (route === "/activity")
+        await expect(
+          page.getByRole("log", { name: "Campaign events" }),
+        ).toContainText("DELIVERED");
       await page.screenshot({
         path: `test-results/${route.slice(1)}-${width}.png`,
         fullPage: true,

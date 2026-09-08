@@ -1,23 +1,25 @@
 # Current work
 
-## Repository truth
+## Repository and review
 
-The accessible private repository `rahmon-tech/emailsystem` was verified empty: no commits, branches, source, migrations, tests or CI. The original directive is preserved in MASTER_DIRECTIVE.md. No unrelated work was replaced.
+The private repository `rahmon-tech/emailsystem` was originally empty. The directive is preserved in MASTER_DIRECTIVE.md. The application is on `codex/emailsystem-platform`, with [draft PR #1](https://github.com/rahmon-tech/emailsystem/pull/1). Automatic approval review rejected updating the default branch because publishing to `main` had not been explicitly authorized; the review branch provides the concrete implementation for approval.
 
-## Implemented milestones
+## Implemented
 
-Authentication and ownership; PostgreSQL schema and initial migration; encrypted provider catalog and all required API/SMTP adapters; Save & Verify and test deliveries; CSV/TXT/XLSX/paste imports; rich text and source composer; sanitized immutable snapshots; durable preparation and BullMQ dispatch; weighted Redis rate/concurrency coordination; retries and unknown handling; webhook authentication, suppression and unsubscribe; Activity, controls and CSV export; production Docker/Caddy configuration; documentation and CI.
+Authentication and ownership; both PostgreSQL migrations; encrypted catalog connections and all required API/SMTP adapters; native verification and controlled tests; imports and deduplication; rich text/source composer and sanitized immutable snapshots; durable preparation and BullMQ dispatch; weighted Redis limits, quota reservation, cooldowns and bounded retries; unknown reconciliation; authenticated webhooks, suppression and unsubscribe; Activity, controls, filtering and export; production Docker/Caddy configuration; documentation and CI.
 
-## Verified locally
+## Verification
 
-Unit provider/domain/security/HTML tests pass. Next.js production compilation, type checking and static page generation succeeded. Lint passes with navigation warnings being resolved. Fresh PostgreSQL/Redis integration, browser tests and container build are configured in CI and are pending their first remote run. The local environment has no PostgreSQL/Redis daemon or Docker runtime.
+The recorded application checkpoint is `9e154e9e77c360be9fd2ddb96a0e6554e2ec4b0f`, [CI run 34267560407](https://github.com/rahmon-tech/emailsystem/actions/runs/34267560407). It passes 87 unit tests, 13 real PostgreSQL/Redis integration tests, one complete HTTPS browser workflow, type checking, lint, both fresh migrations/schema drift and the production Next.js build. The browser covers five requested viewport widths and proves work progresses after the worker restarts.
 
-## Remaining validation
+Subsequent review changes preserve loaded recipient pages during polling, add populated-screen captures, validate the production Caddy configuration and complete the verification/deployment report. The current PR head runs the full CI workflow again. Consult its Checks tab for the exact head status; a prior passing commit does not stand in for that result.
 
-Run and repair the PostgreSQL/Redis concurrency suite, browser workflow at 390/430/768/1366/1536px, fresh migration/schema drift gate and production Docker build in GitHub Actions. Inspect final commit logs and screenshots. Live provider delivery and a VPS deployment require external credentials/infrastructure and are not claimed verified.
+See [VERIFICATION](VERIFICATION.md) for test scope, architecture, provider methods, production container checks, verification boundaries and exact deployment commands.
+
+## Remaining external work
+
+Approval to merge the review branch; actual provider credentials/sending identities/controlled recipients for live acceptance and authenticated delivery proof; and VPS/domain access for a real deployment. No live provider or unseen VPS is claimed verified.
 
 ## Continuation decisions
 
-PostgreSQL owns durable truth; Redis coordinates work. Unknown sends stop for reconciliation. Provider acceptance and delivery are separate. Imported HTML remains HTML; unsupported Outlook conditional blocks are removed with a warning. Mock connections require explicit configuration. TypeScript 6/ESLint 9 are pinned to work with Next.js's current lint dependencies. Repository-backed code is maintained in GitHub.
-
-Latest verified repository checkpoint: `004f1948721a34ea95613e4a30063765c978490a` (initial operating instructions). The implementation passed 62 unit tests, type checking and a production Next.js build locally; remote gates are next.
+PostgreSQL owns durable truth; Redis coordinates work. Unknown sends stop for reconciliation. Provider acceptance and confirmed delivery are separate. SMTP has a whole-operation deadline below its concurrency lease. Authenticated recipient notifications and unsubscribe are idempotent. Imported HTML remains HTML; unsupported Outlook conditional blocks are removed with a warning. Mock connections require explicit configuration. TypeScript 6/ESLint 9 are pinned for the installed Next.js lint dependencies. Repository-backed code is maintained in GitHub.

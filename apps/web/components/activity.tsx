@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import {
   Alert,
@@ -87,6 +87,8 @@ const states = [
 const label = (v: string) => v.toLowerCase().replaceAll("_", " ");
 export function Activity() {
   const params = useSearchParams();
+  const campaignPagesLoaded = useRef(false);
+  const deliveryPagesLoaded = useRef(false);
   const [campaigns, setCampaigns] = useState<Campaign[]>([]),
     [next, setNext] = useState<string | null>(null),
     [selected, setSelected] = useState(params.get("campaignId") ?? "");
@@ -114,11 +116,12 @@ export function Activity() {
       ...data.items,
       ...old.filter((c) => !data.items.some((n) => n.id === c.id)),
     ]);
-    setNext(data.nextCursor);
+    if (!campaignPagesLoaded.current) setNext(data.nextCursor);
     if (selected) setSummary(await api<Summary>("campaigns/" + selected));
   }, [selected]);
   useEffect(() => {
     let live = true;
+    campaignPagesLoaded.current = false;
     void Promise.all([
       api<Page<Campaign>>("campaigns"),
       api<{ id: string; name: string }[]>("providers"),
@@ -161,12 +164,23 @@ export function Activity() {
     return () => source.close();
   }, [selected]);
   useEffect(() => {
-    if (selected)
+    deliveryPagesLoaded.current = false;
+  }, [selected, filter]);
+  useEffect(() => {
+    let live = true;
+    if (selected && !deliveryPagesLoaded.current)
       void api<Page<Delivery>>(
         `campaigns/${selected}/deliveries?state=${filter}`,
       )
-        .then(setDeliveryPage)
-        .catch((e) => setError(e.message));
+        .then((data) => {
+          if (live && !deliveryPagesLoaded.current) setDeliveryPage(data);
+        })
+        .catch((e) => {
+          if (live) setError(e.message);
+        });
+    return () => {
+      live = false;
+    };
   }, [selected, filter, summary]);
   async function action(kind: "pause" | "resume" | "cancel") {
     setBusy(true);
@@ -316,6 +330,7 @@ export function Activity() {
                 onClick={() =>
                   void api<Page<Campaign>>("campaigns?cursor=" + next)
                     .then((p) => {
+                      campaignPagesLoaded.current = true;
                       setCampaigns((old) => [
                         ...old,
                         ...p.items.filter(
@@ -595,6 +610,19 @@ export function Activity() {
                         </MenuItem>
                       ))}
                     </TextField>
+                    <Button
+                      sx={{ ml: 1, mb: 2 }}
+                      onClick={() => {
+                        deliveryPagesLoaded.current = false;
+                        void api<Page<Delivery>>(
+                          `campaigns/${selected}/deliveries?state=${filter}`,
+                        )
+                          .then(setDeliveryPage)
+                          .catch((e) => setError(e.message));
+                      }}
+                    >
+                      Refresh recipients
+                    </Button>
                     {deliveryPage.items.length === 0 ? (
                       <Typography color="text.secondary">
                         No matching recipients.
@@ -641,18 +669,27 @@ export function Activity() {
                     {deliveryPage.nextCursor && (
                       <Button
                         sx={{ mt: 2 }}
-                        onClick={() =>
+                        onClick={() => {
+                          deliveryPagesLoaded.current = true;
                           void api<Page<Delivery>>(
                             `campaigns/${selected}/deliveries?state=${filter}&cursor=${deliveryPage.nextCursor}`,
                           )
                             .then((p) =>
                               setDeliveryPage((old) => ({
-                                items: [...old.items, ...p.items],
+                                items: [
+                                  ...old.items,
+                                  ...p.items.filter(
+                                    (item) =>
+                                      !old.items.some(
+                                        (oldItem) => oldItem.id === item.id,
+                                      ),
+                                  ),
+                                ],
                                 nextCursor: p.nextCursor,
                               })),
                             )
-                            .catch((e) => setError(e.message))
-                        }
+                            .catch((e) => setError(e.message));
+                        }}
                       >
                         Load more recipients
                       </Button>

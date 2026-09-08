@@ -5,7 +5,7 @@
 Use a Linux VPS with Docker Engine and the Compose plugin, a domain pointing to its public IP, and ports 80/443 open. Allow memory for both Next.js builds and PostgreSQL; 4 GB is a practical starting allocation. Verify the domain's DNS and provider sending-domain records separately.
 
 ```sh
-git clone https://github.com/rahmon-tech/emailsystem.git
+git clone --branch codex/emailsystem-platform https://github.com/rahmon-tech/emailsystem.git
 cd emailsystem
 # Generate production .env without overwriting an existing file:
 docker run --rm -u "$(id -u):$(id -g)" -v "$PWD:/app" -w /app node:24.19.0-bookworm-slim node --experimental-strip-types scripts/setup-env.ts mail.your-domain.com
