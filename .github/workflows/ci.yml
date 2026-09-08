@@ -1,0 +1,96 @@
+name: Verify EmailSystem
+on:
+  push:
+    branches: [main]
+  pull_request:
+permissions:
+  contents: read
+concurrency:
+  group: verify-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: emailsystem_test
+          POSTGRES_USER: emailsystem
+          POSTGRES_PASSWORD: ephemeral-ci-only
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U emailsystem -d emailsystem_test"
+          --health-interval 5s --health-timeout 5s --health-retries 15
+      redis:
+        image: redis:7.4-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 5s --health-retries 15
+    env:
+      DATABASE_URL: postgresql://emailsystem:ephemeral-ci-only@localhost:5432/emailsystem_test
+      REDIS_URL: redis://localhost:6379
+      APP_URL: https://localhost:3443
+      ALLOW_MOCK_PROVIDER: "true"
+      NEXT_TELEMETRY_DISABLED: "1"
+      NODE_ENV: test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.19.0"
+          cache: pnpm
+      - name: Generate ephemeral application keys
+        run: |
+          session_key="$(openssl rand -hex 32)"
+          encryption_key="$(openssl rand -hex 32)"
+          echo "::add-mask::$session_key"
+          echo "::add-mask::$encryption_key"
+          echo "SESSION_SECRET=$session_key" >> "$GITHUB_ENV"
+          echo "CREDENTIAL_ENCRYPTION_KEY=$encryption_key" >> "$GITHUB_ENV"
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm db:generate
+      - name: Apply migrations to fresh PostgreSQL
+        run: pnpm db:migrate
+      - name: Verify migration matches schema
+        run: pnpm exec prisma migrate diff --from-config-datasource --to-schema packages/db/schema.prisma --exit-code
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm test:integration
+      - run: pnpm build
+        id: web_build
+        env:
+          NODE_ENV: production
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm test:e2e
+        env:
+          NODE_ENV: production
+      - name: Validate production containers
+        if: ${{ !cancelled() && steps.web_build.outcome == 'success' }}
+        run: |
+          node --import tsx scripts/setup-env.ts ci.example.com
+          docker compose config --quiet
+          docker compose run --rm --no-deps proxy caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+          docker compose build web
+          docker compose up -d postgres redis
+          docker compose run --rm web node node_modules/prisma/build/index.js migrate deploy
+          docker compose up -d --wait web worker
+          docker compose exec -T web node -e "fetch('http://localhost:3000/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+          docker compose down
+      - name: Collect server diagnostics
+        if: always()
+        run: |
+          mkdir -p test-results/server-logs
+          cp /tmp/emailsystem-e2e-*.log test-results/server-logs/ 2>/dev/null || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: browser-verification
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7

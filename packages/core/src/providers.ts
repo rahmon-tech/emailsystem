@@ -1,0 +1,332 @@
+import { randomUUID } from "node:crypto";
+import { db } from "@emailsystem/db";
+import type { Prisma } from "@emailsystem/db";
+import {
+  connectionSchema,
+  verifyConnection,
+  send,
+} from "@emailsystem/providers";
+import type {
+  Connection,
+  ConnectionInput,
+  Verification,
+  ProviderMessage,
+} from "@emailsystem/providers";
+import { config } from "./config";
+import { encryptSecret, decryptSecret } from "./security";
+import type { SealedSecret } from "./security";
+import { AppError } from "./errors";
+export const providerSelect = {
+  id: true,
+  name: true,
+  type: true,
+  transport: true,
+  settings: true,
+  credentialHint: true,
+  enabled: true,
+  health: true,
+  verifiedAt: true,
+  cooldownUntil: true,
+  quotaRemaining: true,
+  quotaCheckedAt: true,
+  weight: true,
+  perSecond: true,
+  perMinute: true,
+  concurrency: true,
+  revision: true,
+  createdAt: true,
+  verifications: {
+    orderBy: { createdAt: "desc" as const },
+    take: 1,
+    select: { status: true, checks: true, createdAt: true },
+  },
+};
+export const json = (v: unknown) =>
+  JSON.parse(JSON.stringify(v)) as Prisma.InputJsonValue;
+export function unlocked(row: {
+  id: string;
+  userId: string;
+  name: string;
+  type: string;
+  transport: string;
+  settings: unknown;
+  credentials: unknown;
+  weight: number;
+  perSecond: number;
+  perMinute: number;
+  concurrency: number;
+}): Connection {
+  return {
+    ...connectionSchema.parse({
+      name: row.name,
+      type: row.type,
+      transport: row.transport,
+      settings: row.settings,
+      credentials: decryptSecret(
+        row.credentials as SealedSecret,
+        config().CREDENTIAL_ENCRYPTION_KEY,
+        `${row.userId}:${row.id}`,
+      ),
+      weight: row.weight,
+      perSecond: row.perSecond,
+      perMinute: row.perMinute,
+      concurrency: row.concurrency,
+    }),
+    id: row.id,
+  };
+}
+export async function getConnection(userId: string, id: string) {
+  const row = await db.providerConnection.findFirst({
+    where: { id, userId, deletedAt: null },
+  });
+  if (!row) throw new AppError(404, "NOT_FOUND", "Provider not found.");
+  return row;
+}
+export async function saveProvider(
+  userId: string,
+  input: unknown,
+  id?: string,
+) {
+  const parsed = connectionSchema.parse(input);
+  if (parsed.type === "mock" && config().ALLOW_MOCK_PROVIDER !== "true")
+    throw new AppError(
+      403,
+      "MOCK_DISABLED",
+      "Development provider is disabled.",
+    );
+  const previous = id ? await getConnection(userId, id) : null;
+  const providerId = id ?? randomUUID();
+  if (
+    previous &&
+    (previous.type !== parsed.type || previous.transport !== parsed.transport)
+  )
+    throw new AppError(
+      422,
+      "TYPE",
+      "Create a separate connection to change provider or transport.",
+    );
+  const credentials = { ...parsed.credentials };
+  if (previous) {
+    const old = unlocked(previous).credentials;
+    for (const key of [
+      "webhookSecret",
+      "webhookPublicKey",
+      "snsTopicArn",
+    ] as const)
+      if (!credentials[key] && old[key]) credentials[key] = old[key];
+  }
+  const secret = Object.values(credentials).find(Boolean) ?? "";
+  const data = {
+    name: parsed.name,
+    type: parsed.type,
+    transport: parsed.transport,
+    settings: json(parsed.settings),
+    credentials: json(
+      encryptSecret(
+        credentials,
+        config().CREDENTIAL_ENCRYPTION_KEY,
+        `${userId}:${providerId}`,
+      ),
+    ),
+    credentialHint: secret.length > 4 ? "••••" + secret.slice(-4) : "••••",
+    weight: parsed.weight,
+    perSecond: parsed.perSecond,
+    perMinute: parsed.perMinute,
+    concurrency: parsed.concurrency,
+    health: "TESTING",
+    enabled: false,
+    verifiedAt: null,
+  };
+  await db.$transaction(async (tx) => {
+    if (previous) {
+      const changed = await tx.providerConnection.updateMany({
+        where: { id: providerId, userId, revision: previous.revision },
+        data: { ...data, revision: { increment: 1 } },
+      });
+      if (!changed.count)
+        throw new AppError(
+          409,
+          "STALE",
+          "Provider changed. Reload before saving.",
+        );
+    } else
+      await tx.providerConnection.create({
+        data: { id: providerId, userId, ...data },
+      });
+    await tx.auditEvent.create({
+      data: {
+        userId,
+        action: previous ? "provider.updated" : "provider.created",
+        resourceId: providerId,
+      },
+    });
+  });
+  await verifyProvider(userId, providerId);
+  return db.providerConnection.findFirst({
+    where: { id: providerId, userId },
+    select: providerSelect,
+  });
+}
+export async function verifyProvider(userId: string, id: string) {
+  const row = await getConnection(userId, id);
+  const verification = await verifyConnection(unlocked(row));
+  await saveVerification(userId, id, row.revision, verification);
+  return verification;
+}
+async function saveVerification(
+  userId: string,
+  id: string,
+  revision: number,
+  v: Verification,
+) {
+  await db.$transaction(async (tx) => {
+    const current = await tx.providerConnection.findFirst({
+      where: { id, userId },
+    });
+    const changed = await tx.providerConnection.updateMany({
+      where: { id, userId, revision, deletedAt: null },
+      data: {
+        health: v.status,
+        enabled: v.usable,
+        verifiedAt: new Date(),
+        cooldownUntil: null,
+        ...(v.quotaRemaining !== undefined
+          ? { quotaRemaining: v.quotaRemaining, quotaCheckedAt: new Date() }
+          : {}),
+        ...(v.maxSendRate
+          ? {
+              perSecond: Math.max(
+                1,
+                Math.min(v.maxSendRate, current?.perSecond ?? 1),
+              ),
+            }
+          : {}),
+      },
+    });
+    if (!changed.count)
+      throw new AppError(
+        409,
+        "STALE",
+        "Provider changed while verification was running.",
+      );
+    await tx.providerVerification.create({
+      data: { providerId: id, status: v.status, checks: json(v.checks) },
+    });
+    await tx.auditEvent.create({
+      data: { userId, action: "provider.verified", resourceId: id },
+    });
+  });
+}
+export async function testProvider(
+  userId: string,
+  id: string,
+  recipient: string,
+  testMode = false,
+  message?: ProviderMessage,
+) {
+  const row = await getConnection(userId, id),
+    c = unlocked(row);
+  if (
+    testMode &&
+    !(c.transport === "api" && ["mailgun", "mailjet"].includes(c.type))
+  )
+    throw new AppError(
+      422,
+      "TEST_MODE",
+      "This connection does not support a non-delivery test.",
+    );
+  if (
+    await db.suppression.count({
+      where: { userId, email: recipient.toLowerCase() },
+    })
+  )
+    throw new AppError(422, "SUPPRESSED", "This test recipient is suppressed.");
+  const test = await db.providerTestDelivery.create({
+    data: { providerId: id, recipient, status: "PROCESSING" },
+  });
+  const m: ProviderMessage = message ?? {
+    from: c.settings.fromEmail,
+    fromName: c.settings.fromName,
+    to: recipient,
+    cc: [],
+    bcc: [],
+    replyTo: c.settings.replyTo,
+    subject: "EmailSystem test email",
+    html: "<p>Your EmailSystem connection accepted this test.</p>",
+    text: "Your EmailSystem connection accepted this test.",
+    headers: {},
+    attachments: [],
+  };
+  const result = await send(
+    c,
+    { ...m, to: recipient },
+    { attemptId: test.id, idempotencyKey: test.id, testMode },
+  );
+  await db.providerTestDelivery.update({
+    where: { id: test.id },
+    data: {
+      status: result.status,
+      providerMessageId:
+        result.status === "accepted" ? result.providerMessageId : undefined,
+      safeError:
+        result.status === "accepted" ? undefined : result.error.message,
+    },
+  });
+  if (
+    result.status === "accepted" &&
+    !["SANDBOX", "THROTTLED", "POLICY_BLOCKED"].includes(row.health) &&
+    !(c.type === "postmark" && row.health === "CONFIG_ERROR")
+  )
+    await saveVerification(userId, id, row.revision, {
+      status: "HEALTHY",
+      usable: true,
+      checks: [
+        {
+          name: "Controlled test send",
+          status: "passed",
+          detail: testMode
+            ? "Non-delivery provider test accepted."
+            : "Provider accepted the test email. Delivery is not yet confirmed.",
+        },
+      ],
+    });
+  return db.providerTestDelivery.findUnique({ where: { id: test.id } });
+}
+export async function disableProvider(
+  userId: string,
+  id: string,
+  remove = false,
+) {
+  await getConnection(userId, id);
+  await db.$transaction([
+    db.providerConnection.updateMany({
+      where: { id, userId },
+      data: {
+        enabled: false,
+        health: "DISABLED",
+        revision: { increment: 1 },
+        ...(remove ? { deletedAt: new Date() } : {}),
+      },
+    }),
+    db.auditEvent.create({
+      data: {
+        userId,
+        action: remove ? "provider.deleted" : "provider.disabled",
+        resourceId: id,
+      },
+    }),
+  ]);
+}
+export const compatible = (
+  p: {
+    settings: unknown;
+    enabled: boolean;
+    health: string;
+    cooldownUntil: Date | null;
+  },
+  from: string,
+) =>
+  p.enabled &&
+  p.health === "HEALTHY" &&
+  (!p.cooldownUntil || p.cooldownUntil <= new Date()) &&
+  (p.settings as ConnectionInput["settings"]).fromEmail === from;

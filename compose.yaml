@@ -1,0 +1,81 @@
+x-app: &app
+  image: emailsystem:${IMAGE_TAG:-local}
+  build: .
+  env_file: .env
+  restart: unless-stopped
+  init: true
+  security_opt:
+    - no-new-privileges:true
+  cap_drop: [ALL]
+  stop_grace_period: 90s
+  depends_on:
+    postgres:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+  networks: [internal]
+  logging:
+    driver: json-file
+    options:
+      max-size: 10m
+      max-file: '3'
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: emailsystem
+      POSTGRES_USER: emailsystem
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+    volumes: [postgres_data:/var/lib/postgresql/data]
+    networks: [internal]
+    restart: unless-stopped
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U emailsystem -d emailsystem']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+  redis:
+    image: redis:7.4-alpine
+    command: ['redis-server', '--appendonly', 'yes', '--appendfsync', 'everysec', '--maxmemory-policy', 'noeviction']
+    volumes: [redis_data:/data]
+    networks: [internal]
+    restart: unless-stopped
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+  web:
+    <<: *app
+    healthcheck:
+      test: ['CMD', 'node', '-e', "fetch('http://127.0.0.1:3000/health/live').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      start_period: 30s
+      retries: 5
+  worker:
+    <<: *app
+    command: ['node', '--import', 'tsx', 'apps/worker/main.ts']
+    healthcheck:
+      test: ['CMD', 'node', '--import', 'tsx', 'scripts/worker-health.ts']
+      interval: 15s
+      timeout: 8s
+      start_period: 30s
+      retries: 5
+  proxy:
+    image: caddy:2.10-alpine
+    environment:
+      DOMAIN: ${DOMAIN:?Set DOMAIN}
+    ports: ['80:80', '443:443', '443:443/udp']
+    volumes: ['./deploy/Caddyfile:/etc/caddy/Caddyfile:ro', 'caddy_data:/data', 'caddy_config:/config']
+    networks: [internal]
+    depends_on: [web]
+    restart: unless-stopped
+volumes:
+  postgres_data:
+  redis_data:
+  caddy_data:
+  caddy_config:
+networks:
+  internal:
+    driver: bridge

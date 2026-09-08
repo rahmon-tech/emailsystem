@@ -58,13 +58,14 @@ pnpm build
 ALLOW_MOCK_PROVIDER=true pnpm test:e2e
 ```
 
-GitHub Actions uses real PostgreSQL and Redis service containers, applies the initial migration, checks schema drift, runs domain/provider/integration/browser tests, builds Next.js and checks the production image. Browser tests use HTTPS and the development provider; they never send real email. Screenshots and traces are attached to the run.
+GitHub Actions uses real PostgreSQL and Redis service containers, applies both SQL migrations, checks schema drift, runs domain/provider/integration/browser tests, builds Next.js, validates Caddy, and starts the production web/worker containers to check readiness. Browser tests use HTTPS and the development provider; they never send real email. Screenshots and failure traces are attached to the run.
 
 Implementation and verification status are recorded in [CURRENT_WORK](docs/CURRENT_WORK.md). Live provider delivery, account-specific permission behavior and deployment on your VPS require your credentials/infrastructure. These are not implied by a successful mock test.
 
 ## Documentation
 
 - [Architecture and delivery semantics](docs/ARCHITECTURE.md)
+- [Verification results](docs/VERIFICATION.md)
 - [Provider configuration and webhook setup](docs/PROVIDERS.md)
 - [Security and operational limits](docs/SECURITY.md)
 - [Deployment, migration, backup and restore](docs/DEPLOYMENT.md)
