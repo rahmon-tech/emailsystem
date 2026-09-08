@@ -342,7 +342,26 @@ async function request(req: HttpRequest, deps: Dependencies) {
   });
   if (Number(response.headers.get("content-length") ?? 0) > 1048576)
     throw new Error("Provider response exceeds limit");
-  const raw = await response.text();
+  let raw = "";
+  const reader = response.body?.getReader();
+  const decoder = new TextDecoder();
+  let size = 0;
+  if (reader)
+    try {
+      while (true) {
+        const chunk = await reader.read();
+        if (chunk.done) break;
+        size += chunk.value.byteLength;
+        if (size > 1048576) {
+          await reader.cancel();
+          throw new Error("Provider response exceeds limit");
+        }
+        raw += decoder.decode(chunk.value, { stream: true });
+      }
+      raw += decoder.decode();
+    } finally {
+      reader.releaseLock();
+    }
   if (raw.length > 1048576) throw new Error("Provider response exceeds limit");
   let data: unknown;
   try {
@@ -441,15 +460,15 @@ function mailOptions(m: ProviderMessage, ctx: SendContext, c: Connection) {
     disableUrlAccess: true,
   };
 }
-function ses(c: Connection, deps: Dependencies) {
+function ses(c: Connection, deps: Dependencies, timeout = 20000) {
   return (
     deps.ses ??
     new SESv2Client({
       region: c.settings.region ?? "us-east-1",
       maxAttempts: 1,
       requestHandler: {
-        connectionTimeout: 10000,
-        requestTimeout: 20000,
+        connectionTimeout: Math.min(timeout, 10000),
+        requestTimeout: timeout,
         throwOnRequestTimeout: true,
       },
       credentials: {
@@ -549,6 +568,8 @@ export async function send(
         path(data, "data", "error"))
     )
       return { status: "rejected", error: normalizeError(400, detail) };
+    if (c.type === "mailjet" && ctx.testMode)
+      return { status: "accepted", providerMessageId: null };
     const id =
       c.type === "resend" || c.type === "mailgun"
         ? obj(data).id
@@ -654,7 +675,7 @@ export async function verifyConnection(
       }
     }
     if (c.type === "ses") {
-      const client = ses(c, deps);
+      const client = ses(c, deps, 5000);
       const account = obj(await client.send(new GetAccountCommand({})));
       if (account.SendingEnabled !== true)
         return result(
@@ -680,12 +701,37 @@ export async function verifyConnection(
           check("Sender", "failed", "Verify this SES sending identity."),
         );
       const sandbox = account.ProductionAccessEnabled !== true;
+      const quota = obj(account.SendQuota);
+      const remaining =
+        typeof quota.Max24HourSend === "number" && quota.Max24HourSend >= 0
+          ? Math.max(
+              0,
+              Math.floor(
+                quota.Max24HourSend - Number(quota.SentLast24Hours ?? 0),
+              ),
+            )
+          : undefined;
+      const exhausted = remaining === 0;
       return {
         ...result(
-          sandbox ? "SANDBOX" : "HEALTHY",
-          !sandbox,
+          sandbox ? "SANDBOX" : exhausted ? "THROTTLED" : "HEALTHY",
+          !sandbox && !exhausted,
           check("Account", "passed", "SES account authenticated."),
           check("Sender", "passed", "Identity is verified."),
+          check(
+            "Sending quota",
+            exhausted ? "failed" : "passed",
+            remaining === undefined
+              ? "No finite daily quota reported."
+              : `${remaining} recipients remaining in the SES rolling 24-hour quota.`,
+          ),
+          check(
+            "Enforcement",
+            account.EnforcementStatus === "PROBATION" ? "unknown" : "passed",
+            account.EnforcementStatus === "PROBATION"
+              ? "Account is under probation; review SES guidance."
+              : "Sending is enabled.",
+          ),
           check(
             "Production access",
             sandbox ? "failed" : "passed",
@@ -695,6 +741,7 @@ export async function verifyConnection(
           ),
         ),
         maxSendRate: Number(path(account, "SendQuota", "MaxSendRate") ?? 1),
+        quotaRemaining: remaining,
       };
     }
     if (c.type === "mailjet") {

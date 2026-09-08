@@ -122,4 +122,14 @@ test("error normalization identifies policy enforcement", () => {
   );
 });
 
-test("SMTP2GO selects documented regional API hosts",()=>{for(const [region,host]of [["US","us-api.smtp2go.com"],["EU","eu-api.smtp2go.com"],["AU","au-api.smtp2go.com"]]){const c=connection("smtp2go");c.settings.region=region;assert.equal(new URL(endpoints(c).sendUrl!).hostname,host);}});
+test("SMTP2GO selects documented regional API hosts", () => {
+  for (const [region, host] of [
+    ["US", "us-api.smtp2go.com"],
+    ["EU", "eu-api.smtp2go.com"],
+    ["AU", "au-api.smtp2go.com"],
+  ]) {
+    const c = connection("smtp2go");
+    c.settings.region = region;
+    assert.equal(new URL(endpoints(c).sendUrl!).hostname, host);
+  }
+});

@@ -34,7 +34,7 @@ export function Shell({
   email: string;
   children: React.ReactNode;
 }) {
-  const router=useRouter();
+  const router = useRouter();
   const pathname = usePathname();
   const [mobile, setMobile] = useState(false),
     [anchor, setAnchor] = useState<HTMLElement | null>(null);
@@ -185,7 +185,8 @@ export function Shell({
             <MenuItem
               onClick={async () => {
                 await api("auth/logout", {});
-                router.replace("/login");router.refresh();
+                router.replace("/login");
+                router.refresh();
               }}
             >
               Sign out

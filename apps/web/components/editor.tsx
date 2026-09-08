@@ -2,8 +2,27 @@
 import { useState } from "react";
 import { EditorContent, useEditor, useEditorState } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
-import LinkExtension from '@tiptap/extension-link';
-const EmailLink=LinkExtension.extend({addAttributes(){return {...this.parent?.(),emailButton:{default:false,parseHTML:element=>element.getAttribute('data-email-button')==='true',renderHTML:attributes=>attributes.emailButton?{'data-email-button':'true',style:'display:inline-block;background-color:#2457e0;color:#ffffff;padding:12px 20px;text-decoration:none;border-radius:6px'}:{}}};}});
+import LinkExtension from "@tiptap/extension-link";
+const EmailLink = LinkExtension.extend({
+  addAttributes() {
+    return {
+      ...this.parent?.(),
+      emailButton: {
+        default: false,
+        parseHTML: (element) =>
+          element.getAttribute("data-email-button") === "true",
+        renderHTML: (attributes) =>
+          attributes.emailButton
+            ? {
+                "data-email-button": "true",
+                style:
+                  "display:inline-block;background-color:#2457e0;color:#ffffff;padding:12px 20px;text-decoration:none;border-radius:6px",
+              }
+            : {},
+      },
+    };
+  },
+});
 import Image from "@tiptap/extension-image";
 import TextAlign from "@tiptap/extension-text-align";
 import { TextStyle } from "@tiptap/extension-text-style";
@@ -53,8 +72,8 @@ export function RichEditor({
   const editor = useEditor({
     immediatelyRender: false,
     extensions: [
-      StarterKit.configure({link:false}),
-      EmailLink.configure({openOnClick:false}),
+      StarterKit.configure({ link: false }),
+      EmailLink.configure({ openOnClick: false }),
       Image,
       TextAlign.configure({ types: ["heading", "paragraph"] }),
       TextStyle,
@@ -295,7 +314,10 @@ export function RichEditor({
                         type: "text",
                         text: "Learn more",
                         marks: [
-                          { type: "link", attrs: { href: url, emailButton:true } },
+                          {
+                            type: "link",
+                            attrs: { href: url, emailButton: true },
+                          },
                           { type: "bold" },
                         ],
                       },

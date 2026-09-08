@@ -35,20 +35,22 @@ export async function processDelivery(
   if (all.some((p) => p.health === "POLICY_BLOCKED")) return;
   const eligible = all.filter((p) => compatible(p, snapshot.from));
   const cost = 1 + snapshot.cc.length + snapshot.bcc.length;
-  const candidates = eligible.map((p) => ({
-    id: p.id,
-    weight: p.weight,
-    perSecond: p.perSecond,
-    perMinute: p.perMinute,
-    concurrency: p.concurrency,
-    cost,
-    group: rateGroup(
-      p.userId,
-      p.type,
-      snapshot.from,
-      (p.settings as ConnectionInput["settings"]).region,
-    ),
-  }));
+  const candidates = eligible
+    .filter((p) => p.quotaRemaining === null || p.quotaRemaining >= cost)
+    .map((p) => ({
+      id: p.id,
+      weight: p.weight,
+      perSecond: p.perSecond,
+      perMinute: p.perMinute,
+      concurrency: p.concurrency,
+      cost,
+      group: rateGroup(
+        p.userId,
+        p.type,
+        snapshot.from,
+        (p.settings as ConnectionInput["settings"]).region,
+      ),
+    }));
   const attemptId = randomUUID();
   const chosen = await acquireProvider(initial.userId, candidates, attemptId);
   // A contender without a permit must not postpone a delivery another worker is claiming.
@@ -111,6 +113,24 @@ export async function processDelivery(
         });
         return false;
       }
+      const quotaPeers = all
+        .filter(
+          (p) =>
+            rateGroup(
+              p.userId,
+              p.type,
+              snapshot.from,
+              (p.settings as ConnectionInput["settings"]).region,
+            ) === candidate.group,
+        )
+        .map((p) => p.id);
+      await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${initial.userId + ":quota:" + candidate.group},0))::text`;
+      if (
+        await tx.providerConnection.count({
+          where: { id: { in: quotaPeers }, quotaRemaining: { lt: cost } },
+        })
+      )
+        return false;
       const changed = await tx.delivery.updateMany({
         where: { id, state: { in: unclaimedStates } },
         data: {
@@ -122,6 +142,10 @@ export async function processDelivery(
         },
       });
       if (!changed.count) return false;
+      await tx.providerConnection.updateMany({
+        where: { id: { in: quotaPeers }, quotaRemaining: { not: null } },
+        data: { quotaRemaining: { decrement: cost } },
+      });
       await tx.deliveryAttempt.create({
         data: {
           id: attemptId,

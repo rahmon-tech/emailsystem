@@ -68,6 +68,8 @@ model ProviderConnection {
   health String @default("UNVERIFIED")
   verifiedAt DateTime?
   cooldownUntil DateTime?
+  quotaRemaining Int?
+  quotaCheckedAt DateTime?
   weight Int @default(1)
   perSecond Int @default(1)
   perMinute Int @default(30)

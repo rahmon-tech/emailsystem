@@ -7,6 +7,7 @@ export default defineConfig({
   expect: { timeout: 20000 },
   reporter: [["list"], ["html", { open: "never" }]],
   use: {
+    actionTimeout: 15000,
     baseURL: "https://localhost:3443",
     ignoreHTTPSErrors: true,
     trace: "retain-on-failure",

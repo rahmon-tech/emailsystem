@@ -1,5 +1,5 @@
 "use client";
-import {useRouter} from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 import {
   Box,
@@ -14,7 +14,7 @@ import {
 import { MailOutlined } from "@mui/icons-material";
 import { api } from "../../components/api-client";
 export default function Login() {
- const router=useRouter();
+  const router = useRouter();
   const [email, setEmail] = useState(""),
     [password, setPassword] = useState(""),
     [busy, setBusy] = useState(false),
@@ -40,7 +40,8 @@ export default function Login() {
             setError("");
             try {
               await api("auth/login", { email, password });
-              router.replace("/providers");router.refresh();
+              router.replace("/providers");
+              router.refresh();
             } catch (e) {
               setError((e as Error).message);
             } finally {

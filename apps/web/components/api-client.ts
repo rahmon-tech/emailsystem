@@ -20,7 +20,7 @@ export async function api<T>(
   const data = await res.json();
   if (!res.ok) {
     if (res.status === 401 && path !== "auth/login")
-      window.location.replace(new URL("/login",window.location.origin).href);
+      window.location.replace(new URL("/login", window.location.origin).href);
     throw new Error(
       data.fields
         ?.map(

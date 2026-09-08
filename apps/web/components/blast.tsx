@@ -1,5 +1,5 @@
 "use client";
-import {useRouter} from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import {
@@ -58,7 +58,7 @@ type Flight = {
 };
 type Attachment = { filename: string; content: string; contentType: string };
 export function Blast() {
- const router=useRouter();
+  const router = useRouter();
   const [providers, setProviders] = useState<ProviderRow[]>([]),
     [imports, setImports] = useState<ImportRow[]>([]),
     [importId, setImportId] = useState(""),
@@ -639,7 +639,7 @@ export function Blast() {
                   referrerPolicy="no-referrer"
                   srcDoc={preview.html}
                   style={{
-                    width: view === "mobile" ? 390 : "100%",
+                    width: view === "mobile" ? "min(390px, 100%)" : "100%",
                     height: 520,
                     border: 0,
                     background: "white",

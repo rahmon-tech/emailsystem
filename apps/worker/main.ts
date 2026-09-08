@@ -1,6 +1,7 @@
 import "dotenv/config";
 import { Queue, Worker } from "bullmq";
 import { Redis } from "ioredis";
+import { verifyProvider } from "@emailsystem/core/providers";
 import { db } from "@emailsystem/db";
 import { redis } from "@emailsystem/core/redis";
 import { config } from "@emailsystem/core/config";
@@ -111,6 +112,20 @@ async function pump() {
           });
         }
       }
+      {
+        const providers = await db.providerConnection.findMany({
+          where: {
+            type: "ses",
+            transport: "api",
+            deletedAt: null,
+            health: { in: ["HEALTHY", "THROTTLED"] },
+            verifiedAt: { lt: new Date(Date.now() - 300000) },
+          },
+          take: 1,
+          orderBy: { verifiedAt: "asc" },
+        });
+        for (const p of providers) await verifyProvider(p.userId, p.id);
+      }
       if (iteration++ % 1800 === 0) {
         const date = new Date(
           Date.now() - cfg.ACTIVITY_RETENTION_DAYS * 86400000,
@@ -118,7 +133,13 @@ async function pump() {
         await db.activityEvent.deleteMany({
           where: { createdAt: { lt: date } },
         });
-        await db.providerEvent.deleteMany({where:{createdAt:{lt:new Date(Date.now()-cfg.WEBHOOK_RETENTION_DAYS*86400000)}}});
+        await db.providerEvent.deleteMany({
+          where: {
+            createdAt: {
+              lt: new Date(Date.now() - cfg.WEBHOOK_RETENTION_DAYS * 86400000),
+            },
+          },
+        });
         await db.session.deleteMany({
           where: { expiresAt: { lt: new Date() } },
         });

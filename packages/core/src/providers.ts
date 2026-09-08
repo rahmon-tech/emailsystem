@@ -27,6 +27,8 @@ export const providerSelect = {
   health: true,
   verifiedAt: true,
   cooldownUntil: true,
+  quotaRemaining: true,
+  quotaCheckedAt: true,
   weight: true,
   perSecond: true,
   perMinute: true,
@@ -188,6 +190,9 @@ async function saveVerification(
         enabled: v.usable,
         verifiedAt: new Date(),
         cooldownUntil: null,
+        ...(v.quotaRemaining !== undefined
+          ? { quotaRemaining: v.quotaRemaining, quotaCheckedAt: new Date() }
+          : {}),
         ...(v.maxSendRate
           ? {
               perSecond: Math.max(
@@ -221,6 +226,21 @@ export async function testProvider(
 ) {
   const row = await getConnection(userId, id),
     c = unlocked(row);
+  if (
+    testMode &&
+    !(c.transport === "api" && ["mailgun", "mailjet"].includes(c.type))
+  )
+    throw new AppError(
+      422,
+      "TEST_MODE",
+      "This connection does not support a non-delivery test.",
+    );
+  if (
+    await db.suppression.count({
+      where: { userId, email: recipient.toLowerCase() },
+    })
+  )
+    throw new AppError(422, "SUPPRESSED", "This test recipient is suppressed.");
   const test = await db.providerTestDelivery.create({
     data: { providerId: id, recipient, status: "PROCESSING" },
   });
@@ -254,7 +274,7 @@ export async function testProvider(
   });
   if (
     result.status === "accepted" &&
-    row.health !== "SANDBOX" &&
+    !["SANDBOX", "THROTTLED", "POLICY_BLOCKED"].includes(row.health) &&
     !(c.type === "postmark" && row.health === "CONFIG_ERROR")
   )
     await saveVerification(userId, id, row.revision, {

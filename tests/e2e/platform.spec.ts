@@ -8,17 +8,13 @@ test("login, provider setup, HTML import, preview, test, campaign controls, reco
   page.on("pageerror", (e) => errors.push(e.message));
   await page.goto("/login");
   await page.getByLabel("Email address").fill("browser-test@example.com");
-  await page
-    .getByLabel("Password", { exact: true })
-    .fill("Isolated-browser-test-password-2026");
+  await page.getByLabel("Password").fill("Isolated-browser-test-password-2026");
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await expect(page).toHaveURL(/providers/);
   await expect(page.getByText("No providers configured yet.")).toBeVisible();
   await page.getByRole("button", { name: /Development Mock/ }).click();
   await page.getByLabel("Connection name").fill("Browser verification");
-  await page
-    .getByLabel("From email", { exact: true })
-    .fill("sender@example.com");
+  await page.getByLabel("From email").fill("sender@example.com");
   await page
     .getByRole("button", { name: "Save & Verify", exact: true })
     .click();
@@ -29,44 +25,34 @@ test("login, provider setup, HTML import, preview, test, campaign controls, reco
   await page
     .getByRole("button", { name: "Test Browser verification", exact: true })
     .click();
-  await page
-    .getByLabel("Test recipient", { exact: true })
-    .fill("test@example.net");
+  await page.getByLabel("Test recipient").fill("test@example.net");
   await page
     .getByRole("button", { name: "Send Test Email", exact: true })
     .click();
   await expect(page.getByText("accepted", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Close", exact: true }).click();
   await page.goto("/blast");
-  await page
-    .getByLabel("Recipient file")
-    .setInputFiles({
-      name: "contacts.csv",
-      mimeType: "text/csv",
-      buffer: Buffer.from(
-        "email\none@example.net\none@example.net\ntwo@example.net\nbad\n",
-      ),
-    });
+  await page.getByLabel("Recipient file").setInputFiles({
+    name: "contacts.csv",
+    mimeType: "text/csv",
+    buffer: Buffer.from(
+      "email\none@example.net\none@example.net\ntwo@example.net\nbad\n",
+    ),
+  });
   await expect(page.getByText("1 duplicate", { exact: true })).toBeVisible();
-  await page
-    .getByLabel("Campaign name", { exact: true })
-    .fill("Browser campaign");
-  await page
-    .getByLabel("Subject", { exact: true })
-    .fill("Browser verification");
+  await page.getByLabel("Campaign name").fill("Browser campaign");
+  await page.getByLabel("Subject").fill("Browser verification");
   await page
     .getByRole("textbox", { name: "Email body", exact: true })
     .fill("A rich text message");
   await page.getByRole("button", { name: "Bold", exact: true }).click();
-  await page
-    .getByLabel("HTML file")
-    .setInputFiles({
-      name: "message.html",
-      mimeType: "text/html",
-      buffer: Buffer.from(
-        '<html><head><style>@media(max-width:480px){td{padding:12px}}</style></head><body><table width="100%"><tr><td><h1>Delivery check</h1><p>Preserved HTML layout.</p></td></tr></table><script>throw Error("unsafe")</script></body></html>',
-      ),
-    });
+  await page.getByLabel("HTML file").setInputFiles({
+    name: "message.html",
+    mimeType: "text/html",
+    buffer: Buffer.from(
+      '<html><head><style>@media(max-width:480px){td{padding:12px}}</style></head><body><table width="100%"><tr><td><h1>Delivery check</h1><p>Preserved HTML layout.</p></td></tr></table><script>throw Error("unsafe")</script></body></html>',
+    ),
+  });
   await page
     .getByRole("button", { name: "Refresh preview", exact: true })
     .click();

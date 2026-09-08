@@ -36,7 +36,7 @@ export interface SendContext {
   testMode?: boolean;
 }
 export type SendResult =
-  | { status: "accepted"; providerMessageId: string }
+  | { status: "accepted"; providerMessageId: string | null }
   | { status: "rejected" | "unknown"; error: ProviderError };
 export interface Verification {
   status: string;
@@ -47,6 +47,7 @@ export interface Verification {
     detail: string;
   }[];
   maxSendRate?: number;
+  quotaRemaining?: number;
 }
 export const safeMessages: Record<ErrorCategory, string> = {
   temporary: "Provider temporarily unavailable.",

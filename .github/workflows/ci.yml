@@ -61,6 +61,7 @@ jobs:
       - run: pnpm test
       - run: pnpm test:integration
       - run: pnpm build
+        id: web_build
         env:
           NODE_ENV: production
       - run: pnpm exec playwright install --with-deps chromium
@@ -68,10 +69,21 @@ jobs:
         env:
           NODE_ENV: production
       - name: Validate production containers
+        if: ${{ !cancelled() && steps.web_build.outcome == 'success' }}
         run: |
           node --import tsx scripts/setup-env.ts ci.example.com
           docker compose config --quiet
           docker compose build web
+          docker compose up -d postgres redis
+          docker compose run --rm web node node_modules/prisma/build/index.js migrate deploy
+          docker compose up -d --wait web worker
+          docker compose exec -T web node -e "fetch('http://localhost:3000/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+          docker compose down
+      - name: Collect server diagnostics
+        if: always()
+        run: |
+          mkdir -p test-results/server-logs
+          cp /tmp/emailsystem-e2e-*.log test-results/server-logs/ 2>/dev/null || true
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -79,5 +91,4 @@ jobs:
           path: |
             playwright-report/
             test-results/
-            /tmp/emailsystem-e2e-*.log
           retention-days: 7
