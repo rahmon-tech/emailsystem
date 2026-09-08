@@ -118,6 +118,7 @@ async function pump() {
         await db.activityEvent.deleteMany({
           where: { createdAt: { lt: date } },
         });
+        await db.providerEvent.deleteMany({where:{createdAt:{lt:new Date(Date.now()-cfg.WEBHOOK_RETENTION_DAYS*86400000)}}});
         await db.session.deleteMany({
           where: { expiresAt: { lt: new Date() } },
         });

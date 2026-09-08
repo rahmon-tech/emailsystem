@@ -51,13 +51,8 @@ export async function processDelivery(
   }));
   const attemptId = randomUUID();
   const chosen = await acquireProvider(initial.userId, candidates, attemptId);
-  if (!chosen) {
-    await db.delivery.updateMany({
-      where: { id, state: { in: unclaimedStates } },
-      data: { nextAttemptAt: new Date(Date.now() + 5000) },
-    });
-    return;
-  }
+  // A contender without a permit must not postpone a delivery another worker is claiming.
+  if (!chosen) return;
   const provider = eligible.find((p) => p.id === chosen)!;
   const candidate = candidates.find((p) => p.id === chosen)!;
   try {

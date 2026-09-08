@@ -12,6 +12,7 @@ const schema = z.object({
   WORKER_CONCURRENCY: z.coerce.number().int().min(1).max(32).default(4),
   ACTIVITY_RETENTION_DAYS: z.coerce.number().int().min(7).default(90),
   ATTEMPT_RETENTION_DAYS: z.coerce.number().int().min(30).default(365),
+  WEBHOOK_RETENTION_DAYS:z.coerce.number().int().min(7).default(30),
   MAX_IMPORT_ROWS: z.coerce.number().int().min(1).max(1000000).default(100000),
   MAX_UPLOAD_BYTES: z.coerce
     .number()

@@ -1,4 +1,5 @@
 "use client";
+import {useRouter} from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import {
@@ -57,6 +58,7 @@ type Flight = {
 };
 type Attachment = { filename: string; content: string; contentType: string };
 export function Blast() {
+ const router=useRouter();
   const [providers, setProviders] = useState<ProviderRow[]>([]),
     [imports, setImports] = useState<ImportRow[]>([]),
     [importId, setImportId] = useState(""),
@@ -769,7 +771,7 @@ export function Blast() {
                   "campaigns",
                   payload(),
                 );
-                window.location.assign("/activity?campaignId=" + result.id);
+                router.push("/activity?campaignId=" + result.id);
               })
             }
           >

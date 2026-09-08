@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   Box,
   Typography,
@@ -34,6 +34,7 @@ export function Shell({
   email: string;
   children: React.ReactNode;
 }) {
+  const router=useRouter();
   const pathname = usePathname();
   const [mobile, setMobile] = useState(false),
     [anchor, setAnchor] = useState<HTMLElement | null>(null);
@@ -184,7 +185,7 @@ export function Shell({
             <MenuItem
               onClick={async () => {
                 await api("auth/logout", {});
-                window.location.assign("/login");
+                router.replace("/login");router.refresh();
               }}
             >
               Sign out

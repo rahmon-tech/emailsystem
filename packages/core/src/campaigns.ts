@@ -143,10 +143,11 @@ export async function preflight(userId: string, input: unknown) {
   };
 }
 export async function createCampaign(userId: string, input: unknown) {
-  const result = await preflight(userId, input);
-  if (!result.ready)
-    throw new AppError(422, "PREFLIGHT", result.problems.join(" "));
-  const key = result.data.startKey ?? crypto.randomUUID();
+  const data=messageInput.parse(input);const key=data.startKey??crypto.randomUUID();
+  const previous=await db.campaign.findUnique({where:{userId_startKey:{userId,startKey:key}}});
+  if(previous)return previous;
+  const result = await preflight(userId, data);
+  if (!result.ready)throw new AppError(422, "PREFLIGHT", result.problems.join(" "));
   // Unique owner + start key makes repeated browser submissions refer to one campaign.
   return db.$transaction(async (tx) => {
     await tx.campaign.createMany({
