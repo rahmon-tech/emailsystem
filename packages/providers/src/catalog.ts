@@ -223,7 +223,7 @@ export const catalog: ProviderDefinition[] = [
         field(
           "sessionToken",
           "Session token (optional)",
-          "https://docs.aws.amazon.com/IAM/latest/UserGuide/access-key-self-managed.html",
+          "https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_temp_request.html",
           true,
         ),
       ],

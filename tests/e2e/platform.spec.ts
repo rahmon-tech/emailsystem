@@ -25,41 +25,33 @@ test("login, provider setup, HTML import, preview, test, campaign controls, reco
   ]) {
     await page.getByRole("button", { name: new RegExp(provider) }).click();
     const dialog = page.getByRole("dialog");
-    await expect(dialog.getByLabel(credential, { exact: true })).toBeVisible();
+    // Required labels include the MUI asterisk. Restrict matching to inputs so
+    // credential-help links with descriptive aria-labels cannot collide.
+    const input = (label: string) =>
+      dialog.getByLabel(label).and(dialog.locator("input"));
+    await expect(input(credential)).toBeVisible();
     await expect(
       dialog.getByRole("link", { name: new RegExp("Where do I get") }).first(),
     ).toHaveAttribute("href", /^https:/);
     await expect(dialog.getByLabel("SMTP hostname")).toHaveCount(0);
     await dialog.getByRole("button", { name: "SMTP", exact: true }).click();
     if (provider === "Brevo") {
-      await expect(
-        dialog.getByLabel("SMTP key", { exact: true }),
-      ).toBeVisible();
-      await expect(dialog.getByLabel("API key", { exact: true })).toHaveCount(
-        0,
-      );
+      await expect(input("SMTP key")).toBeVisible();
+      await expect(input("API key")).toHaveCount(0);
     }
     if (provider === "Postmark") {
-      await expect(
-        dialog.getByLabel("Stream SMTP access key", { exact: true }),
-      ).toBeVisible();
+      await expect(input("Stream SMTP access key")).toBeVisible();
       await dialog.getByLabel("SMTP credential type").click();
       await page
         .getByRole("option", { name: "Server token as username and password" })
         .click();
-      await expect(
-        dialog.getByLabel("Server token", { exact: true }),
-      ).toBeVisible();
-      await expect(
-        dialog.getByLabel("Stream SMTP access key", { exact: true }),
-      ).toHaveCount(0);
+      await expect(input("Server token")).toBeVisible();
+      await expect(input("Stream SMTP access key")).toHaveCount(0);
       await dialog.getByLabel("Message Stream type").click();
       await page
         .getByRole("option", { name: "Transactional — test only" })
         .click();
-      await expect(
-        dialog.getByLabel("Message Stream ID", { exact: true }),
-      ).toHaveValue("outbound");
+      await expect(input("Message Stream ID")).toHaveValue("outbound");
       await expect(
         dialog.getByText(/Campaigns require a Broadcast stream/),
       ).toBeVisible();

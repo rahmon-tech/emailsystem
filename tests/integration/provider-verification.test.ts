@@ -216,6 +216,11 @@ test("failed, incomplete and malformed verification states remain outside the ca
       "POLICY_BLOCKED",
     ],
     ["mailjet", () => new Response("invalid-json-secret"), "DEGRADED"],
+    [
+      "mailgun",
+      () => Response.json({ message: "Rate limited" }, { status: 429 }),
+      "THROTTLED",
+    ],
   ] as const) {
     const saved = await saveProvider(userId, input(type), undefined, {
       fetch: async () => response(),

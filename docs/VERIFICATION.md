@@ -30,7 +30,7 @@ All SMTP connections use Nodemailer TLS/authentication verification and a separa
 
 The catalog now owns credential help, typed authentication, explicit SMTP port/TLS pairs, regional routing, verification strategies and test capabilities. Both Postmark SMTP modes/hosts are covered. Brevo format-only validation and explicit Resend tests have distinct behavior. A third additive migration records controlled-test mode without guessing historical values. New database integration cases verify each provider's persisted state, encryption, pool eligibility and isolated test records. Browser coverage exercises all ten provider forms and Postmark credential changes.
 
-Local lint/type checks and 115 unit tests pass. The branch's GitHub Actions run is the authority for PostgreSQL/Redis integration, fresh migration/schema drift, production browser and container gates. Results below describe the previous released checkpoint until the new run completes.
+Local lint/type checks and 117 unit tests pass. The branch's GitHub Actions run is the authority for PostgreSQL/Redis integration, fresh migration/schema drift, production browser and container gates. Results below describe the previous released checkpoint until the new run completes.
 
 ## Previous released checkpoint
 

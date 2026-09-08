@@ -1047,7 +1047,9 @@ export async function verifyConnection(
             ? "MISSING_PERMISSION"
             : n.category === "policy"
               ? "POLICY_BLOCKED"
-              : "DEGRADED",
+              : n.category === "rate_limit"
+                ? "THROTTLED"
+                : "DEGRADED",
         false,
         check("Verification", "failed", n.message),
       );
@@ -1074,12 +1076,14 @@ function verificationError(status: number, detail: string) {
           ? "POLICY_BLOCKED"
           : e.category === "sender_configuration"
             ? "SENDER_UNVERIFIED"
-            : "DEGRADED",
+            : e.category === "rate_limit"
+              ? "THROTTLED"
+              : "DEGRADED",
     false,
     check(
-      status === 403 ? "Read permission" : "Verification",
+      e.category === "authorization" ? "Read permission" : "Verification",
       "failed",
-      status === 403
+      e.category === "authorization"
         ? "Read permission unavailable. This does not prove the sending key is invalid. Run a controlled test send."
         : e.message,
     ),

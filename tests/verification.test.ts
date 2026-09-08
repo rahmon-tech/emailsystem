@@ -192,7 +192,7 @@ test("Mailjet native sandbox succeeds without inventing a provider message ID", 
   assert.equal(result.providerMessageId, null);
 });
 
-test("Resend invalid keys and unverified senders are classified from documented errors", async () => {
+test("Resend invalid keys are classified from the documented error name", async () => {
   const v = await verifyConnection(connection("resend"), {
     fetch: async () =>
       Response.json(
@@ -261,5 +261,34 @@ test("Postmark sandbox servers cannot become campaign eligible", async () => {
     fetch: async () => Response.json({ ID: 123, DeliveryType: "Sandbox" }),
   });
   assert.equal(v.status, "SANDBOX");
+  assert.equal(v.usable, false);
+});
+
+test("verification preserves rate limits and account enforcement guidance", async () => {
+  for (const [status, data, expected] of [
+    [429, { message: "Rate limit exceeded" }, "THROTTLED"],
+    [
+      403,
+      { message: "Account suspended due to enforcement" },
+      "POLICY_BLOCKED",
+    ],
+  ] as const) {
+    const v = await verifyConnection(connection("resend"), {
+      fetch: async () => Response.json(data, { status }),
+    });
+    assert.equal(v.status, expected);
+    assert.equal(v.usable, false);
+    assert(!JSON.stringify(v).includes("Run a controlled test send"));
+  }
+});
+test("SendGrid documented scope-authorization denial is distinct from invalid credentials", async () => {
+  const v = await verifyConnection(connection("sendgrid"), {
+    fetch: async () =>
+      Response.json(
+        { errors: [{ message: "authorization required" }] },
+        { status: 401 },
+      ),
+  });
+  assert.equal(v.status, "MISSING_PERMISSION");
   assert.equal(v.usable, false);
 });

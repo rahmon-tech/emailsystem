@@ -43,7 +43,7 @@ Save & Verify validates and normalizes input, encrypts credentials using ownersh
 
 SMTP verification calls Nodemailer `verify()` only. It confirms DNS/TLS/authentication and explicitly reports sender acceptance as unknown. No SMTP email is sent during Save & Verify. API verification uses read-only or provider-native non-delivery operations. Resend's safe address is used only after the user clicks Send Test Email; it is never a fallback from a failed read request.
 
-Controlled tests always use the selected stored connection and recipient, omit campaign CC/BCC, preserve the provider message ID and safe result, and write a separate ProviderTestDelivery. They never create campaign attempts or change campaign statistics. The nullable `testMode` field distinguishes new delivery-capable and non-delivery tests; historical rows retain unknown mode. Brevo format-only tests cannot promote a connection to HEALTHY. Native test modes are unavailable for SMTP and are rejected before any network action when unsupported. Acceptance does not establish inbox delivery.
+Controlled tests always use the selected stored connection and recipient, omit campaign CC/BCC, preserve the provider message ID and safe result, and write a separate ProviderTestDelivery. They never create campaign attempts or change campaign statistics. The nullable `testMode` field records whether a new test requested native non-delivery mode or a normal send; historical rows retain unknown mode. Brevo format-only tests cannot promote a connection to HEALTHY. Native test modes are unavailable for SMTP and are rejected before any network action when unsupported. Acceptance does not establish inbox delivery.
 
 ## Webhooks
 
