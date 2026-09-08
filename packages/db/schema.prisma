@@ -1,0 +1,246 @@
+generator client {
+  provider = "prisma-client"
+  output = "./generated"
+}
+datasource db {
+  provider = "postgresql"
+}
+enum CampaignState {
+  DRAFT
+  PREPARING
+  QUEUED
+  SENDING
+  PAUSED
+  CANCELLING
+  CANCELLED
+  COMPLETED
+  COMPLETED_WITH_ERRORS
+  FAILED
+}
+enum DeliveryState {
+  PENDING
+  QUEUED
+  PROCESSING
+  PROVIDER_ACCEPTED
+  DELIVERED
+  DEFERRED
+  SOFT_BOUNCED
+  HARD_BOUNCED
+  FAILED
+  COMPLAINED
+  UNSUBSCRIBED
+  SUPPRESSED
+  CANCELLED
+  UNKNOWN
+}
+model User {
+  id String @id @default(uuid())
+  email String @unique
+  passwordHash String
+  createdAt DateTime @default(now())
+  sessions Session[]
+  providers ProviderConnection[]
+  imports ContactImport[]
+  campaigns Campaign[]
+  suppressions Suppression[]
+  audit AuditEvent[]
+}
+model Session {
+  tokenHash String @id
+  userId String
+  user User @relation(fields:[userId],references:[id],onDelete:Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  @@index([expiresAt])
+  @@index([userId])
+}
+model ProviderConnection {
+  id String @id @default(uuid())
+  userId String
+  user User @relation(fields:[userId],references:[id],onDelete:Cascade)
+  name String
+  type String
+  transport String
+  settings Json
+  credentials Json
+  credentialHint String
+  enabled Boolean @default(false)
+  health String @default("UNVERIFIED")
+  verifiedAt DateTime?
+  cooldownUntil DateTime?
+  weight Int @default(1)
+  perSecond Int @default(1)
+  perMinute Int @default(30)
+  concurrency Int @default(1)
+  revision Int @default(1)
+  deletedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  verifications ProviderVerification[]
+  attempts DeliveryAttempt[]
+  tests ProviderTestDelivery[]
+  events ProviderEvent[]
+  @@unique([id,userId])
+  @@index([userId,enabled,health])
+}
+model ProviderVerification {
+  id String @id @default(uuid())
+  providerId String
+  provider ProviderConnection @relation(fields:[providerId],references:[id],onDelete:Cascade)
+  status String
+  checks Json
+  createdAt DateTime @default(now())
+  @@index([providerId,createdAt])
+}
+model ProviderTestDelivery {
+  id String @id @default(uuid())
+  providerId String
+  provider ProviderConnection @relation(fields:[providerId],references:[id],onDelete:Cascade)
+  recipient String
+  status String
+  providerMessageId String?
+  safeError String?
+  createdAt DateTime @default(now())
+  @@index([providerId,createdAt])
+}
+model ContactImport {
+  id String @id @default(uuid())
+  userId String
+  user User @relation(fields:[userId],references:[id],onDelete:Cascade)
+  filename String
+  state String @default("PREPARING")
+  stats Json
+  createdAt DateTime @default(now())
+  recipients ImportRecipient[]
+  @@unique([id,userId])
+  @@index([userId,createdAt])
+}
+model ImportRecipient {
+  id String @id @default(uuid())
+  importId String
+  userId String
+  import ContactImport @relation(fields:[importId,userId],references:[id,userId],onDelete:Cascade)
+  email String
+  @@unique([importId,email])
+  @@index([importId,id])
+}
+model Campaign {
+  id String @id @default(uuid())
+  userId String
+  user User @relation(fields:[userId],references:[id],onDelete:Cascade)
+  name String
+  state CampaignState @default(DRAFT)
+  message Json
+  importId String
+  preparationCursor String?
+  preparedAt DateTime?
+  intendedRecipientCount Int @default(0)
+  recipientCount Int @default(0)
+  startKey String
+  scheduledAt DateTime @default(now())
+  startedAt DateTime?
+  completedAt DateTime?
+  safeError String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  deliveries Delivery[]
+  activity ActivityEvent[]
+  @@unique([id,userId])
+  @@unique([userId,startKey])
+  @@index([userId,createdAt,id])
+  @@index([state,scheduledAt])
+}
+model Delivery {
+  id String @id @default(uuid())
+  userId String
+  campaignId String
+  campaign Campaign @relation(fields:[campaignId,userId],references:[id,userId],onDelete:Cascade)
+  email String
+  state DeliveryState @default(PENDING)
+  attemptCount Int @default(0)
+  nextAttemptAt DateTime @default(now())
+  claimId String?
+  claimedAt DateTime?
+  acceptedAt DateTime?
+  deliveredAt DateTime?
+  safeError String?
+  unsubscribeToken String @unique
+  unsubscribeHash String @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  attempts DeliveryAttempt[]
+  @@unique([id,userId])
+  @@unique([campaignId,email])
+  @@index([state,nextAttemptAt,id])
+  @@index([campaignId,state,id])
+  @@index([userId,email])
+}
+model DeliveryAttempt {
+  id String @id @default(uuid())
+  userId String
+  deliveryId String
+  delivery Delivery @relation(fields:[deliveryId,userId],references:[id,userId],onDelete:Cascade)
+  providerId String
+  provider ProviderConnection @relation(fields:[providerId,userId],references:[id,userId])
+  providerRevision Int
+  idempotencyKey String @unique
+  state String @default("PROCESSING")
+  providerMessageId String?
+  category String?
+  safeError String?
+  startedAt DateTime @default(now())
+  finishedAt DateTime?
+  @@index([providerId,providerMessageId])
+  @@index([deliveryId,startedAt])
+  @@index([state,startedAt])
+}
+model ProviderEvent {
+  id String @id @default(uuid())
+  providerId String
+  provider ProviderConnection @relation(fields:[providerId],references:[id])
+  attemptId String?
+  eventKey String
+  messageId String
+  recipient String?
+  kind String
+  processed Boolean @default(false)
+  nextMatchAt DateTime @default(now())
+  occurredAt DateTime
+  createdAt DateTime @default(now())
+  @@unique([providerId,eventKey])
+  @@index([processed,nextMatchAt])
+}
+model Suppression {
+  id String @id @default(uuid())
+  userId String
+  user User @relation(fields:[userId],references:[id],onDelete:Cascade)
+  email String
+  reason String
+  createdAt DateTime @default(now())
+  @@unique([userId,email])
+  @@index([userId,createdAt])
+}
+model ActivityEvent {
+  id BigInt @id @default(autoincrement())
+  userId String
+  campaignId String
+  campaign Campaign @relation(fields:[campaignId,userId],references:[id,userId],onDelete:Cascade)
+  deliveryId String?
+  providerName String?
+  maskedEmail String?
+  kind String
+  message String
+  createdAt DateTime @default(now())
+  @@index([userId,id])
+  @@index([campaignId,id])
+  @@index([createdAt])
+}
+model AuditEvent {
+  id String @id @default(uuid())
+  userId String
+  user User @relation(fields:[userId],references:[id],onDelete:Cascade)
+  action String
+  resourceId String
+  createdAt DateTime @default(now())
+  @@index([userId,createdAt])
+}

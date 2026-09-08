@@ -1,0 +1,11 @@
+packages:
+  - apps/*
+  - packages/*
+minimumReleaseAge: 1440
+allowBuilds:
+  '@prisma/engines': true
+  prisma: true
+  sharp: true
+  esbuild: true
+  msgpackr-extract: false
+  unrs-resolver: true
