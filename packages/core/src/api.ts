@@ -105,6 +105,7 @@ export async function api(request: Request, parts: string[]) {
           where: {
             userId: user.id,
             startedAt: { gte: new Date(Date.now() - 86400000) },
+            state: { notIn: ["NOT_STARTED", "RESERVED"] },
           },
           _count: true,
         });

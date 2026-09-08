@@ -194,6 +194,14 @@ test("decryption failure before transport releases all reservations and leaves a
   });
   assert.equal(a.state, "NOT_STARTED");
   assert.equal(a.transmissionStartedAt, null);
+  assert.equal(
+    (
+      await db.providerConnection.findUniqueOrThrow({
+        where: { id: f.provider.id },
+      })
+    ).enabled,
+    false,
+  );
   assert(
     (await safetyCapacity(f.user.id, f.input.from, f.campaign.id)).usage.every(
       (b) => b.used === 0,
@@ -236,7 +244,20 @@ test("recovery releases durable unstarted reservations but preserves interrupted
       },
     });
   }
+  await db.providerConnection.update({
+    where: { id: f.provider.id },
+    data: { quotaRemaining: 0, quotaCheckedAt: new Date() },
+  });
   await recoverStalled();
+  assert.equal(
+    (
+      await db.providerConnection.findUniqueOrThrow({
+        where: { id: f.provider.id },
+      })
+    ).quotaRemaining,
+    0,
+    "An unstarted refund cannot increase a freshly reported provider quota",
+  );
   await rebuildSafety(f.user.id);
   const states = await db.delivery.findMany({
     where: { campaignId: f.campaign.id },
@@ -470,4 +491,25 @@ test("the minimum sample crossing on a later acceptance evaluates earlier compla
   assert.equal((await getSafetySettings(f.user.id)).pausedReason, null);
   await processDelivery(last.id);
   assert.match((await getSafetySettings(f.user.id)).pausedReason!, /Complaint/);
+});
+
+test("Redis rebuild racing live claims preserves the shared account ceiling", async () => {
+  const f = await fixture(20, { accountDaily: 10 });
+  for (const d of f.deliveries.slice(0, 3)) await processDelivery(d.id);
+  await redis.del(`safety:{${f.user.id}}`);
+  await Promise.all([
+    ...f.deliveries.slice(3).map((d) => processDelivery(d.id)),
+    rebuildSafety(f.user.id),
+    rebuildSafety(f.user.id),
+  ]);
+  const count = await db.deliveryAttempt.count({
+    where: { userId: f.user.id, transmissionStartedAt: { not: null } },
+  });
+  assert.equal(count, 10);
+  assert.equal(
+    (await safetyCapacity(f.user.id, f.input.from)).usage.find(
+      (b) => b.scope === "account",
+    )!.used,
+    10,
+  );
 });

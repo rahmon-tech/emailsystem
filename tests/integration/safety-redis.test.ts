@@ -121,3 +121,14 @@ test("missing Redis ledger fails closed until authoritative restoration", async 
   ]);
   assert.equal((await f.g.reserve("rebuilt", f.budgets, 1)).allowed, false);
 });
+
+test("transport start moves reserved units to the later minute without refunding them early", async () => {
+  const f = await fixture(1);
+  await f.g.reserve("delayed-start", f.budgets, 1);
+  f.advance(60000);
+  assert.equal(await f.g.commit("delayed-start"), true);
+  f.advance(86400000);
+  assert.equal((await f.g.reserve("too-early", f.budgets, 1)).allowed, false);
+  f.advance(60000);
+  assert.equal((await f.g.reserve("expired", f.budgets, 1)).allowed, true);
+});

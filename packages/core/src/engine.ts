@@ -300,7 +300,22 @@ export async function processDelivery(
     );
     if (!claimed || !provider || !candidate) return;
     // Rendering/decryption can fail safely before the transport-start marker.
-    const connection = unlocked(provider);
+    let connection: ReturnType<typeof unlocked>;
+    try {
+      connection = unlocked(provider);
+    } catch {
+      await db.providerConnection.updateMany({
+        where: {
+          id: provider.id,
+          userId: initial.userId,
+          revision: provider.revision,
+        },
+        data: { enabled: false, health: "CONFIG_ERROR" },
+      });
+      throw new Error(
+        "Provider credentials could not be opened. Update and verify the connection.",
+      );
+    }
     const message = deliveryMessage(
       initial.campaign.message,
       initial.email,
@@ -546,7 +561,14 @@ export async function processDelivery(
               },
             });
             await tx.providerConnection.updateMany({
-              where: { id: { in: quotaPeers }, quotaRemaining: { not: null } },
+              where: {
+                id: { in: quotaPeers },
+                quotaRemaining: { not: null },
+                OR: [
+                  { quotaCheckedAt: null },
+                  { quotaCheckedAt: { lte: a.startedAt } },
+                ],
+              },
               data: { quotaRemaining: { increment: cost } },
             });
             await ensureGovernor(tx, initial.userId, clock, true);
@@ -629,6 +651,10 @@ export async function recoverStalled() {
                 .map((p) => p.id),
             },
             quotaRemaining: { not: null },
+            OR: [
+              { quotaCheckedAt: null },
+              { quotaCheckedAt: { lte: reserved.startedAt } },
+            ],
           },
           data: { quotaRemaining: { increment: reserved.messageUnits } },
         });

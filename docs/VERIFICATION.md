@@ -30,7 +30,15 @@ All SMTP connections use Nodemailer TLS/authentication verification and a separa
 
 The catalog now owns credential help, typed authentication, explicit SMTP port/TLS pairs, regional routing, verification strategies and test capabilities. Both Postmark SMTP modes/hosts are covered. Brevo format-only validation and explicit Resend tests have distinct behavior. A third additive migration records controlled-test mode without guessing historical values. New database integration cases verify each provider's persisted state, encryption, pool eligibility and isolated test records. Browser coverage exercises all ten provider forms and Postmark credential changes.
 
-## Executed tests
+## Sending safety milestone
+
+[PR #3](https://github.com/rahmon-tech/emailsystem/pull/3) adds independent rolling account/domain/provider/campaign budgets and sticky outcome brakes while preserving the completed platform and catalog. The preliminary safety source is `cbfed49d3bcc4d9ff8c38a9d6f9d4fb452acc543`, [CI run 34290077566](https://github.com/rahmon-tech/emailsystem/actions/runs/34290077566). It passes 120 unit tests, 52 real PostgreSQL/Redis integration tests and the production HTTPS browser workflow. Fresh migrations, zero drift, upgrade from exact baseline `846c288`, production build, Caddy validation and Docker web/worker readiness pass. Final candidate changes still require their own complete run before merge; CURRENT_WORK.md tracks this boundary.
+
+Added evidence includes atomic remaining-ten races, separate processes sharing an account cap across multiple providers, all four independent caps, CC/BCC costs, conservative rolling expiry, unstarted release, UNKNOWN retention, Redis-flush reconstruction, exact 150-recipient/100-unit pacing across days, authoritative outcome deduplication, suppressed-recipient exclusion, minimum samples, explicit review and tenant ownership. Browser assertions cover settings persistence, the responsive safety dialog, and Activity account/domain usage at 390, 430, 768, 1366 and 1536 pixels. Screenshots are CI artifacts; overflow and interaction checks are automated.
+
+The final candidate also adds concurrent reconstruction during claims and moving reserved units to the later transport-start minute. It prevents an unstarted quota refund from increasing a newer provider-reported quota and keeps unstarted reservations outside provider acceptance metrics.
+
+## Executed provider baseline tests
 
 The verified application source above passes the complete workflow. Subsequent documentation changes preserve the application code and run the same gates.
 

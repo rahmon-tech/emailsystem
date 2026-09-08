@@ -405,7 +405,11 @@ export async function campaignSummary(userId: string, id: string) {
     }),
     db.deliveryAttempt.groupBy({
       by: ["providerId", "state"],
-      where: { userId, delivery: { campaignId: id } },
+      where: {
+        userId,
+        delivery: { campaignId: id },
+        state: { notIn: ["NOT_STARTED", "RESERVED"] },
+      },
       _count: true,
     }),
     db.delivery.count({
