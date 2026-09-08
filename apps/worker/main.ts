@@ -62,6 +62,12 @@ async function pump() {
           campaign: {
             state: { in: ["QUEUED", "SENDING"] },
             preparedAt: { not: null },
+            safetyPausedReason: null,
+            user: { safetyPausedReason: null },
+            OR: [
+              { safetyWaitUntil: null },
+              { safetyWaitUntil: { lte: new Date() } },
+            ],
           },
         },
         orderBy: { nextAttemptAt: "asc" },

@@ -1,4 +1,5 @@
 "use client";
+import { SendingSafety } from "./sending-safety";
 import { useEffect, useState } from "react";
 import {
   Box,
@@ -135,6 +136,7 @@ export function Providers() {
       <PageTitle
         eyebrow="CONNECTIONS"
         title="Your sending providers"
+        action={<SendingSafety />}
         description="Connect your email services. We’ll check each connection before it can send."
       />
       <Failure error={error} />

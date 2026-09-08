@@ -1,3 +1,5 @@
+import { getSafetySettings, saveSafetySettings } from "./safety";
+import { reviewSafety } from "./safety-brakes";
 import { z } from "zod";
 import { db } from "@emailsystem/db";
 import { config } from "./config";
@@ -79,6 +81,18 @@ export async function api(request: Request, parts: string[]) {
         appUrl: config().APP_URL,
         maxUploadBytes: config().MAX_UPLOAD_BYTES,
       });
+    if (area === "safety") {
+      if (method === "GET" && !id)
+        return response(await getSafetySettings(user.id));
+      if (method === "PUT" && !id)
+        return response(
+          await saveSafetySettings(user.id, await readJson(request, 32000)),
+        );
+      if (method === "POST" && id === "review")
+        return response(
+          await reviewSafety(user.id, await readJson(request, 2048)),
+        );
+    }
     if (area === "providers") {
       if (method === "GET" && !id) {
         const providers = await db.providerConnection.findMany({
@@ -91,6 +105,7 @@ export async function api(request: Request, parts: string[]) {
           where: {
             userId: user.id,
             startedAt: { gte: new Date(Date.now() - 86400000) },
+            state: { notIn: ["NOT_STARTED", "RESERVED"] },
           },
           _count: true,
         });
@@ -299,6 +314,7 @@ export async function api(request: Request, parts: string[]) {
         problems: result.problems,
         warnings: result.warnings,
         count: result.count,
+        safety: result.safety,
         providers: result.providers,
         previewHtml: result.previewHtml,
         text: result.message.text,

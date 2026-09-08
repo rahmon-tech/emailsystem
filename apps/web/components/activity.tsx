@@ -1,4 +1,5 @@
 "use client";
+import { SafetyMetrics, type SafetySummary } from "./sending-safety";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import {
@@ -42,6 +43,7 @@ type Campaign = {
   safeError: string | null;
 };
 type Summary = Campaign & {
+  safety: SafetySummary;
   counts: Record<string, number>;
   acceptedCount: number;
   providers: { providerId: string; state: string; _count: number }[];
@@ -393,16 +395,17 @@ export function Activity() {
                         Pause
                       </Button>
                     )}
-                    {summary.state === "PAUSED" && (
-                      <Button
-                        aria-label="Resume campaign"
-                        startIcon={<PlayArrow />}
-                        disabled={busy}
-                        onClick={() => void action("resume")}
-                      >
-                        Resume
-                      </Button>
-                    )}
+                    {summary.state === "PAUSED" &&
+                      !summary.safety.pausedReason && (
+                        <Button
+                          aria-label="Resume campaign"
+                          startIcon={<PlayArrow />}
+                          disabled={busy}
+                          onClick={() => void action("resume")}
+                        >
+                          Resume
+                        </Button>
+                      )}
                     {["PREPARING", "QUEUED", "SENDING", "PAUSED"].includes(
                       summary.state,
                     ) && (
@@ -423,11 +426,19 @@ export function Activity() {
                     </Button>
                   </Stack>
                 </Stack>
-                {summary.safeError && (
-                  <Alert severity="warning" sx={{ mt: 2 }}>
-                    {summary.safeError}
-                  </Alert>
-                )}
+                <SafetyMetrics
+                  safety={summary.safety}
+                  campaignId={summary.id}
+                  refresh={() => {
+                    void refresh().catch((e) => setError(e.message));
+                  }}
+                />
+                {summary.safeError &&
+                  summary.safeError !== summary.safety.pausedReason && (
+                    <Alert severity="warning" sx={{ mt: 2 }}>
+                      {summary.safeError}
+                    </Alert>
+                  )}
                 <Box sx={{ mt: 3, mb: 2 }}>
                   <Stack
                     direction="row"

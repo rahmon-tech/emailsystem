@@ -14,7 +14,7 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint apps packages tests scripts",
     "test": "node --import tsx --test tests/*.test.ts",
-    "test:integration": "node --import tsx --test --test-concurrency=1 tests/integration/*.test.ts",
+    "test:integration": "node --import tsx --test --test-concurrency=1 --test-timeout=120000 tests/integration/*.test.ts",
     "test:e2e": "playwright test",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate deploy",

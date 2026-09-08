@@ -1,3 +1,8 @@
+import { lockSafety } from "./safety";
+import {
+  evaluateSafetyBrakes,
+  checkExistingSafetyOutcomes,
+} from "./safety-brakes";
 import { db } from "@emailsystem/db";
 import {
   authenticateWebhook,
@@ -91,6 +96,7 @@ export async function applyEvent(id: string) {
       ["hard_bounce", "complaint", "unsubscribe"].includes(event.kind)
     )
       await db.$transaction(async (tx) => {
+        await lockSafety(tx, attempt.userId);
         await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${attempt.userId + ":" + event.recipient},0))::text`;
         await tx.suppression.upsert({
           where: {
@@ -103,16 +109,30 @@ export async function applyEvent(id: string) {
           },
           update: { reason: event.kind },
         });
+        await tx.providerEvent.update({
+          where: { id },
+          data: { processed: true, attemptId: attempt.id },
+        });
+        await tx.deliveryAttempt.update({
+          where: { id: attempt.id },
+          data: { state: "ACCEPTED", providerMessageId: event.messageId },
+        });
+        await evaluateSafetyBrakes(
+          tx,
+          attempt.userId,
+          attempt.delivery.campaignId,
+        );
       });
     await db.providerEvent.update({ where: { id }, data: { processed: true } });
     return;
   }
   await db.$transaction(async (tx) => {
+    await lockSafety(tx, attempt.userId);
     await lockCampaign(tx, attempt.delivery.campaignId);
     await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${attempt.userId + ":" + attempt.delivery.email},0))::text`;
     const claimed = await tx.providerEvent.updateMany({
       where: { id, processed: false },
-      data: { processed: true },
+      data: { processed: true, attemptId: attempt.id },
     });
     if (!claimed.count) return;
     const delivery = await tx.delivery.findUniqueOrThrow({
@@ -181,6 +201,14 @@ export async function applyEvent(id: string) {
         where: { id: delivery.campaignId, state: "COMPLETED" },
         data: { state: "COMPLETED_WITH_ERRORS" },
       });
+    if (["hard_bounce", "complaint"].includes(event.kind))
+      await evaluateSafetyBrakes(tx, attempt.userId, delivery.campaignId);
+    else if (["accepted", "delivered"].includes(event.kind))
+      await checkExistingSafetyOutcomes(
+        tx,
+        attempt.userId,
+        delivery.campaignId,
+      );
     await tx.activityEvent.create({
       data: {
         userId: attempt.userId,

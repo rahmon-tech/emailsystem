@@ -47,9 +47,10 @@ export async function acquireProvider(
   userId: string,
   candidates: Candidate[],
   token: string,
+  ratePeers: Candidate[] = candidates,
 ) {
   const enriched = candidates.map((c) => {
-    const peers = candidates.filter((p) => p.group === c.group);
+    const peers = ratePeers.filter((p) => p.group === c.group);
     return {
       ...c,
       groupSecond: Math.min(...peers.map((p) => p.perSecond)),

@@ -11,8 +11,15 @@ The web application stores a campaign and returns immediately. Independent worke
 - CSV, TXT, XLSX and pasted recipients, normalization, deduplication and account-wide suppressions.
 - Tiptap rich text, CodeMirror HTML import, sanitized immutable email snapshots, mobile/desktop previews, attachments and scheduling.
 - PostgreSQL campaign/delivery/attempt records, BullMQ workers, weighted dispatch, coordinated rate/concurrency limits, cooldowns and bounded retries.
+- Independent rolling 24-hour account/domain/provider/campaign budgets, durable usage recovery, and complaint/hard-bounce pauses requiring review.
 - Authenticated provider notifications, signed unsubscribe links, live SSE activity, pause/resume/cancel, filters and safe CSV exports.
 - Password hashing, tenant ownership checks, CSRF protection, rate limits, Docker Compose, HTTPS proxy, migration and backup instructions.
+
+## Sending safety
+
+Open **Providers → Sending safety** to set rolling budgets. Defaults are 10,000 account units and 5,000 each for sender domain, provider connection and campaign. One To/CC/BCC recipient uses one unit. Adding providers never raises the shared account/domain budget. Larger campaigns queue across days; Activity shows usage and when capacity begins to return. Provider rate limits and actual quotas still apply.
+
+Complaint/hard-bounce thresholds can pause an account or campaign after a meaningful sample. Review the provider reports, record an administrator review, then explicitly resume. See [window, recovery and brake details](docs/ARCHITECTURE.md#central-sending-safety-governor). Sending safety controls reduce accidental over-sending and help preserve provider/account health.
 
 ## Requirements
 
@@ -58,7 +65,7 @@ pnpm build
 ALLOW_MOCK_PROVIDER=true pnpm test:e2e
 ```
 
-GitHub Actions uses real PostgreSQL and Redis service containers, applies all SQL migrations, checks schema drift, runs domain/provider/integration/browser tests, builds Next.js, validates Caddy, and starts the production web/worker containers to check readiness. Browser tests use HTTPS and the development provider; they never send real email. Screenshots and failure traces are attached to the run.
+GitHub Actions uses real PostgreSQL and Redis service containers, applies all SQL migrations, rehearses an upgrade from the verified provider milestone, checks schema drift, runs domain/provider/integration/browser tests, builds Next.js, validates Caddy, and starts the production web/worker containers to check readiness. Browser tests use HTTPS and the development provider; they never send real email. Screenshots and failure traces are attached to the run.
 
 Implementation and verification status are recorded in [CURRENT_WORK](docs/CURRENT_WORK.md). Live provider delivery, account-specific permission behavior and deployment on your VPS require your credentials/infrastructure. These are not implied by a successful mock test.
 

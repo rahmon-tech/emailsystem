@@ -14,6 +14,16 @@
 - Webhooks use native signatures or explicit HTTPS credentials depending on provider. Raw payloads, provider keys and provider error bodies are never logged. Activity and audit store safe text and identifiers.
 - CSV exports quote cells and prefix spreadsheet formula markers. Unsubscribe tokens are random and signed; GET only displays confirmation and POST performs suppression.
 
+## Sending safety
+
+Sending safety controls reduce accidental over-sending and help preserve provider/account health. They do not guarantee inbox placement or prevent provider restrictions. The controls cover independent rolling account/domain/provider/campaign budgets, recipient-copy costs, persistent UNKNOWN accounting and complaint/hard-bounce review pauses; [architecture](ARCHITECTURE.md#central-sending-safety-governor) defines the defaults and exact windows.
+
+Safety mutations require an authenticated owner and matching Origin. Per-provider overrides and campaign review IDs are reauthorized inside the account transaction. Numeric bounds reject zero, negatives, fractional budgets and overflow; only campaign `null` explicitly disables a cap. The current model has one administrator per isolated user account, with no public registration or delegated roles. Acknowledging a review is an explicit administrative action, never an automatic recovery mechanism. Threshold edits cannot clear existing holds.
+
+Reservations and restoration serialize under a PostgreSQL account advisory lock. All Redis safety state shares one key to fail closed after a flush/eviction. Loss after the durable transport-start marker remains charged, even when no response was saved. Deploy database migration and restart **all** web/worker instances together; workers running the previous version do not implement the new governor and must not coexist during rollout. Restore PostgreSQL and clear/rebuild stale Redis safety state after a database backup restore.
+
+Outcome brakes depend on authenticated, correlated provider events and accepted history; absence of webhooks is not evidence of a healthy complaint rate. Known suppressed recipients are excluded before claims and from prior-accepted outcome cohorts. Seven-day outcome evidence fits the minimum seven-day normalized-event retention. Provider policy enforcement remains a separate block and must be resolved before safety review/resume.
+
 ## Operational boundaries
 
 Use consented lists and authenticated sending domains. Explicit policy enforcement pauses sending; review the account before re-verifying the blocked connection. Re-verification cannot replace a provider's approval.

@@ -12,6 +12,20 @@ test("login, provider setup, HTML import, preview, test, campaign controls, reco
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await expect(page).toHaveURL(/providers/);
   await expect(page.getByText("No providers configured yet.")).toBeVisible();
+  await page
+    .getByRole("button", { name: "Sending safety", exact: true })
+    .click();
+  await expect(
+    page.getByLabel("Account daily budget", { exact: true }),
+  ).toHaveValue("10000");
+  await page.getByLabel("Account daily budget", { exact: true }).fill("12000");
+  await page
+    .getByRole("button", { name: "Save safety settings", exact: true })
+    .click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  expect(
+    (await (await context.request.get("/api/safety")).json()).accountDaily,
+  ).toBe(12000);
   for (const [provider, credential] of [
     ["Resend", "API key"],
     ["Amazon SES", "Access Key ID"],
@@ -290,6 +304,39 @@ test("login, provider setup, HTML import, preview, test, campaign controls, reco
         await expect(page.getByLabel("From email")).toHaveValue(
           "sender@example.com",
         );
+      if (route === "/providers") {
+        await page
+          .getByRole("button", { name: "Sending safety", exact: true })
+          .click();
+        const dialog = page.getByRole("dialog", {
+          name: "Sending safety",
+          exact: true,
+        });
+        await expect(
+          dialog.getByLabel("Account daily budget", { exact: true }),
+        ).toHaveValue("12000");
+        await dialog
+          .getByRole("button", { name: "Automatic safety pauses", exact: true })
+          .click();
+        await expect(
+          dialog.getByLabel("Complaint threshold (%)", { exact: true }),
+        ).toBeVisible();
+        expect(
+          await dialog.evaluate((el) => el.scrollWidth <= el.clientWidth + 2),
+        ).toBe(true);
+        await page.screenshot({
+          path: `test-results/safety-dialog-${width}.png`,
+          fullPage: true,
+          animations: "disabled",
+        });
+        await dialog
+          .getByRole("button", { name: "Close", exact: true })
+          .click();
+      }
+      if (route === "/activity")
+        await expect(
+          page.getByLabel("Sending safety usage", { exact: true }),
+        ).toContainText("Account · 24h");
       await page.screenshot({
         path: `test-results/${route.slice(1)}-${width}.png`,
         fullPage: true,
