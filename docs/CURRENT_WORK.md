@@ -6,7 +6,7 @@ The private repository `rahmon-tech/emailsystem` was originally empty. The direc
 
 ## Implemented
 
-Authentication and ownership; both PostgreSQL migrations; encrypted catalog connections and all required API/SMTP adapters; native verification and controlled tests; imports and deduplication; rich text/source composer and sanitized immutable snapshots; durable preparation and BullMQ dispatch; weighted Redis limits, quota reservation, cooldowns and bounded retries; unknown reconciliation; authenticated webhooks, suppression and unsubscribe; Activity, controls, filtering and export; production Docker/Caddy configuration; documentation and CI.
+Authentication and ownership; all PostgreSQL migrations; encrypted catalog connections and all required API/SMTP adapters; native verification and controlled tests; imports and deduplication; rich text/source composer and sanitized immutable snapshots; durable preparation and BullMQ dispatch; weighted Redis limits, quota reservation, cooldowns and bounded retries; unknown reconciliation; authenticated webhooks, suppression and unsubscribe; Activity, controls, filtering and export; production Docker/Caddy configuration; documentation and CI.
 
 ## Verification
 
@@ -23,3 +23,7 @@ Actual provider credentials/sending identities/controlled recipients are needed 
 ## Continuation decisions
 
 PostgreSQL owns durable truth; Redis coordinates work. Unknown sends stop for reconciliation. Provider acceptance and confirmed delivery are separate. SMTP has a whole-operation deadline below its concurrency lease. Authenticated recipient notifications and unsubscribe are idempotent. Imported HTML remains HTML; unsupported Outlook conditional blocks are removed with a warning. Mock connections require explicit configuration. TypeScript 6/ESLint 9 are pinned for the installed Next.js lint dependencies. Repository-backed code is maintained in GitHub.
+
+## Provider catalog addendum (2026-09-08)
+
+Integrated into the existing application: typed centralized auth/credential metadata and help links; exact SMTP port/TLS pairs including Mailjet alternatives; both Postmark SMTP hosts and credential modes; explicit Resend testing; Brevo format-only sandbox validation; persisted controlled-test mode; and deterministic endpoint/auth/region plus real-database verification-state coverage. Transactional Postmark connections stay outside campaign routing. The addendum is preserved in PROVIDER_CATALOG_ADDENDUM.md and setup/deviations are documented in PROVIDERS.md. Full CI verifies this follow-up before publication to main.

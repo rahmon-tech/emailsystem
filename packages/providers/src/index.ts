@@ -10,7 +10,14 @@ import {
 import { lookup } from "node:dns/promises";
 import { Socket } from "node:net";
 import ipaddr from "ipaddr.js";
-import { catalog, connectionSchema, endpoints, definition } from "./catalog";
+import {
+  catalog,
+  connectionSchema,
+  endpoints,
+  definition,
+  supportsTestMode,
+  smtpCredentials,
+} from "./catalog";
 import type { Connection } from "./catalog";
 import { safeMessages } from "./types";
 import type {
@@ -21,7 +28,7 @@ import type {
   Verification,
   ErrorCategory,
 } from "./types";
-export { catalog, connectionSchema, endpoints, definition };
+export { catalog, connectionSchema, endpoints, definition, supportsTestMode };
 export type { Connection, ConnectionInput, ProviderType } from "./catalog";
 export type * from "./types";
 type Obj = Record<string, unknown>;
@@ -47,20 +54,24 @@ export function normalizeError(
     )
   )
     category = "policy";
-  else if (status === 401 || (protocol === "smtp" && status === 535))
-    category = "authentication";
-  else if (status === 403) category = "authorization";
   else if (
-    status === 429 ||
-    (protocol === "smtp" && (status === 421 || status === 454))
+    status === 401 ||
+    /"name"\s*:\s*"invalid_api_key"/.test(detail) ||
+    (protocol === "smtp" && status === 535)
   )
-    category = "rate_limit";
+    category = "authentication";
   else if (
     /(sender|domain).*(unverified|not verified|verify|unauthorized)|not.*verified.*(sender|domain)/i.test(
       detail,
     )
   )
     category = "sender_configuration";
+  else if (status === 403) category = "authorization";
+  else if (
+    status === 429 ||
+    (protocol === "smtp" && (status === 421 || status === 454))
+  )
+    category = "rate_limit";
   else if (
     status &&
     ((protocol === "http" && (status >= 500 || status === 408)) ||
@@ -106,7 +117,10 @@ function auth(c: Connection): Record<string, string> {
     case "api-key":
       return { "api-key": s.apiKey };
     case "postmark":
-      return { "X-Postmark-Server-Token": s.serverToken };
+      return {
+        "X-Postmark-Server-Token": s.serverToken,
+        Accept: "application/json",
+      };
     case "smtp2go":
       return { "X-Smtp2go-Api-Key": s.apiKey };
     case "elastic":
@@ -120,6 +134,10 @@ export function buildRequest(
   m: ProviderMessage,
   ctx: SendContext,
 ): HttpRequest {
+  if (ctx.testMode && !supportsTestMode(c))
+    throw new Error(
+      "Non-delivery test mode is unavailable for this connection",
+    );
   const url = endpoints(c).sendUrl;
   if (!url) throw new Error("Provider uses SDK or SMTP");
   const headers = { ...auth(c), "Content-Type": "application/json" };
@@ -191,6 +209,7 @@ export function buildRequest(
         headers: {
           ...m.headers,
           "X-Mailin-custom": `es_attempt:${ctx.attemptId}`,
+          ...(ctx.testMode ? { "X-Sib-Sandbox": "drop" } : {}),
         },
         attachment: m.attachments.map((a) => ({
           name: a.filename,
@@ -440,24 +459,13 @@ export function buildSmtpOptions(
   address: string,
 ): SMTPTransport.Options {
   const ep = endpoints(c);
-  const s = c.credentials;
-  const username =
-    definition(c.type).smtp?.username ??
-    (c.type === "mailjet" ? s.apiKey : s.username);
-  const password = ["resend", "sendgrid"].includes(c.type)
-    ? s.apiKey
-    : c.type === "mailjet"
-      ? s.secretKey
-      : s.password;
-  const secure = c.settings.security
-    ? c.settings.security === "tls"
-    : [465, 2465, 8465, 443].includes(ep.port);
+  const secure = ep.security === "tls";
   return {
     host: address,
     port: ep.port,
     secure,
     requireTLS: !secure,
-    auth: { user: username, pass: password },
+    auth: smtpCredentials(c),
     tls: { servername: ep.smtpHost, rejectUnauthorized: true },
     connectionTimeout: c.settings.timeout,
     greetingTimeout: c.settings.timeout,
@@ -507,7 +515,7 @@ function ses(c: Connection, deps: Dependencies, timeout = 20000) {
   return (
     deps.ses ??
     new SESv2Client({
-      region: c.settings.region ?? "us-east-1",
+      region: c.settings.region ?? definition("ses").regions![0],
       maxAttempts: 1,
       requestHandler: {
         connectionTimeout: Math.min(timeout, 10000),
@@ -530,6 +538,14 @@ export async function send(
   ctx: SendContext,
   deps: Dependencies = {},
 ): Promise<SendResult> {
+  if (ctx.testMode && !supportsTestMode(c))
+    return {
+      status: "rejected",
+      error: {
+        category: "permanent",
+        message: "Non-delivery test mode is unavailable for this connection.",
+      },
+    };
   try {
     if (c.type === "mock") {
       if (
@@ -657,7 +673,8 @@ const result = (
 const probe = (c: Connection): ProviderMessage => ({
   from: c.settings.fromEmail,
   fromName: c.settings.fromName,
-  to: "delivered@resend.dev",
+  // Used only with provider-native non-delivery validation.
+  to: c.settings.fromEmail,
   cc: [],
   bcc: [],
   replyTo: c.settings.replyTo,
@@ -671,8 +688,9 @@ export async function verifyConnection(
   c: Connection,
   deps: Dependencies = {},
 ): Promise<Verification> {
+  const strategy = definition(c.type).verification;
   try {
-    if (c.type === "mock") {
+    if (strategy === "mock") {
       if (
         process.env.NODE_ENV === "production" &&
         process.env.ALLOW_MOCK_PROVIDER !== "true"
@@ -695,6 +713,19 @@ export async function verifyConnection(
     if (c.transport === "smtp") {
       return await withSmtp(c, deps, async (transport) => {
         await transport.verify();
+        if (
+          c.type === "postmark" &&
+          c.settings.messageStreamType === "transactional"
+        )
+          return result(
+            "CONFIG_ERROR",
+            false,
+            check(
+              "Message Stream",
+              "failed",
+              "Transactional SMTP is available for explicit tests only. Campaigns require a Broadcast stream.",
+            ),
+          );
         return result(
           "HEALTHY",
           true,
@@ -711,10 +742,13 @@ export async function verifyConnection(
         );
       });
     }
-    if (c.type === "ses") {
+    if (strategy === "ses-account") {
       const client = ses(c, deps, 5000);
       const account = obj(await client.send(new GetAccountCommand({})));
-      if (account.SendingEnabled !== true)
+      if (
+        account.SendingEnabled !== true ||
+        account.EnforcementStatus === "SHUTDOWN"
+      )
         return result(
           "POLICY_BLOCKED",
           false,
@@ -781,7 +815,7 @@ export async function verifyConnection(
         quotaRemaining: remaining,
       };
     }
-    if (c.type === "mailjet") {
+    if (strategy === "native-sandbox") {
       const { response, data } = await request(
         buildRequest(c, probe(c), {
           attemptId: crypto.randomUUID(),
@@ -815,34 +849,53 @@ export async function verifyConnection(
       },
       deps,
     );
-    if (c.type === "resend" && response.status === 403) {
-      const sent = await send(
-        c,
-        probe(c),
-        { attemptId: crypto.randomUUID(), idempotencyKey: crypto.randomUUID() },
-        deps,
+    if (
+      !response.ok &&
+      normalizeError(response.status, JSON.stringify(data)).category ===
+        "policy"
+    )
+      return verificationError(response.status, JSON.stringify(data));
+    if (c.type === "resend" && obj(data).name === "invalid_api_key")
+      return result(
+        "AUTH_ERROR",
+        false,
+        check("Authentication", "failed", safeMessages.authentication),
       );
-      return sent.status === "accepted"
-        ? result(
-            "HEALTHY",
-            true,
-            check(
-              "Send permission",
-              "passed",
-              "Safe Resend test recipient accepted. Read permission is not required.",
-            ),
-          )
-        : result(
-            sent.error.category === "sender_configuration"
-              ? "DOMAIN_UNVERIFIED"
-              : "MISSING_PERMISSION",
-            false,
-            check("Send permission", "failed", sent.error.message),
-          );
-    }
+    if (
+      c.type === "resend" &&
+      (obj(data).name === "restricted_api_key" || response.status === 403)
+    )
+      return result(
+        "UNVERIFIED",
+        false,
+        check(
+          "Read permission",
+          "unknown",
+          "Domain read permission is unavailable; a sending-only key may still be valid.",
+        ),
+        check(
+          "Send permission",
+          "unknown",
+          "Use Send Test Email for an explicit controlled test. Saving never sends an email.",
+        ),
+      );
+    if (
+      c.type === "sendgrid" &&
+      response.status === 401 &&
+      /authorization required|access forbidden/i.test(JSON.stringify(data))
+    )
+      return result(
+        "MISSING_PERMISSION",
+        false,
+        check(
+          "Read permission",
+          "unknown",
+          "The key cannot list scopes. This does not establish whether mail.send is granted; use a controlled test.",
+        ),
+      );
     if (!response.ok)
       return verificationError(response.status, JSON.stringify(data));
-    if (c.type === "sendgrid") {
+    if (strategy === "scopes") {
       const allowed = arr(obj(data).scopes).includes("mail.send");
       return result(
         allowed ? "HEALTHY" : "MISSING_PERMISSION",
@@ -858,7 +911,7 @@ export async function verifyConnection(
         check("Sender", "unknown", "Authenticate this sender in SendGrid."),
       );
     }
-    if (c.type === "resend") {
+    if (strategy === "domains") {
       const domain = c.settings.domain ?? c.settings.fromEmail.split("@")[1];
       const found = arr(obj(data).data)
         .map(obj)
@@ -877,16 +930,27 @@ export async function verifyConnection(
         ),
       );
     }
-    if (c.type === "postmark") {
+    if (strategy === "server-stream") {
+      if (obj(data).DeliveryType === "Sandbox")
+        return result(
+          "SANDBOX",
+          false,
+          check(
+            "Server mode",
+            "failed",
+            "This Postmark server uses Sandbox delivery. Use a live Broadcast server for campaigns.",
+          ),
+        );
       const stream = await request(
         {
-          url: `https://${definition("postmark").api!.host}/message-streams/${encodeURIComponent(c.settings.messageStream)}`,
+          url: ep.streamUrl!,
           method: "GET",
           headers: auth(c),
         },
         deps,
       );
       if (
+        c.settings.messageStreamType === "transactional" ||
         !stream.response.ok ||
         obj(stream.data).MessageStreamType !== "Broadcast"
       )
@@ -902,7 +966,7 @@ export async function verifyConnection(
       return result(
         "HEALTHY",
         true,
-        check("Server token", "passed", "Real server token authenticated."),
+        check("Server token", "passed", "Supplied server token authenticated."),
         check("Message Stream", "passed", "Broadcast stream confirmed."),
         check("Sender", "unknown", "Verify your sender signature in Postmark."),
       );
@@ -913,6 +977,46 @@ export async function verifyConnection(
         false,
         check("SMTP relay", "failed", "Enable transactional sending in Brevo."),
       );
+    if (strategy === "account-sandbox") {
+      const sandbox = await request(
+        buildRequest(c, probe(c), {
+          attemptId: crypto.randomUUID(),
+          idempotencyKey: crypto.randomUUID(),
+          testMode: true,
+        }),
+        deps,
+      );
+      if (!sandbox.response.ok)
+        return verificationError(
+          sandbox.response.status,
+          JSON.stringify(sandbox.data),
+        );
+      if (typeof obj(sandbox.data).messageId !== "string")
+        return result(
+          "DEGRADED",
+          false,
+          check(
+            "Sandbox validation",
+            "failed",
+            "Brevo returned an unexpected validation response.",
+          ),
+        );
+      return result(
+        "UNVERIFIED",
+        false,
+        check("Authentication", "passed", "Account request authenticated."),
+        check(
+          "Sandbox format",
+          "passed",
+          "Request format validated without delivery.",
+        ),
+        check(
+          "Send permission",
+          "unknown",
+          "Brevo sandbox validates format only. Use Send Test Email without sandbox mode to confirm sender acceptance.",
+        ),
+      );
+    }
     return result(
       "UNVERIFIED",
       false,

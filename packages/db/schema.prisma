@@ -100,6 +100,7 @@ model ProviderTestDelivery {
   provider ProviderConnection @relation(fields:[providerId],references:[id],onDelete:Cascade)
   recipient String
   status String
+  testMode Boolean?
   providerMessageId String?
   safeError String?
   createdAt DateTime @default(now())

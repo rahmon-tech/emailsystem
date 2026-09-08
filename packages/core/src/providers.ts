@@ -5,12 +5,15 @@ import {
   connectionSchema,
   verifyConnection,
   send,
+  supportsTestMode,
+  definition,
 } from "@emailsystem/providers";
 import type {
   Connection,
   ConnectionInput,
   Verification,
   ProviderMessage,
+  Dependencies,
 } from "@emailsystem/providers";
 import { config } from "./config";
 import { encryptSecret, decryptSecret } from "./security";
@@ -86,6 +89,7 @@ export async function saveProvider(
   userId: string,
   input: unknown,
   id?: string,
+  dependencies: Dependencies = {},
 ) {
   const parsed = connectionSchema.parse(input);
   if (parsed.type === "mock" && config().ALLOW_MOCK_PROVIDER !== "true")
@@ -161,15 +165,19 @@ export async function saveProvider(
       },
     });
   });
-  await verifyProvider(userId, providerId);
+  await verifyProvider(userId, providerId, dependencies);
   return db.providerConnection.findFirst({
     where: { id: providerId, userId },
     select: providerSelect,
   });
 }
-export async function verifyProvider(userId: string, id: string) {
+export async function verifyProvider(
+  userId: string,
+  id: string,
+  dependencies: Dependencies = {},
+) {
   const row = await getConnection(userId, id);
-  const verification = await verifyConnection(unlocked(row));
+  const verification = await verifyConnection(unlocked(row), dependencies);
   await saveVerification(userId, id, row.revision, verification);
   return verification;
 }
@@ -223,13 +231,11 @@ export async function testProvider(
   recipient: string,
   testMode = false,
   message?: ProviderMessage,
+  dependencies: Dependencies = {},
 ) {
   const row = await getConnection(userId, id),
     c = unlocked(row);
-  if (
-    testMode &&
-    !(c.transport === "api" && ["mailgun", "mailjet"].includes(c.type))
-  )
+  if (testMode && !supportsTestMode(c))
     throw new AppError(
       422,
       "TEST_MODE",
@@ -242,7 +248,7 @@ export async function testProvider(
   )
     throw new AppError(422, "SUPPRESSED", "This test recipient is suppressed.");
   const test = await db.providerTestDelivery.create({
-    data: { providerId: id, recipient, status: "PROCESSING" },
+    data: { providerId: id, recipient, status: "PROCESSING", testMode },
   });
   const m: ProviderMessage = message ?? {
     from: c.settings.fromEmail,
@@ -259,8 +265,9 @@ export async function testProvider(
   };
   const result = await send(
     c,
-    { ...m, to: recipient },
+    { ...m, to: recipient, cc: [], bcc: [] },
     { attemptId: test.id, idempotencyKey: test.id, testMode },
+    dependencies,
   );
   await db.providerTestDelivery.update({
     where: { id: test.id },
@@ -274,6 +281,10 @@ export async function testProvider(
   });
   if (
     result.status === "accepted" &&
+    !(
+      testMode && definition(c.type).capabilities.nativeTestMode === "format"
+    ) &&
+    c.settings.messageStreamType !== "transactional" &&
     !["SANDBOX", "THROTTLED", "POLICY_BLOCKED"].includes(row.health) &&
     !(c.type === "postmark" && row.health === "CONFIG_ERROR")
   )
@@ -328,5 +339,7 @@ export const compatible = (
 ) =>
   p.enabled &&
   p.health === "HEALTHY" &&
+  (p.settings as ConnectionInput["settings"]).messageStreamType !==
+    "transactional" &&
   (!p.cooldownUntil || p.cooldownUntil <= new Date()) &&
   (p.settings as ConnectionInput["settings"]).fromEmail === from;
