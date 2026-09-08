@@ -63,7 +63,7 @@ export async function processDelivery(
   try {
     const claimed = await db.$transaction(async (tx) => {
       await lockCampaign(tx, initial.campaignId);
-      await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${initial.userId + ":" + initial.email},0))`;
+      await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${initial.userId + ":" + initial.email},0))::text`;
       const c = await tx.campaign.findUnique({
         where: { id: initial.campaignId },
       });

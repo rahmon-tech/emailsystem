@@ -443,7 +443,7 @@ export async function api(request: Request, parts: string[]) {
           .object({ email: z.email().transform((s) => s.toLowerCase()) })
           .parse(await readJson(request, 1024));
         const record = await db.$transaction(async (tx) => {
-          await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${user.id + ":" + input.email},0))`;
+          await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${user.id + ":" + input.email},0))::text`;
           return tx.suppression.upsert({
             where: { userId_email: { userId: user.id, email: input.email } },
             create: { userId: user.id, email: input.email, reason: "manual" },

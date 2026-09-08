@@ -91,7 +91,7 @@ export async function applyEvent(id: string) {
       ["hard_bounce", "complaint", "unsubscribe"].includes(event.kind)
     )
       await db.$transaction(async (tx) => {
-        await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${attempt.userId + ":" + event.recipient},0))`;
+        await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${attempt.userId + ":" + event.recipient},0))::text`;
         await tx.suppression.upsert({
           where: {
             userId_email: { userId: attempt.userId, email: event.recipient! },
@@ -109,7 +109,7 @@ export async function applyEvent(id: string) {
   }
   await db.$transaction(async (tx) => {
     await lockCampaign(tx, attempt.delivery.campaignId);
-    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${attempt.userId + ":" + attempt.delivery.email},0))`;
+    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${attempt.userId + ":" + attempt.delivery.email},0))::text`;
     const claimed = await tx.providerEvent.updateMany({
       where: { id, processed: false },
       data: { processed: true },
@@ -190,7 +190,7 @@ export async function unsubscribe(token: string) {
   if (!d) throw new AppError(404, "TOKEN", "Unsubscribe link is invalid.");
   await db.$transaction(async (tx) => {
     await lockCampaign(tx, d.campaignId);
-    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${d.userId + ":" + d.email},0))`;
+    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${d.userId + ":" + d.email},0))::text`;
     await tx.suppression.upsert({
       where: { userId_email: { userId: d.userId, email: d.email } },
       create: { userId: d.userId, email: d.email, reason: "unsubscribe" },

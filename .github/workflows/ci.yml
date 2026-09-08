@@ -44,8 +44,12 @@ jobs:
           cache: pnpm
       - name: Generate ephemeral application keys
         run: |
-          echo "SESSION_SECRET=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
-          echo "CREDENTIAL_ENCRYPTION_KEY=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
+          session_key="$(openssl rand -hex 32)"
+          encryption_key="$(openssl rand -hex 32)"
+          echo "::add-mask::$session_key"
+          echo "::add-mask::$encryption_key"
+          echo "SESSION_SECRET=$session_key" >> "$GITHUB_ENV"
+          echo "CREDENTIAL_ENCRYPTION_KEY=$encryption_key" >> "$GITHUB_ENV"
       - run: pnpm install --frozen-lockfile
       - run: pnpm db:generate
       - name: Apply migrations to fresh PostgreSQL
