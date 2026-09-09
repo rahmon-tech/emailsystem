@@ -8,7 +8,6 @@ import {
   DialogActions,
   DialogContent,
   FormControlLabel,
-  MenuItem,
   Stack,
   Switch,
   TextField,
@@ -16,48 +15,33 @@ import {
   IconButton,
   Tooltip,
 } from "@mui/material";
-import {
-  LinkOutlined,
-  ExpandMore,
-  DeleteOutlined,
-  CheckCircleOutlined,
-} from "@mui/icons-material";
+import { LinkOutlined, ExpandMore, DeleteOutlined } from "@mui/icons-material";
 import { api } from "./api-client";
 import { Failure, ResponsiveDialog } from "./shared";
+
 export type TrackingConfig = {
-  settings: {
-    defaultEnabled: boolean;
-    defaultDomainId: string | null;
-    blockUnknown: boolean;
-  };
-  domains: {
-    id: string;
-    hostname: string;
-    usable: boolean;
-    enabled: boolean;
-    txtName: string;
-    txtValue: string;
-  }[];
+  settings: { defaultEnabled: boolean; blockUnknown: boolean };
+  appUrl: string;
   deniedDomains: { id: string; hostname: string }[];
   retentionDays: number;
   linkLifetimeDays: number;
 };
+
 export function TrackingSettings() {
-  const [open, setOpen] = useState(false),
-    [data, setData] = useState<TrackingConfig | null>(null),
-    [hostname, setHostname] = useState(""),
-    [denied, setDenied] = useState(""),
-    [busy, setBusy] = useState(false),
-    [error, setError] = useState("");
+  const [open, setOpen] = useState(false);
+  const [data, setData] = useState<TrackingConfig | null>(null);
+  const [denied, setDenied] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
   const refresh = async () => setData(await api<TrackingConfig>("tracking"));
-  const run = async (fn: () => Promise<unknown>) => {
+  const run = async (operation: () => Promise<unknown>) => {
     setBusy(true);
     setError("");
     try {
-      await fn();
+      await operation();
       await refresh();
-    } catch (e) {
-      setError((e as Error).message);
+    } catch (reason) {
+      setError((reason as Error).message);
     } finally {
       setBusy(false);
     }
@@ -86,141 +70,29 @@ export function TrackingSettings() {
           <Stack spacing={2.5}>
             <Failure error={error} />
             <Typography variant="body2" color="text.secondary">
-              Click tracking is optional. Direct links work without any setup.
+              Click tracking is optional. It is off by default. When it is off,
+              safe destination links remain direct.
             </Typography>
             {data && (
               <>
-                <Stack spacing={1}>
-                  <FormControlLabel
-                    control={
-                      <Switch
-                        checked={data.settings.defaultEnabled}
-                        disabled={
-                          busy ||
-                          (!data.settings.defaultEnabled &&
-                            !data.domains.some((d) => d.usable))
-                        }
-                        onChange={(_, checked) =>
-                          void save({ defaultEnabled: checked })
-                        }
-                      />
-                    }
-                    label="Track clicks by default"
-                  />
-                  <TextField
-                    select
-                    label="Default tracking hostname"
-                    value={data.settings.defaultDomainId ?? ""}
-                    disabled={busy}
-                    onChange={(e) =>
-                      void save({ defaultDomainId: e.target.value || null })
-                    }
-                  >
-                    <MenuItem value="">Choose a verified hostname</MenuItem>
-                    {data.domains
-                      .filter((d) => d.usable)
-                      .map((d) => (
-                        <MenuItem key={d.id} value={d.id}>
-                          {d.hostname}
-                        </MenuItem>
-                      ))}
-                  </TextField>
-                </Stack>
-                <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
-                  <TextField
-                    label="Tracking hostname"
-                    placeholder="click.your-domain.com"
-                    value={hostname}
-                    onChange={(e) => setHostname(e.target.value)}
-                    fullWidth
-                  />
-                  <Button
-                    variant="outlined"
-                    disabled={busy || !hostname.trim()}
-                    onClick={() =>
-                      void run(async () => {
-                        await api("tracking", { hostname });
-                        setHostname("");
-                      })
-                    }
-                  >
-                    Add
-                  </Button>
-                </Stack>
-                {data.domains.map((domain) => (
-                  <Accordion key={domain.id} disableGutters>
-                    <AccordionSummary expandIcon={<ExpandMore />}>
-                      <Stack
-                        direction="row"
-                        spacing={1}
-                        sx={{ minWidth: 0, alignItems: "center" }}
-                      >
-                        {domain.usable && (
-                          <CheckCircleOutlined
-                            color="success"
-                            fontSize="small"
-                          />
-                        )}
-                        <Typography noWrap>{domain.hostname}</Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          {domain.usable ? "Verified" : "Needs verification"}
-                        </Typography>
-                      </Stack>
-                    </AccordionSummary>
-                    <AccordionDetails>
-                      <Stack spacing={1.5}>
-                        <Typography variant="body2">
-                          Add this DNS TXT record, then route this hostname over
-                          HTTPS to this app. Your hosting administrator can use
-                          the deployment guide.
-                        </Typography>
-                        <TextField
-                          label="TXT name"
-                          value={domain.txtName}
-                          slotProps={{ input: { readOnly: true } }}
-                        />
-                        <TextField
-                          label="TXT value"
-                          value={domain.txtValue}
-                          multiline
-                          slotProps={{ input: { readOnly: true } }}
-                        />
-                        <Stack direction="row" spacing={1}>
-                          <Button
-                            variant="outlined"
-                            disabled={busy}
-                            onClick={() =>
-                              void run(() =>
-                                api(`tracking/${domain.id}/verify`, {}),
-                              )
-                            }
-                          >
-                            Verify hostname
-                          </Button>
-                          {domain.enabled && (
-                            <Button
-                              disabled={busy}
-                              color="warning"
-                              onClick={() =>
-                                void run(() =>
-                                  api(`tracking/${domain.id}/disable`, {}),
-                                )
-                              }
-                            >
-                              Disable
-                            </Button>
-                          )}
-                        </Stack>
-                        {domain.enabled && (
-                          <Typography variant="caption" color="text.secondary">
-                            Disabling makes links on this hostname unavailable,
-                            including previously sent links.
-                          </Typography>
-                        )}
-                      </Stack>
-                    </AccordionDetails>
-                  </Accordion>
-                ))}
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={data.settings.defaultEnabled}
+                      disabled={busy}
+                      onChange={(_, checked) =>
+                        void save({ defaultEnabled: checked })
+                      }
+                    />
+                  }
+                  label="Track clicks by default"
+                />
+                <TextField
+                  label="Redirect base"
+                  value={`${data.appUrl}/r/…`}
+                  helperText="Uses this app’s verified public URL; no third-party shortener is required."
+                  slotProps={{ input: { readOnly: true } }}
+                />
                 <Accordion disableGutters>
                   <AccordionSummary expandIcon={<ExpandMore />}>
                     <Typography>Destination policy</Typography>
@@ -238,7 +110,7 @@ export function TrackingSettings() {
                         <TextField
                           label="Denied destination domain"
                           value={denied}
-                          onChange={(e) => setDenied(e.target.value)}
+                          onChange={(event) => setDenied(event.target.value)}
                           fullWidth
                         />
                         <Button
@@ -255,9 +127,9 @@ export function TrackingSettings() {
                           Add
                         </Button>
                       </Stack>
-                      {data.deniedDomains.map((d) => (
+                      {data.deniedDomains.map((domain) => (
                         <Stack
-                          key={d.id}
+                          key={domain.id}
                           direction="row"
                           sx={{
                             alignItems: "center",
@@ -265,16 +137,16 @@ export function TrackingSettings() {
                           }}
                         >
                           <Typography sx={{ overflowWrap: "anywhere" }}>
-                            {d.hostname}
+                            {domain.hostname}
                           </Typography>
                           <Tooltip title="Remove denial">
                             <IconButton
-                              aria-label={`Remove ${d.hostname}`}
+                              aria-label={`Remove ${domain.hostname}`}
                               disabled={busy}
                               onClick={() =>
                                 void run(() =>
                                   api(
-                                    `denied-destinations/${d.id}`,
+                                    `denied-destinations/${domain.id}`,
                                     undefined,
                                     "DELETE",
                                   ),
@@ -296,20 +168,21 @@ export function TrackingSettings() {
                             }
                           />
                         }
-                        label="Require known link reputation"
+                        label="Block unknown reputation results"
                       />
                       <Typography variant="caption" color="text.secondary">
-                        Off by default. Turning this on also blocks sends when
-                        reputation checks are unavailable or inconclusive.
+                        Off by default. A timeout stays unknown—it is never
+                        silently reported as clean.
                       </Typography>
                     </Stack>
                   </AccordionDetails>
                 </Accordion>
                 <Typography variant="caption" color="text.secondary">
-                  Daily visit totals are retained for {data.retentionDays} days.
-                  Links expire after {data.linkLifetimeDays} days. No IP
-                  addresses or browser fingerprints are stored. Visits do not
-                  prove human engagement.
+                  Daily aggregate visit totals are kept for {data.retentionDays}{" "}
+                  days; links expire after {data.linkLifetimeDays} days. No IP
+                  address, browser fingerprint, cookies, or request headers are
+                  stored. “Likely automated” is heuristic and a visit never
+                  confirms a human action.
                 </Typography>
               </>
             )}

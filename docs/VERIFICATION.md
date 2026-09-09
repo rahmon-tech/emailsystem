@@ -1,85 +1,63 @@
 # Implementation and verification report
 
-Branch: `main`. The platform and provider catalog were merged in PRs #1 and #2. The central sending safety milestone was merged in [PR #3](https://github.com/rahmon-tech/emailsystem/pull/3) as `17ca4e076e4e420021fce57b13a4d6d39c9c6a89`. Verified application source: `d6b548dae04bf8992ec73a67a2b077ab6077a327`, [CI run 34290732223](https://github.com/rahmon-tech/emailsystem/actions/runs/34290732223). [Main branch CI runs](https://github.com/rahmon-tech/emailsystem/actions?query=branch%3Amain) identify subsequent exact documentation commits for deployment.
+This report separates implemented behavior from evidence actually collected. It does not treat configured credentials, provider authentication, sender authorization, inbox delivery, or VPS installation as interchangeable facts.
 
-## Architecture and implemented features
+## Current candidate
 
-Next.js 16, React 19 and MUI 9 provide the authenticated Providers → Blast → Activity interface. TypeScript packages separate business rules, provider adapters, HTML rendering and persistence. Prisma 7 and PostgreSQL 17 own campaign snapshots, recipients, attempts, events and suppression. Independent BullMQ workers use Redis 7.4 for coordination, rate/concurrency limits and recovery.
+The candidate adds the production provider bootstrap and sender-identity model to the existing TypeScript/PostgreSQL/Redis architecture. The exact commit and CI URL will be recorded after a secret-free branch is pushed and all remote gates finish.
 
-Implemented features include encrypted connections, verification/history and controlled tests; CSV/TXT/XLSX/paste imports with deduplication; rich text and imported HTML, sanitized desktop/mobile previews, attachments and scheduling; durable preparation and dispatch; weighted routing, quotas, retries and held unknown outcomes; authenticated webhooks and signed unsubscribe; persisted Activity counts, SSE, filtering, pause/resume/cancel, recipient inspection and CSV export. Deployment includes SQL migrations, non-root web/worker containers, PostgreSQL/Redis volumes, Caddy HTTPS, health checks and backup/restore instructions.
+### Local evidence
 
-## Provider coverage
+| Gate                   | Result                                                                                           |
+| ---------------------- | ------------------------------------------------------------------------------------------------ |
+| Prisma schema          | Valid; client generation succeeds.                                                               |
+| TypeScript             | Passes with no emitted output.                                                                   |
+| ESLint                 | Passes across apps, packages, tests, and scripts.                                                |
+| Unit tests             | **134 passed.**                                                                                  |
+| Production build       | Passes with `APP_URL=https://localhost:3443/emailblast` and `NEXT_PUBLIC_BASE_PATH=/emailblast`. |
+| Repository secret scan | Passes without printing matching content.                                                        |
+| Patch hygiene          | `git diff --check` passes.                                                                       |
 
-API and SMTP adapters are implemented for Resend, Amazon SES, Mailgun, SendGrid, Brevo, Postmark, Mailjet, SMTP2GO and Elastic Email. Custom SMTP is implemented. The development MockProvider is explicitly gated and sends no real email.
+PostgreSQL migrations, Redis integration, production HTTPS browser workflows, and container readiness require the CI services and are not marked passed until the candidate CI run completes.
 
-| Provider | Implemented API verification |
-| --- | --- |
-| Resend | Domain lookup; sending-only keys require an explicit controlled test. Save & Verify never sends. |
-| SES | Official SDK GetAccount/GetEmailIdentity, sandbox and sending-policy checks, rate and remaining-quota checks. |
-| Mailgun | Regional domain lookup and a separate controlled test for send permission. |
-| SendGrid | Native scopes lookup requiring `mail.send`. |
-| Brevo | Native account/relay checks and format-only sandbox validation, followed by a delivery-capable controlled test. |
-| Postmark | Actual server-token lookup, Sandbox detection and Broadcast message-stream validation. |
-| Mailjet | Native Send API SandboxMode validation with the supplied credentials. |
-| SMTP2GO | Authenticated native email summary lookup and a separate controlled test where required. |
-| Elastic Email | Native domain lookup and a separate controlled test where required. |
+## Implemented acceptance boundaries
 
-All SMTP connections use Nodemailer TLS/authentication verification and a separate test email to establish sender acceptance. SMTP authentication does not establish inbox delivery. [Provider setup and official references](PROVIDERS.md) document credentials, regions, native notifications and known deviations.
+### Providers and runtime secrets
 
-## Provider catalog addendum
+- The bootstrap catalog contains exactly eight primary API connections: Resend, Mailgun, SendGrid, Brevo, Postmark, Mailjet, SMTP2GO, and Elastic Email. Amazon SES remains available in the ordinary catalog but is not part of this bootstrap.
+- `.env.providers.example` contains variable names only. `.env.providers.local` is ignored, permission-checked, loaded only by the server-side CLI, and never copied into a container image.
+- Apply is idempotent by tenant and bootstrap key. Credentials are encrypted with the existing authenticated credential-storage layer before database persistence.
+- Mailgun management and sending keys are distinct. Optional SMTP credentials remain separate encrypted fields and do not create another routable connection.
+- Verification uses documented read operations or provider-native non-delivery validation. It does not send unsolicited email. A Postmark token is not selected when safe probes leave more than one valid candidate.
+- Connection health and sender/domain authorization are displayed separately. No domain or sender becomes `VERIFIED` merely because a key was saved.
 
-The catalog now owns credential help, typed authentication, explicit SMTP port/TLS pairs, regional routing, verification strategies and test capabilities. Both Postmark SMTP modes/hosts are covered. Brevo format-only validation and explicit Resend tests have distinct behavior. A third additive migration records controlled-test mode without guessing historical values. New database integration cases verify each provider's persisted state, encryption, pool eligibility and isolated test records. Browser coverage exercises all ten provider forms and Postmark credential changes.
+### Sender identity and dispatch
 
-## Sending safety milestone
+- Domains, aliases, and provider authorization records are tenant-scoped by composite database relations.
+- Campaigns select an enabled stored identity; arbitrary `From` addresses and foreign sender IDs are rejected.
+- Authorization scope is either `DOMAIN_WIDE` or `ADDRESS_SPECIFIC`. Address-specific evidence does not silently authorize sibling aliases.
+- Provider eligibility is checked during pre-flight, when a delivery is claimed, and immediately before transport. Changing a provider's configured domain retires its old authorization.
+- A campaign snapshot keeps one sender for all recipients. Aliases do not multiply provider quotas, rates, concurrency, or safety budgets.
 
-[PR #3](https://github.com/rahmon-tech/emailsystem/pull/3) adds independent rolling account/domain/provider/campaign budgets and sticky outcome brakes while preserving the completed platform and catalog. Source `d6b548dae04bf8992ec73a67a2b077ab6077a327` passes the full workflow: **175 tests**, fresh migrations, zero drift, upgrade from exact baseline `846c288`, production build, Caddy validation and Docker web/worker readiness. All previous 154 tests remain intact.
+### Tracking, privacy, and reputation
 
-Added evidence includes atomic remaining-ten races, separate processes sharing an account cap across multiple providers, all four independent caps, CC/BCC costs, conservative rolling expiry, unstarted release, UNKNOWN retention, Redis-flush reconstruction, exact 150-recipient/100-unit pacing across days, authoritative outcome deduplication, suppressed-recipient exclusion, minimum samples, explicit review and tenant ownership. Browser assertions cover settings persistence, the responsive safety dialog, and Activity account/domain usage at 390, 430, 768, 1366 and 1536 pixels. Screenshots are CI artifacts; overflow and interaction checks are automated.
+- Tracking defaults off and sending does not depend on it. With tracking off, safe HTTP/HTTPS destinations remain direct.
+- When explicitly enabled, links use the canonical `APP_URL/r/<opaque-token>` route. No separate hostname workflow or third-party shortening service exists.
+- Redirect destinations come only from tenant-scoped database records. Request parameters, headers, and referrers cannot replace them.
+- Analytics persist daily raw and likely-automated aggregates only. Full IPs, user-agent history, fingerprints, cookies, and unrelated headers are not stored.
+- Scanner classification is heuristic. Redirect visits never modify delivery state or trigger security-sensitive business actions.
+- Reputation sources normalize to `REPUTATION_CLEAN`, `REPUTATION_BLOCKED`, or `REPUTATION_UNKNOWN`. Absence from a deny list and provider outages remain unknown. Unknown results block only under explicit policy.
+- Existing opaque links and aggregate history survive the schema transition; tracking is forced off during upgrade until the canonical route is operational.
 
-Additional regressions verify concurrent reconstruction during claims and moving reserved units to the later transport-start minute. It prevents an unstarted quota refund from increasing a newer provider-reported quota and keeps unstarted reservations outside provider acceptance metrics.
+### HTML fidelity
 
-## Executed tests
-
-The verified application source above passes the complete workflow. Subsequent documentation changes preserve the application code and run the same gates.
-
-| Gate | Scope and result |
-| --- | --- |
-| Unit tests | **120 passed.** Domain transitions, HTML isolation, cryptography, every provider's API/SMTP contracts and verification, safe errors, signatures, recipient event correlation and SMTP deadlines. Exact API/SMTP hosts, auth, regions, every port/TLS pairing, Postmark modes and unsupported native-test rejection are included. Safety default/bounds, recipient-unit cost and minimum-sample brake tests are included. Provider transports are mocked. |
-| Integration tests | **54 passed.** Real PostgreSQL and Redis; MockProvider or injected transport outcomes. Concurrent claims, idempotent start, tenant isolation/CSRF, cancel during sends, early/duplicate events, retry, unknown recovery, suppression, XLSX import, shared rate/concurrency/fairness and quota reservations. Cases verify saved credentials/state for every provider, SMTP no-send verification, pool exclusion and independent test records. Eighteen additional safety cases cover all four caps, expiry, multi-process races, restoration during claims, queued pacing, UNKNOWN, release, thresholds, deduplication, suppression and review. |
-| Browser workflow | **1 passed.** Real production Next.js/HTTPS, PostgreSQL, Redis and workers with MockProvider. Login, invalid-form feedback, all ten provider forms, Postmark credential/stream modes, provider setup/verification/test, CSV deduplication, rich text/HTML import, mobile/desktop preview, pre-flight, delivered events, pause/resume/cancel, export and worker restart followed by confirmed progress. |
-| Responsive UI | Providers, Blast and Activity checked at **390, 430, 768, 1366 and 1536 px**, with overflow assertions and screenshots, including the safety settings dialog and Activity usage. |
-| Lint/type checking | Both pass. |
-| Production build | Next.js compilation, type checking and static generation pass. |
-| Fresh migrations | All four SQL migrations apply to fresh PostgreSQL; upgrade from exact baseline `846c288`, historical UNKNOWN/copy backfill, and both schema drift checks pass. |
-| Production containers | Caddy configuration validation, image build, fresh database migrations, web/worker startup and dependency-aware readiness all pass. |
-
-Total: **175 automated tests**. Browser screenshots and failure traces are published as CI artifacts. The current workflow also validates the mounted Caddy configuration before starting production containers.
+Representative newsletter and announcement fixtures assert table hierarchy, CTA placement, text, images, widths, spacing, responsive CSS, buttons, and supported Outlook fallbacks. Safety normalization removes active content and reports visible structural changes without rewriting marketing copy, randomizing recipients, concealing URLs, or attempting filter evasion.
 
 ## Verification boundaries
 
-- **Implemented:** all adapters, provider-native verification, delivery processing, notification authentication and deployment configuration described above.
-- **Verified with mocks:** provider requests/responses and the full email campaign workflow. No adapter test establishes the permissions or delivery behavior of an actual provider account.
-- **Verified with real infrastructure in CI:** PostgreSQL, Redis, worker restart/recovery, SQL migrations, Next.js build/runtime and Docker web/worker readiness.
-- **Verified against real providers:** none. Live credentials, verified sending identities, provider quotas, webhook configuration and controlled recipient addresses are required for that proof. An actual VPS/domain is required to prove its deployment, HTTPS issuance and network configuration.
+- Provider request contracts and responses are tested with synthetic credentials and injected transports. These tests do not prove any live account's permissions.
+- Live credential checks and sender/domain status will be recorded only from the controlled deployment machine. The safe bootstrap verify command performs no delivery.
+- Provider acceptance from a later explicitly requested test message would prove only provider acceptance for that sender—not inbox placement or human receipt.
+- VPS deployment, HTTPS, coexistence with existing projects, account creation, backups, and live readiness remain unverified until a working remote connection is available and the running host is inspected.
 
-Unknown outcomes remain held for reconciliation. Imported Outlook conditional blocks are removed with a visible warning. Custom SMTP has no portable confirmed-delivery callback. These boundaries are documented in [architecture](ARCHITECTURE.md) and [security](SECURITY.md).
-
-## Exact first-deployment commands
-
-Deploy from `main`. Replace `mail.your-domain.com` with the domain pointing to the VPS. The private repository requires normal GitHub access on that host.
-
-```sh
-git clone --branch main https://github.com/rahmon-tech/emailsystem.git
-cd emailsystem
-docker run --rm -u "$(id -u):$(id -g)" -v "$PWD:/app" -w /app node:24.19.0-bookworm-slim node --experimental-strip-types scripts/setup-env.ts mail.your-domain.com
-chmod 600 .env
-docker compose build
-docker compose up -d postgres redis
-docker compose run --rm web node node_modules/prisma/build/index.js migrate deploy
-docker compose run --rm -it web node --import tsx scripts/create-user.ts
-docker compose up -d
-curl --fail https://mail.your-domain.com/health/live
-curl --fail https://mail.your-domain.com/health/ready
-```
-
-The account CLI prompts for the first user's email and password. Enter provider credentials afterward through Providers → Save & Verify. See [DEPLOYMENT](DEPLOYMENT.md) for updates, backup, restore and troubleshooting.
+See [provider setup](PROVIDERS.md), [deployment](DEPLOYMENT.md), [architecture](ARCHITECTURE.md), and [security](SECURITY.md) for operating details.

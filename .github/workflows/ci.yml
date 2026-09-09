@@ -63,6 +63,7 @@ jobs:
       - name: Rehearse upgrade from verified provider milestone
         run: node --import tsx scripts/verify-safety-upgrade.ts
       - run: pnpm lint
+      - run: pnpm secrets:scan
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm test:integration

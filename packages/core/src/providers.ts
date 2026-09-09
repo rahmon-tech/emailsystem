@@ -26,9 +26,16 @@ import { config } from "./config";
 import { encryptSecret, decryptSecret } from "./security";
 import type { SealedSecret } from "./security";
 import { AppError } from "./errors";
+import {
+  ensureProviderIdentity,
+  recordControlledSenderTest,
+  senderForProviderTest,
+  syncProviderAuthorization,
+} from "./senders";
 export const providerSelect = {
   id: true,
   name: true,
+  bootstrapKey: true,
   type: true,
   transport: true,
   settings: true,
@@ -45,6 +52,14 @@ export const providerSelect = {
   concurrency: true,
   revision: true,
   createdAt: true,
+  domainAuthorizations: {
+    select: {
+      status: true,
+      scope: true,
+      safeDetail: true,
+      authorizedDomain: { select: { id: true, domain: true, status: true } },
+    },
+  },
   verifications: {
     orderBy: { createdAt: "desc" as const },
     take: 1,
@@ -123,10 +138,15 @@ export async function saveProvider(
       "webhookSecret",
       "webhookPublicKey",
       "snsTopicArn",
+      "managementApiKey",
+      "accountToken",
+      "smtpUsername",
+      "smtpPassword",
+      "smtpApiKey",
     ] as const)
       if (!credentials[key] && old[key]) credentials[key] = old[key];
   }
-  const secret = Object.values(credentials).find(Boolean) ?? "";
+  const hasSecret = Object.values(credentials).some(Boolean);
   const data = {
     name: parsed.name,
     type: parsed.type,
@@ -139,7 +159,7 @@ export async function saveProvider(
         `${userId}:${providerId}`,
       ),
     ),
-    credentialHint: secret.length > 4 ? "••••" + secret.slice(-4) : "••••",
+    credentialHint: hasSecret ? "Configured" : "No credentials",
     weight: parsed.weight,
     perSecond: parsed.perSecond,
     perMinute: parsed.perMinute,
@@ -164,6 +184,7 @@ export async function saveProvider(
       await tx.providerConnection.create({
         data: { id: providerId, userId, ...data },
       });
+    await ensureProviderIdentity(tx, userId, providerId, parsed.settings);
     await tx.auditEvent.create({
       data: {
         userId,
@@ -173,6 +194,76 @@ export async function saveProvider(
     });
   });
   await verifyProvider(userId, providerId, dependencies);
+  return db.providerConnection.findFirst({
+    where: { id: providerId, userId },
+    select: providerSelect,
+  });
+}
+
+export async function upsertBootstrapProvider(
+  userId: string,
+  bootstrapKey: string,
+  input: unknown,
+) {
+  const parsed = connectionSchema.parse(input);
+  if (!/^[a-z0-9-]{1,40}$/.test(bootstrapKey))
+    throw new AppError(422, "BOOTSTRAP_KEY", "Invalid bootstrap key.");
+  if (parsed.type === "mock")
+    throw new AppError(
+      422,
+      "BOOTSTRAP_PROVIDER",
+      "Development providers cannot be production-bootstrapped.",
+    );
+  const previous = await db.providerConnection.findUnique({
+    where: { userId_bootstrapKey: { userId, bootstrapKey } },
+  });
+  const providerId = previous?.id ?? randomUUID();
+  const credentials = parsed.credentials;
+  const hasSecret = Object.values(credentials).some(Boolean);
+  const data = {
+    bootstrapKey,
+    name: parsed.name,
+    type: parsed.type,
+    transport: parsed.transport,
+    settings: json(parsed.settings),
+    credentials: json(
+      encryptSecret(
+        credentials,
+        config().CREDENTIAL_ENCRYPTION_KEY,
+        `${userId}:${providerId}`,
+      ),
+    ),
+    credentialHint: hasSecret ? "Configured" : "No credentials",
+    weight: parsed.weight,
+    perSecond: parsed.perSecond,
+    perMinute: parsed.perMinute,
+    concurrency: parsed.concurrency,
+    enabled: false,
+    health: "UNVERIFIED",
+    verifiedAt: null,
+    cooldownUntil: null,
+  };
+  await db.$transaction(async (tx) => {
+    if (previous)
+      await tx.providerConnection.update({
+        where: { id: providerId },
+        data: { ...data, deletedAt: null, revision: { increment: 1 } },
+      });
+    else
+      await tx.providerConnection.create({
+        data: { id: providerId, userId, ...data },
+      });
+    await ensureProviderIdentity(tx, userId, providerId, parsed.settings);
+    await tx.auditEvent.create({
+      data: {
+        userId,
+        action: previous
+          ? "provider.bootstrap.updated"
+          : "provider.bootstrap.created",
+        resourceId: providerId,
+      },
+    });
+  });
   return db.providerConnection.findFirst({
     where: { id: providerId, userId },
     select: providerSelect,
@@ -230,6 +321,7 @@ async function saveVerification(
     await tx.auditEvent.create({
       data: { userId, action: "provider.verified", resourceId: id },
     });
+    await syncProviderAuthorization(tx, userId, id, v);
   });
 }
 export async function testProvider(
@@ -239,9 +331,15 @@ export async function testProvider(
   testMode = false,
   message?: ProviderMessage,
   dependencies: Dependencies = {},
+  senderSelection?: { senderIdentityId?: string; from?: string },
 ) {
   const row = await getConnection(userId, id),
     c = unlocked(row);
+  const selected = await senderForProviderTest(
+    userId,
+    id,
+    senderSelection ?? { from: message?.from ?? c.settings.fromEmail },
+  );
   if (testMode && !supportsTestMode(c))
     throw new AppError(
       422,
@@ -263,7 +361,7 @@ export async function testProvider(
       const settings = safetySettings.parse(user.safetySettings),
         token = crypto.randomUUID();
       const governor = await ensureGovernor(tx, userId);
-      const domain = senderDomain(c.settings.fromEmail);
+      const domain = senderDomain(selected.sender.email);
       const current = await tx.providerConnection.findFirstOrThrow({
         where: { id, userId },
       });
@@ -305,12 +403,12 @@ export async function testProvider(
     { timeout: 60000 },
   );
   const m: ProviderMessage = message ?? {
-    from: c.settings.fromEmail,
-    fromName: c.settings.fromName,
+    from: selected.sender.email,
+    fromName: selected.sender.displayName,
     to: recipient,
     cc: [],
     bcc: [],
-    replyTo: c.settings.replyTo,
+    replyTo: selected.sender.replyTo,
     subject: "EmailSystem test email",
     html: "<p>Your EmailSystem connection accepted this test.</p>",
     text: "Your EmailSystem connection accepted this test.",
@@ -319,7 +417,15 @@ export async function testProvider(
   };
   const result = await send(
     c,
-    { ...m, to: recipient, cc: [], bcc: [] },
+    {
+      ...m,
+      from: selected.sender.email,
+      fromName: selected.sender.displayName || m.fromName,
+      replyTo: selected.sender.replyTo || m.replyTo,
+      to: recipient,
+      cc: [],
+      bcc: [],
+    },
     { attemptId: test.id, idempotencyKey: test.id, testMode },
     dependencies,
   );
@@ -347,7 +453,7 @@ export async function testProvider(
       usable: true,
       checks: [
         {
-          name: "Controlled test send",
+          name: "Send permission",
           status: "passed",
           detail: testMode
             ? "Non-delivery provider test accepted."
@@ -355,6 +461,8 @@ export async function testProvider(
         },
       ],
     });
+  if (result.status === "accepted" && !testMode)
+    await recordControlledSenderTest(userId, id, selected.sender.id);
   return db.providerTestDelivery.findUnique({ where: { id: test.id } });
 }
 export async function disableProvider(

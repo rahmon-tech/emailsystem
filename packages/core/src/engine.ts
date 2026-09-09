@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { db } from "@emailsystem/db";
 import { send } from "@emailsystem/providers";
 import type { SendResult, ConnectionInput } from "@emailsystem/providers";
-import { compatible, unlocked } from "./providers";
+import { unlocked } from "./providers";
 import { acquireProvider, releaseProvider, rateGroup } from "./dispatcher";
 import { lockCampaign, deliveryMessage } from "./campaigns";
 import { retryDecision, unclaimedStates } from "./domain";
@@ -19,6 +19,10 @@ import {
 } from "./safety";
 import { safetySettings, messageCost } from "./safety-config";
 import type { Candidate } from "./dispatcher";
+import {
+  eligibleProvidersForSenderId,
+  providerStillAuthorized,
+} from "./senders";
 export async function processDelivery(
   id: string,
   sendMessage: typeof send = send,
@@ -44,6 +48,8 @@ export async function processDelivery(
     cc: string[];
     bcc: string[];
   };
+  const senderIdentityId = initial.campaign.senderIdentityId;
+  if (!senderIdentityId) return;
   const cost = messageCost(snapshot),
     domain = senderDomain(snapshot.from),
     attemptId = randomUUID();
@@ -116,10 +122,13 @@ export async function processDelivery(
           });
           return false;
         }
-        const eligible = all.filter(
-          (p) =>
-            compatible(p, snapshot.from) &&
-            (p.quotaRemaining === null || p.quotaRemaining >= cost),
+        const authorized = await eligibleProvidersForSenderId(
+          tx,
+          initial.userId,
+          senderIdentityId,
+        );
+        const eligible = authorized.filter(
+          (p) => p.quotaRemaining === null || p.quotaRemaining >= cost,
         );
         if (!eligible.length) {
           await waitForSafety(
@@ -344,7 +353,12 @@ export async function processDelivery(
           user.safetyPausedReason ||
           c.safetyPausedReason ||
           p.revision !== provider!.revision ||
-          !compatible(p, snapshot.from) ||
+          !(await providerStillAuthorized(
+            tx,
+            initial.userId,
+            p.id,
+            senderIdentityId,
+          )) ||
           (await tx.providerConnection.count({
             where: { userId: initial.userId, health: "POLICY_BLOCKED" },
           })) ||

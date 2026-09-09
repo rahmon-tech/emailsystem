@@ -1,5 +1,7 @@
 "use client";
 import { TrackingSettings } from "./tracking-settings";
+import { SenderSettings } from "./sender-settings";
+import type { SenderCatalog } from "./sender-settings";
 import { SendingSafety } from "./sending-safety";
 import { useEffect, useState } from "react";
 import {
@@ -66,6 +68,7 @@ import {
 } from "./shared";
 export interface ProviderRow {
   id: string;
+  bootstrapKey?: string | null;
   name: string;
   type: ProviderType;
   transport: "api" | "smtp";
@@ -93,6 +96,12 @@ export interface ProviderRow {
   concurrency: number;
   credentialHint: string;
   recentAcceptance: number | null;
+  domainAuthorizations: {
+    status: string;
+    scope: string;
+    safeDetail: string | null;
+    authorizedDomain: { id: string; domain: string; status: string };
+  }[];
   verifications: {
     status: string;
     checks: { name: string; status: string; detail: string }[];
@@ -204,6 +213,7 @@ export function Providers() {
             }}
           >
             <SendingSafety />
+            <SenderSettings />
             <TrackingSettings />
             <Button
               variant="contained"
@@ -289,7 +299,7 @@ export function Providers() {
                   </Tooltip>
                 </Stack>
                 <Typography sx={{ mt: 2, fontSize: 13 }}>
-                  {p.settings.fromEmail}
+                  Verification sender · {p.settings.fromEmail}
                 </Typography>
                 <Stack
                   direction="row"
@@ -301,16 +311,30 @@ export function Providers() {
                     flexWrap: "wrap",
                   }}
                 >
-                  <Status
-                    value={p.enabled ? p.health : "DISABLED"}
-                    busy={busy === p.id}
-                  />
+                  <Status value={p.health} busy={busy === p.id} />
                   <Typography variant="caption" color="text.secondary">
                     {p.recentAcceptance === null
                       ? "No recent sends"
                       : `${p.recentAcceptance}% accepted today`}
                   </Typography>
                 </Stack>
+                {p.domainAuthorizations.map((authorization) => (
+                  <Stack
+                    key={authorization.authorizedDomain.id}
+                    direction="row"
+                    sx={{
+                      mt: 1,
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      gap: 1,
+                    }}
+                  >
+                    <Typography variant="caption" color="text.secondary">
+                      {authorization.authorizedDomain.domain}
+                    </Typography>
+                    <Status value={authorization.status} />
+                  </Stack>
+                ))}
                 <Stack
                   direction="row"
                   sx={{
@@ -324,12 +348,12 @@ export function Providers() {
                   }}
                 >
                   <Tooltip
-                    title={`Last verified: ${date(p.verifiedAt)} · Weight ${p.weight} · ${p.perMinute}/min`}
+                    title={`Last checked: ${date(p.verifiedAt)} · Weight ${p.weight} · ${p.perMinute}/min`}
                   >
                     <Typography variant="caption" color="text.secondary">
                       {p.verifiedAt
-                        ? `Verified ${new Date(p.verifiedAt).toLocaleDateString()}`
-                        : "Not verified"}
+                        ? `Checked ${new Date(p.verifiedAt).toLocaleDateString()}`
+                        : "Not checked"}
                     </Typography>
                   </Tooltip>
                   <Stack direction="row" spacing={0.25}>
@@ -541,8 +565,10 @@ export function Providers() {
 }
 const labels: Record<string, string> = {
   apiKey: "API key",
+  managementApiKey: "Management API key",
   secretKey: "Secret key",
   serverToken: "Server token",
+  accountToken: "Account token",
   accessKeyId: "Access Key ID",
   secretAccessKey: "Secret Access Key",
   sessionToken: "Session token (optional)",
@@ -770,16 +796,21 @@ function ProviderForm({
               }
             />
           ))}
-          <Typography sx={{ fontWeight: 700 }}>Sending identity</Typography>
+          <Typography sx={{ fontWeight: 700 }}>Verification sender</Typography>
+          <Typography variant="body2" color="text.secondary">
+            This address is used to check the connection and creates an identity
+            in Domains & senders. Campaigns choose from verified identities
+            there; this field is not a per-campaign free-text From.
+          </Typography>
           <TextField
-            label="From email"
+            label="Verification sender email"
             type="email"
             value={settings.fromEmail}
             onChange={(e) => change("fromEmail", e.target.value)}
             required
           />
           <TextField
-            label="From name"
+            label="Default display name"
             value={settings.fromName}
             onChange={(e) => change("fromName", e.target.value)}
           />
@@ -1000,6 +1031,8 @@ function TestDialog({
   const [recipient, setRecipient] = useState(
       definition(row.type).capabilities.safeTestRecipient ?? "",
     ),
+    [catalog, setCatalog] = useState<SenderCatalog | null>(null),
+    [senderIdentityId, setSenderIdentityId] = useState(""),
     [testMode, setTestMode] = useState(false),
     [result, setResult] = useState<{
       status: string;
@@ -1010,6 +1043,35 @@ function TestDialog({
     } | null>(null),
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false);
+  const senders =
+    catalog?.domains.flatMap((domain) =>
+      domain.providers.some((provider) => provider.id === row.id)
+        ? domain.senders.filter((sender) => sender.enabled)
+        : [],
+    ) ?? [];
+  useEffect(() => {
+    let active = true;
+    void api<SenderCatalog>("senders")
+      .then((next) => {
+        if (!active) return;
+        setCatalog(next);
+        const available = next.domains.flatMap((domain) =>
+          domain.providers.some((provider) => provider.id === row.id)
+            ? domain.senders.filter((sender) => sender.enabled)
+            : [],
+        );
+        setSenderIdentityId(
+          available.find((sender) => sender.email === row.settings.fromEmail)
+            ?.id ??
+            available[0]?.id ??
+            "",
+        );
+      })
+      .catch((reason) => setError((reason as Error).message));
+    return () => {
+      active = false;
+    };
+  }, [row.id, row.settings.fromEmail]);
   return (
     <ResponsiveDialog
       open
@@ -1026,6 +1088,19 @@ function TestDialog({
             A small test email will use this exact connection. Provider quotas
             and charges may apply.
           </Typography>
+          <TextField
+            select
+            label="Sender identity"
+            value={senderIdentityId}
+            onChange={(event) => setSenderIdentityId(event.target.value)}
+            helperText="A successful delivery-capable test authorizes only this address unless the provider has already proven the whole domain."
+          >
+            {senders.map((sender) => (
+              <MenuItem key={sender.id} value={sender.id}>
+                {sender.email}
+              </MenuItem>
+            ))}
+          </TextField>
           <TextField
             label="Test recipient"
             type="email"
@@ -1090,13 +1165,17 @@ function TestDialog({
           variant="contained"
           loading={busy}
           startIcon={<ScienceOutlined />}
-          disabled={busy || !recipient}
+          disabled={busy || !recipient || !senderIdentityId}
           onClick={async () => {
             setBusy(true);
             setError("");
             try {
               setResult(
-                await api(`providers/${row.id}/test`, { recipient, testMode }),
+                await api(`providers/${row.id}/test`, {
+                  recipient,
+                  testMode,
+                  senderIdentityId,
+                }),
               );
               await onResult();
             } catch (e) {

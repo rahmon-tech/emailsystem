@@ -24,19 +24,32 @@ Enter `ray@emailblast.me` and the separately supplied password at account creati
 
 Verify port 3087 is free before starting. If occupied, choose an unused loopback port using `EMAILBLAST_PORT` and update the proxy target together. This compose project publishes only its web process on loopback and does not start a second public proxy. Its PostgreSQL, Redis, network and persistent volumes remain isolated under the `emailblast` project name.
 
-For an existing Nginx server, include `deploy/nginx-emailblast.conf` inside the existing `app.promptologoy.com` HTTPS server block, validate with `nginx -t`, then reload Nginx. Preserve all existing locations and certificates. For a different proxy, apply an equivalent path-scoped route only after inspecting its actual configuration. Forward `/emailblast/...` unchanged; do not strip the prefix. Overwrite the incoming client-IP headers at the trusted proxy and allow SSE responses to stream. Do not enable raw access logging for redirect paths.
+For an existing Nginx server, include `deploy/nginx-emailblast.conf` inside the existing `app.promptologoy.com` HTTPS server block, validate with `nginx -t`, then reload Nginx. Preserve all existing locations and certificates. For a different proxy, apply an equivalent path-scoped route only after inspecting its actual configuration. Forward `/emailblast/...` unchanged; do not strip the prefix. The trusted proxy must overwrite `Host`, `X-Forwarded-Host` and incoming client-IP headers, and allow SSE responses to stream. Do not expose the loopback application port publicly or enable raw access logging for redirect paths.
 
-Verify both the existing root project and `/emailblast/login`, authenticate with the requested account, check `/emailblast/health/ready`, provider setup, pre-flight, preview, Activity/SSE and CSV export. Sending requires a real provider connection; tracking remains off without one or more verified tracking hostnames. Do not send a live campaign as an installation health check.
+Verify both the existing root project and `/emailblast/login`, authenticate with the requested account, check `/emailblast/health/ready`, provider setup, pre-flight, preview, Activity/SSE and CSV export. Sending never depends on click tracking. Do not send a live campaign as an installation health check.
 
 `NEXT_PUBLIC_BASE_PATH` is compiled into Next.js and must equal the pathname of `APP_URL`. Rebuild when changing it. Client fetches, native links, exports and SSE include the prefix; Next navigation includes it automatically. Cookies are scoped to that path. [Next.js documents the build-time basePath behavior](https://nextjs.org/docs/app/api-reference/config/next-config-js/basePath).
 
 For updates, use the same compose files and project name for every command. Back up the database and keys, build the selected verified commit, stop only the `emailblast` worker, apply migrations, recreate only its web/worker containers, and recheck both sites. Never run a global Docker prune or remove another project's containers/volumes. Keep the previous image and compatible backup for rollback.
 
-## Optional tracking hostnames
+## Click redirect path
 
-Use hostnames you own. Add each in Providers → Link settings. Publish the displayed `_emailblast.<hostname>` TXT record. Configure valid TLS and route only `${NEXT_PUBLIC_BASE_PATH}/r/*` and `${NEXT_PUBLIC_BASE_PATH}/tracking/verify/*` on that hostname to the same web service, preserving the original hostname and path; return 404 for other paths on the tracking virtual host. Then choose Verify hostname. There is no on-demand TLS issuance for arbitrary Host headers.
+Optional click tracking uses the same canonical `APP_URL` as the application: `${APP_URL}/r/<opaque-token>`. Do not add a second hostname, wildcard host routing or a third-party shortener. The supplied Nginx fragment disables access logs for `/emailblast/r/`; apply the same minimization if the existing proxy configuration is adapted. Tracking defaults off, and a direct safe destination remains direct when it is off.
 
-Verification checks TXT ownership, public DNS addresses, a pinned HTTPS connection with a valid certificate and the expected challenge response. It rejects redirects and private/mixed address sets. Successful verification lasts 30 days; the worker refreshes enabled domains daily. Failed refreshes preserve the last successful validity window, and disabling a domain invalidates its links immediately. Existing links are never silently moved to a different hostname. Keep tracking-host logs disabled or aggregate/redact them with bounded retention as well.
+## Secure provider bootstrap
+
+Copy `.env.providers.example` to `.env.providers.local`, enter values only on the controlled VPS, set ownership so the runtime container user can read it, and set mode `0600`. Never paste values into shell arguments, Compose YAML, Git, CI, screenshots or logs. The command validates mappings before mutation; API and optional SMTP-backup fields remain distinct inside one encrypted provider record, so a backup transport does not create extra safety capacity.
+
+```sh
+cp .env.providers.example .env.providers.local
+chown 1000:1000 .env.providers.local
+chmod 600 .env.providers.local
+docker compose -p emailblast -f compose.yaml -f compose.shared.yaml run --rm --no-deps -v "$PWD/.env.providers.local:/app/.env.providers.local:ro" web node --import tsx scripts/providers-bootstrap.ts --dry-run --user ray@emailblast.me
+docker compose -p emailblast -f compose.yaml -f compose.shared.yaml run --rm --no-deps -v "$PWD/.env.providers.local:/app/.env.providers.local:ro" web node --import tsx scripts/providers-bootstrap.ts --apply --user ray@emailblast.me
+docker compose -p emailblast -f compose.yaml -f compose.shared.yaml run --rm --no-deps -v "$PWD/.env.providers.local:/app/.env.providers.local:ro" web node --import tsx scripts/providers-bootstrap.ts --verify --user ray@emailblast.me
+```
+
+`--apply` upserts exactly eight API-primary records in disabled/unverified state and encrypts all retained credentials. `--verify` uses read-only or provider-native non-delivery checks; it never sends an ordinary email. Postmark candidates are safely probed when two server tokens are present and no selection is given; ambiguous valid candidates stop for an explicit selection. A healthy connection is not the same as a verified sender domain. Use an explicit controlled recipient in Providers → Test only when a genuine send test is authorized.
 
 ## First installation
 
@@ -57,7 +70,7 @@ curl --fail https://mail.your-domain.com/health/live
 curl --fail https://mail.your-domain.com/health/ready
 ```
 
-The user creation command reads the email and password from the terminal with password echo disabled. Provider keys are subsequently entered through Providers → Save & Verify.
+The user creation command reads the email and password from the terminal with password echo disabled. Providers can then be installed with the secure bootstrap above or individually through Providers → Save & Verify.
 
 Caddy obtains TLS automatically and forwards the client IP. PostgreSQL and Redis are internal, backed by persistent volumes. The application requires HTTPS in production. Workers continue independently of open browsers and web restarts.
 

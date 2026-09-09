@@ -46,8 +46,10 @@ export const sesRegions = [
 export type SmtpSecurity = "starttls" | "tls";
 export type CredentialKey =
   | "apiKey"
+  | "managementApiKey"
   | "secretKey"
   | "serverToken"
+  | "accountToken"
   | "accessKeyId"
   | "secretAccessKey"
   | "sessionToken"
@@ -262,8 +264,14 @@ export const catalog: ProviderDefinition[] = [
       api: [
         field(
           "apiKey",
-          "API key",
+          "Sending API key",
           "https://documentation.mailgun.com/docs/mailgun/quickstart",
+        ),
+        field(
+          "managementApiKey",
+          "Management API key (optional)",
+          "https://documentation.mailgun.com/docs/mailgun/api-reference/openapi-final/tag/Domains/",
+          true,
         ),
       ],
       smtp: smtpFields(
@@ -385,6 +393,12 @@ export const catalog: ProviderDefinition[] = [
           "serverToken",
           "Server token",
           "https://postmarkapp.com/developer/user-guide/send-email-with-api",
+        ),
+        field(
+          "accountToken",
+          "Account token (optional)",
+          "https://postmarkapp.com/developer/api/overview",
+          true,
         ),
       ],
       smtp: smtpFields(

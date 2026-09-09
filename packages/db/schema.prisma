@@ -42,10 +42,12 @@ model User {
   safetyPausedReason String?
   safetyReviewedAt DateTime?
   trackingSettings Json @default("{}")
-  trackingDomains TrackingDomain[]
   deniedDestinations DeniedDestination[]
   sessions Session[]
   providers ProviderConnection[]
+  authorizedDomains AuthorizedDomain[]
+  senderIdentities SenderIdentity[]
+  providerDomainAuthorizations ProviderDomainAuthorization[]
   imports ContactImport[]
   campaigns Campaign[]
   suppressions Suppression[]
@@ -65,6 +67,7 @@ model ProviderConnection {
   userId String
   user User @relation(fields:[userId],references:[id],onDelete:Cascade)
   name String
+  bootstrapKey String?
   type String
   transport String
   settings Json
@@ -89,8 +92,78 @@ model ProviderConnection {
   attempts DeliveryAttempt[]
   tests ProviderTestDelivery[]
   events ProviderEvent[]
+  domainAuthorizations ProviderDomainAuthorization[]
   @@unique([id,userId])
+  @@unique([userId,bootstrapKey])
   @@index([userId,enabled,health])
+}
+
+model AuthorizedDomain {
+  id String @id @default(uuid())
+  userId String
+  user User @relation(fields:[userId],references:[id],onDelete:Cascade)
+  domain String
+  status String @default("UNVERIFIED")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  providerAuthorizations ProviderDomainAuthorization[]
+  senderIdentities SenderIdentity[]
+  @@unique([id,userId])
+  @@unique([userId,domain])
+  @@index([userId,status])
+}
+
+model SenderIdentity {
+  id String @id @default(uuid())
+  userId String
+  user User @relation(fields:[userId],references:[id],onDelete:Cascade)
+  authorizedDomainId String
+  authorizedDomain AuthorizedDomain @relation(fields:[authorizedDomainId,userId],references:[id,userId],onDelete:Cascade)
+  localPart String
+  email String
+  displayName String @default("")
+  replyTo String @default("")
+  enabled Boolean @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  providerAuthorizations ProviderSenderAuthorization[]
+  campaigns Campaign[]
+  @@unique([id,userId])
+  @@unique([userId,email])
+  @@unique([authorizedDomainId,localPart])
+  @@index([userId,enabled])
+}
+
+model ProviderDomainAuthorization {
+  id String @id @default(uuid())
+  userId String
+  user User @relation(fields:[userId],references:[id],onDelete:Cascade)
+  providerConnectionId String
+  providerConnection ProviderConnection @relation(fields:[providerConnectionId,userId],references:[id,userId],onDelete:Cascade)
+  authorizedDomainId String
+  authorizedDomain AuthorizedDomain @relation(fields:[authorizedDomainId,userId],references:[id,userId],onDelete:Cascade)
+  scope String @default("DOMAIN_WIDE")
+  status String @default("UNVERIFIED")
+  verifiedAt DateTime?
+  safeDetail String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  senderAuthorizations ProviderSenderAuthorization[]
+  @@unique([id,userId])
+  @@unique([providerConnectionId,authorizedDomainId])
+  @@index([userId,status])
+  @@index([authorizedDomainId,status])
+}
+
+model ProviderSenderAuthorization {
+  userId String
+  providerDomainAuthorizationId String
+  providerDomainAuthorization ProviderDomainAuthorization @relation(fields:[providerDomainAuthorizationId,userId],references:[id,userId],onDelete:Cascade)
+  senderIdentityId String
+  senderIdentity SenderIdentity @relation(fields:[senderIdentityId,userId],references:[id,userId],onDelete:Cascade)
+  createdAt DateTime @default(now())
+  @@id([providerDomainAuthorizationId,senderIdentityId])
+  @@index([userId,senderIdentityId])
 }
 model ProviderVerification {
   id String @id @default(uuid())
@@ -140,6 +213,8 @@ model Campaign {
   id String @id @default(uuid())
   userId String
   user User @relation(fields:[userId],references:[id],onDelete:Cascade)
+  senderIdentityId String?
+  senderIdentity SenderIdentity? @relation(fields:[senderIdentityId,userId],references:[id,userId],onDelete:Restrict)
   name String
   state CampaignState @default(DRAFT)
   message Json
@@ -166,6 +241,7 @@ model Campaign {
   @@unique([id,userId])
   @@unique([userId,startKey])
   @@index([userId,createdAt,id])
+  @@index([userId,senderIdentityId])
   @@index([state,scheduledAt])
 }
 model Delivery {
@@ -270,23 +346,6 @@ model AuditEvent {
   @@index([userId,createdAt])
 }
 
-model TrackingDomain {
-  id String @id @default(uuid())
-  userId String
-  user User @relation(fields:[userId],references:[id],onDelete:Cascade)
-  hostname String @unique
-  proofToken String @unique
-  enabled Boolean @default(false)
-  revision Int @default(0)
-  verifiedAt DateTime?
-  verifiedUntil DateTime?
-  lastCheckedAt DateTime?
-  createdAt DateTime @default(now())
-  links TrackingLink[]
-  @@unique([id,userId])
-  @@index([userId,enabled])
-}
-
 model DeniedDestination {
   id String @id @default(uuid())
   userId String
@@ -301,8 +360,6 @@ model TrackingLink {
   userId String
   campaignId String
   campaign Campaign @relation(fields:[campaignId,userId],references:[id,userId],onDelete:Cascade)
-  domainId String
-  domain TrackingDomain @relation(fields:[domainId,userId],references:[id,userId],onDelete:Cascade)
   token String @unique
   destination String
   expiresAt DateTime

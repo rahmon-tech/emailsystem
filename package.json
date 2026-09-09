@@ -19,6 +19,8 @@
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate deploy",
     "user:create": "node --import tsx scripts/create-user.ts",
+    "providers:bootstrap": "node --import tsx scripts/providers-bootstrap.ts",
+    "secrets:scan": "node --import tsx scripts/secret-scan.ts",
     "check": "pnpm lint && pnpm typecheck && pnpm test"
   },
   "dependencies": {

@@ -8,6 +8,7 @@ The web application stores a campaign and returns immediately. Independent worke
 
 - API and SMTP presets for Resend, Amazon SES, Mailgun, SendGrid, Brevo, Postmark, Mailjet, SMTP2GO and Elastic Email; public Custom SMTP.
 - Encrypted credentials, provider-specific Save & Verify, separate controlled test emails and verification history.
+- Idempotent eight-provider API bootstrap, verified domains, bulk sender aliases, and campaign sender selection.
 - CSV, TXT, XLSX and pasted recipients, normalization, deduplication and account-wide suppressions.
 - Tiptap rich text, CodeMirror HTML import, sanitized immutable email snapshots, mobile/desktop previews, attachments and scheduling.
 - PostgreSQL campaign/delivery/attempt records, BullMQ workers, weighted dispatch, coordinated rate/concurrency limits, cooldowns and bounded retries.
@@ -49,13 +50,14 @@ Set `ALLOW_MOCK_PROVIDER=true` to expose the explicitly labeled development adap
 
 ## VPS installation
 
-See [deployment instructions](docs/DEPLOYMENT.md), including first-user creation, upgrades, health checks and backups. Provider keys belong in encrypted connections entered through the UI, not in environment variables.
+See [deployment instructions](docs/DEPLOYMENT.md), including first-user creation, secure provider bootstrap, upgrades, health checks and backups. Provider bootstrap values live only in a mode-0600 git-ignored local file and are encrypted into PostgreSQL; they are never browser or repository content.
 
 ## Verification
 
 ```sh
 pnpm db:generate
 pnpm lint
+pnpm secrets:scan
 pnpm typecheck
 pnpm test
 # Against an isolated database whose name contains "test":

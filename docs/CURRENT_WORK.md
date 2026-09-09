@@ -2,18 +2,25 @@
 
 ## Verified baseline
 
-The UI refinement in PR #4 is merged. Remote main was verified at `be5fb6a3f1c59d703616b2e9484fd4dd4ac7790f`; CI [34296982470](https://github.com/rahmon-tech/emailsystem/actions/runs/34296982470) passed all 175 tests plus migrations, upgrade rehearsal, production build and container readiness. Its desktop/mobile visual review is complete.
+The HTML fidelity and defensive tracking milestone is merged on `main`. Remote source `b5882b3c790e7ca2a1c488139469dc19a8b00d12` passed CI run 34319148808, including PostgreSQL/Redis integration, the production subpath browser workflow, migrations, upgrade rehearsal, build, and container readiness.
 
-## HTML Fidelity & Multi-Domain Branded Tracking
+## Provider bootstrap, senders, and canonical tracking
 
-The seven additional acceptance requirements are implemented in the existing renderer, pre-flight, campaign, redirect, worker and MUI interfaces. No separate delivery architecture or third-party shortener was introduced. Supported safe Outlook fallbacks survive; normalization is deterministic and preserves legitimate copy/layout. Link reputation has explicit clean/blocked/unknown states and deadlines. Tracking defaults off, uses explicitly selected owned/verified hostnames, stores opaque campaign-level links and only daily visit aggregates, and never changes delivery truth. See ARCHITECTURE.md and SECURITY.md for boundaries and retention.
+The current candidate supplements that milestone without introducing a second delivery architecture:
 
-The full preceding tracking prompt was not recoverable from available conversation/file context. This implementation follows the visible seven requirements and existing repository contract; no missing requirement is claimed verified and no reputation-bypass rotation was inferred.
+- a server-only, idempotent bootstrap prepares exactly eight API connections: Resend, Mailgun, SendGrid, Brevo, Postmark, Mailjet, SMTP2GO, and Elastic Email;
+- API credentials and optional backup SMTP credentials remain separate fields in one encrypted provider record, so backups cannot multiply routing capacity;
+- `.env.providers.local` is git-ignored, must be mode `0600`, supplies the bootstrap values only on the controlled machine, and is never printed;
+- dry-run/apply/verify modes expose only safe metadata, perform no automatic delivery, and leave ambiguous Postmark server-token selection unresolved until read-only probes provide evidence;
+- tenant-owned domains and sender identities replace arbitrary campaign `From` text; provider authorization is explicitly domain-wide or address-specific and is rechecked when dispatch begins;
+- bulk aliases do not create providers, increase limits, or change a campaign's stable sender identity;
+- click tracking remains optional and defaults off. When enabled, opaque redirects use `APP_URL/r/<token>`; no hostname product flow, third-party shortener, IP history, user-agent history, cookie, fingerprint, or delivery-state inference is involved;
+- preserved HTML normalization remains deterministic, safe, compatible, and faithful. It does not rewrite copy or mutate content for filter evasion.
 
-Local type checks, lint, 129 unit tests and a production build with `/emailblast` pass. The initial source in [PR #5](https://github.com/rahmon-tech/emailsystem/pull/5) passed all 196 tests (129 unit, 62 PostgreSQL integration and 5 HTTPS browser workflows) in [CI 34317711506](https://github.com/rahmon-tech/emailsystem/actions/runs/34317711506). Its container gate found a YAML escape error in the health command; that is corrected before the next run. Follow-up coverage also verifies installation account creation through stdin, and the renderer now preserves standards document mode and warns about unsupported/relative content. New real PostgreSQL integration coverage tests tenancy, default-off/strict-policy behavior, duplicate submission, redirect boundaries, scanner isolation, retention and concurrent domain disable. Browser acceptance compares original/normalized templates and exercises the existing full app journey at the requested subpath. Exact-commit CI, screenshot review and merge results will be recorded in the milestone PR.
+Local Prisma validation, TypeScript, ESLint, 134 unit tests, secret scanning, diff checks, and a clean production build with `/emailblast` pass. Database-backed migration, integration, browser, and container gates are pending the candidate CI run; this file will not claim them before that evidence exists.
 
 ## Deployment target and access
 
-Authorized target: `https://app.promptologoy.com/emailblast`, alongside existing VPS projects. The shared-host compose override binds only an isolated loopback web port; the scoped Nginx snippet preserves the existing root project. Next build/runtime path configuration, cookies, APIs, navigation, SSE, exports, health, webhooks and unsubscribe links include the prefix. The app account is `ray@emailblast.me`; credentials are never stored in the repository.
+Authorized target: `https://app.promptologoy.com/emailblast`, alongside existing VPS projects. The shared-host compose override binds only an isolated loopback web port; the scoped proxy configuration must be reconciled with the live VPS before installation. The requested account is `ray@emailblast.me`; its password and all provider credentials are runtime secrets and are never repository content.
 
-Actual VPS installation and account creation are pending a working authorized remote connection. The workspace TCP attempt to the supplied server on SSH port 22 returned `Network is unreachable`. Remote Desktop Commander was suggested as an available connection option. No server changes, certificate issuance or live provider sends have occurred. Finish all code/CI work first; inspect the actual VPS and existing proxy before installation. Do not treat the checked-in configuration as deployment evidence.
+Actual VPS installation, account creation, and provider authentication checks remain pending a working authorized remote connection. The workspace TCP attempt to the supplied server on SSH port 22 returned `Network is unreachable`. No server changes, certificate issuance, provider mutation, or live delivery has occurred. The provider `--verify` gate will use only provider-native reads or non-delivery sandbox validation; any real test message requires a separately approved recipient and action.
