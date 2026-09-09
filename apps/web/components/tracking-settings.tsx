@@ -70,7 +70,7 @@ export function TrackingSettings() {
           <Stack spacing={2.5}>
             <Failure error={error} />
             <Typography variant="body2" color="text.secondary">
-              Click tracking is optional and off by default. When it is off,
+              Click tracking is optional. It is off by default. When it is off,
               safe destination links remain direct.
             </Typography>
             {data && (
