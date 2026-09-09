@@ -2,150 +2,58 @@ import sanitizeHtml from "sanitize-html";
 import juice from "juice";
 import { convert } from "html-to-text";
 import { createHash } from "node:crypto";
-// No network resolver is called here. Imported resources are never fetched by the server.
-function cleanCss(css: string) {
-  return css
-    .replace(/@import[^;]*(?:;|$)/gi, "")
-    .replace(/[^{};]*[\\<>][^{};]*(?:;|(?=\}))/g, "")
-    .replace(
-      /[^{};]*(?:expression\s*\(|javascript\s*:|vbscript\s*:|behavior\s*:|-moz-binding)[^{};]*(?:;|(?=\}))/gi,
-      "",
-    )
-    .replace(/url\(\s*(['"]?)(?!https:\/\/)[^)]*\)/gi, "none");
-}
+import { cleanCss, htmlOptions, protectOutlook } from "./safety";
+export { emailLinks, mapEmailLinks, destination } from "./links";
+// Normalization is deterministic and never fetches remote resources.
 export function normalizeEmail(raw: string, preheader = "") {
   if (Buffer.byteLength(raw, "utf8") > 512000)
     throw new Error("Email HTML must be under 512 KB.");
   const warnings: string[] = [];
-  if (/<!--\s*\[if/i.test(raw))
+  if (
+    /<(?:script|iframe|form|object|embed|input|svg|math|link)\b|\son\w+\s*=|(?:javascript|vbscript)\s*:/i.test(
+      raw,
+    )
+  )
     warnings.push(
-      "Outlook conditional blocks were removed for safe rendering. Review the resulting layout.",
+      "Active content was removed. Review any visible changes in the preview.",
     );
-  if (/<script|\son\w+=|<iframe|<form|@import|<link/i.test(raw))
-    warnings.push("Active content or external stylesheets were removed.");
+  const conditional = protectOutlook(raw, warnings);
   const styles: string[] = [];
-  const withoutStyles = raw.replace(
+  const withoutStyles = conditional.html.replace(
     /<style\b[^>]*>([\s\S]*?)<\/style>/gi,
     (_, css: string) => {
-      styles.push(cleanCss(css));
+      styles.push(cleanCss(css, warnings));
       return "";
     },
   );
+  const options = htmlOptions(warnings);
   const safe = sanitizeHtml(withoutStyles, {
-    allowedTags: [
-      "html",
-      "head",
-      "body",
-      "title",
-      "meta",
-      "table",
-      "thead",
-      "tbody",
-      "tfoot",
-      "tr",
-      "td",
-      "th",
-      "colgroup",
-      "col",
-      "div",
-      "span",
-      "p",
-      "br",
-      "hr",
-      "h1",
-      "h2",
-      "h3",
-      "h4",
-      "h5",
-      "h6",
-      "strong",
-      "b",
-      "em",
-      "i",
-      "u",
-      "s",
-      "blockquote",
-      "ul",
-      "ol",
-      "li",
-      "a",
-      "img",
-      "sup",
-      "sub",
-      "pre",
-      "code",
-      "center",
-    ],
+    ...options,
+    allowedTags: [...(options.allowedTags as string[]), "esoutlook"],
     allowedAttributes: {
-      "*": [
-        "style",
-        "class",
-        "id",
-        "align",
-        "valign",
-        "width",
-        "height",
-        "bgcolor",
-        "role",
-        "dir",
-        "lang",
-      ],
-      a: ["href", "title", "target", "rel"],
-      img: ["src", "alt", "width", "height", "title"],
-      table: ["cellpadding", "cellspacing", "border", "width", "align", "role"],
-      td: [
-        "colspan",
-        "rowspan",
-        "width",
-        "height",
-        "align",
-        "valign",
-        "bgcolor",
-        "style",
-      ],
-      th: ["colspan", "rowspan", "scope", "style"],
-      meta: ["name", "content", "charset"],
+      ...options.allowedAttributes,
+      esoutlook: ["data-key"],
     },
-    allowedSchemes: ["https", "http", "mailto", "tel"],
-    allowedSchemesByTag: { img: ["https", "http", "cid"] },
-    allowProtocolRelative: false,
-    transformTags: {
-      "*": (tagName, attribs) => ({
-        tagName,
-        attribs: {
-          ...attribs,
-          ...(attribs.style ? { style: cleanCss(attribs.style) } : {}),
-        },
-      }),
-      a: (tagName, attribs) => ({
-        tagName,
-        attribs: { ...attribs, rel: "noopener noreferrer", target: "_blank" },
-      }),
-    },
-    nonTextTags: [
-      "script",
-      "style",
-      "textarea",
-      "option",
-      "noscript",
-      "iframe",
-      "object",
-      "svg",
-      "math",
-    ],
   });
   const withStyles = `<style>${styles.join("\n")}</style>${safe}`;
-  const inlined = juice(withStyles, {
-    applyStyleTags: true,
-    removeStyleTags: true,
-    preserveMediaQueries: true,
-    preserveImportant: true,
-    applyWidthAttributes: true,
-    applyAttributesTableElements: true,
-  });
+  const inlined = conditional.restore(
+    juice(withStyles, {
+      applyStyleTags: true,
+      removeStyleTags: true,
+      preserveMediaQueries: true,
+      preserveImportant: true,
+      applyWidthAttributes: true,
+      applyAttributesTableElements: true,
+      preserveFontFaces: true,
+    }),
+  );
   const text = convert(inlined, {
     wordwrap: 80,
     selectors: [
+      ...["h1", "h2", "h3", "h4", "h5", "h6"].map((selector) => ({
+        selector,
+        options: { uppercase: false },
+      })),
       { selector: "img", format: "skip" },
       { selector: "a", options: { hideLinkHrefIfSameAsText: true } },
     ],
@@ -154,12 +62,12 @@ export function normalizeEmail(raw: string, preheader = "") {
     ? `<div style="display:none;max-height:0;overflow:hidden;mso-hide:all">${sanitizeHtml(preheader, { allowedTags: [], allowedAttributes: {} })}</div>`
     : "";
   const html = inlined.includes("<body")
-    ? inlined.replace(/(<body\b[^>]*>)/i, `$1${hidden}`)
+    ? inlined.replace(/(<body\b[^>]*>)/i, (tag) => tag + hidden)
     : `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"></head><body>${hidden}${inlined}</body></html>`;
   return {
     html,
     text,
-    warnings,
+    warnings: [...new Set(warnings)],
     hash: createHash("sha256").update(html).digest("hex"),
   };
 }
@@ -170,7 +78,7 @@ export function renderSnapshot(html: string, unsubscribeUrl: string) {
   }).replaceAll('"', "&quot;");
   const footer = `<div style="font-family:Arial,sans-serif;font-size:12px;line-height:1.5;padding:24px;text-align:center;color:#667085"><a href="${safe}" style="color:#667085">Unsubscribe from these emails</a></div>`;
   return /<\/body>/i.test(html)
-    ? html.replace(/<\/body>/i, footer + "</body>")
+    ? html.replace(/<\/body>/i, () => footer + "</body>")
     : html + footer;
 }
 export const previewCsp =

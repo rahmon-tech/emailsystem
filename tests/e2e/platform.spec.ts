@@ -1,3 +1,4 @@
+import { appPath } from "@emailsystem/core/paths";
 import { test, expect } from "@playwright/test";
 import { mkdirSync, readFileSync } from "node:fs";
 test("login, provider setup, HTML import, preview, test, campaign controls, recovery and export", async ({
@@ -30,11 +31,15 @@ test("login, provider setup, HTML import, preview, test, campaign controls, reco
     await picker.getByRole("button", { name, exact: true }).click();
     await expect(picker).toHaveCount(0);
   };
-  await page.goto("/login");
+  await page.goto(appPath("/login"));
   await page.getByLabel("Email address").fill("browser-test@example.com");
   await page.getByLabel("Password").fill("Isolated-browser-test-password-2026");
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await expect(page).toHaveURL(/providers/);
+  const authCookie = (await context.cookies()).find(
+    (c) => c.name === "emailsystem_session",
+  );
+  expect(authCookie?.path).toBe(process.env.NEXT_PUBLIC_BASE_PATH || "/");
   await expect(page.getByText("No providers yet")).toBeVisible();
   await page
     .getByRole("button", { name: "Sending safety", exact: true })
@@ -48,7 +53,8 @@ test("login, provider setup, HTML import, preview, test, campaign controls, reco
     .click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
   expect(
-    (await (await context.request.get("/api/safety")).json()).accountDaily,
+    (await (await context.request.get(appPath("/api/safety"))).json())
+      .accountDaily,
   ).toBe(12000);
   for (const [provider, credential] of [
     ["Resend", "API key"],
@@ -137,7 +143,9 @@ test("login, provider setup, HTML import, preview, test, campaign controls, reco
     .getByRole("button", { name: "Save & Verify", exact: true })
     .click();
   await expect(page.getByText("Healthy", { exact: true })).toBeVisible();
-  const providers = await (await context.request.get("/api/providers")).json();
+  const providers = await (
+    await context.request.get(appPath("/api/providers"))
+  ).json();
   expect(providers).toHaveLength(1);
   expect(providers[0]).not.toHaveProperty("credentials");
   await page
@@ -156,7 +164,33 @@ test("login, provider setup, HTML import, preview, test, campaign controls, reco
     fullPage: true,
     animations: "disabled",
   });
-  await page.goto("/blast");
+  await page
+    .getByRole("button", { name: "Link settings", exact: true })
+    .click();
+  const linksDialog = page.getByRole("dialog", {
+    name: "Links & tracking",
+    exact: true,
+  });
+  await expect(
+    linksDialog.getByLabel("Track clicks by default"),
+  ).not.toBeChecked();
+  await expect(
+    linksDialog.getByText("Click tracking is optional.", { exact: false }),
+  ).toBeVisible();
+  for (const width of [390, 1366]) {
+    await page.setViewportSize({ width, height: 900 });
+    await expect(linksDialog).toBeVisible();
+    await expect(
+      linksDialog.getByRole("button", { name: "Done", exact: true }),
+    ).toBeInViewport();
+    await page.screenshot({
+      path: `test-results/ux-review/tracking-${width}.jpg`,
+      fullPage: true,
+      quality: 80,
+    });
+  }
+  await linksDialog.getByRole("button", { name: "Done", exact: true }).click();
+  await page.goto(appPath("/blast"));
   await page.getByLabel("Recipient file").setInputFiles({
     name: "contacts.csv",
     mimeType: "text/csv",
@@ -194,7 +228,7 @@ test("login, provider setup, HTML import, preview, test, campaign controls, reco
     name: "message.html",
     mimeType: "text/html",
     buffer: Buffer.from(
-      '<html><head><style>@media(max-width:480px){td{padding:12px}}</style></head><body><table width="100%"><tr><td><h1>Delivery check</h1><p>Preserved HTML layout.</p></td></tr></table><script>throw Error("unsafe")</script></body></html>',
+      '<html><head><style>@media(max-width:480px){td{padding:12px}}</style></head><body><table width="100%"><tr><td><h1>Delivery check</h1><p>Preserved HTML layout.</p><a href="https://example.com/collection">Explore the collection</a></td></tr></table><script>throw Error("unsafe")</script></body></html>',
     ),
   });
   await page
@@ -220,6 +254,13 @@ test("login, provider setup, HTML import, preview, test, campaign controls, reco
     .getByRole("button", { name: "Run pre-flight", exact: true })
     .click();
   await expect(page.getByText("Ready to send", { exact: true })).toBeVisible();
+  await page.getByText("More options", { exact: true }).click();
+  await page.getByLabel("Track clicks", { exact: true }).check();
+  await page.getByLabel("Campaign tracking hostname").click();
+  await page
+    .getByRole("option", { name: "click.browser-example.com", exact: true })
+    .click();
+  await page.getByText("More options", { exact: true }).click();
   await page.getByLabel("Subject").fill("Updated browser verification");
   await expect(
     page.getByRole("button", { name: "Send campaign", exact: true }),
@@ -246,7 +287,7 @@ test("login, provider setup, HTML import, preview, test, campaign controls, reco
   await expect
     .poll(async () => {
       const s = await (
-        await context.request.get("/api/campaigns/" + campaignId)
+        await context.request.get(appPath("/api/campaigns/" + campaignId))
       ).json();
       return s.counts.DELIVERED;
     })
@@ -256,8 +297,28 @@ test("login, provider setup, HTML import, preview, test, campaign controls, reco
     fullPage: true,
     animations: "disabled",
   });
+  const { db } = await import("@emailsystem/db");
+  const tracked = await db.trackingLink.findFirstOrThrow({
+    where: { campaignId },
+  });
+  const visited = await context.request.get(appPath(`/r/${tracked.token}`), {
+    headers: {
+      Host: "click.browser-example.com",
+      "User-Agent": "Proofpoint scanner",
+    },
+    maxRedirects: 0,
+  });
+  expect(visited.status()).toBe(302);
+  expect(visited.headers().location).toBe("https://example.com/collection");
+  const visitSummary = await (
+    await context.request.get(appPath(`/api/campaigns/${campaignId}`))
+  ).json();
+  expect(visitSummary.tracking.rawVisits).toBe(1);
+  expect(visitSummary.tracking.likelyAutomated).toBe(1);
+  expect(visitSummary.counts.DELIVERED).toBe(2);
+  await db.$disconnect();
   const exported = await context.request.get(
-    `/api/campaigns/${campaignId}/export`,
+    appPath(`/api/campaigns/${campaignId}/export`),
   );
   expect(exported.status()).toBe(200);
   expect(await exported.text()).toContain("DELIVERED");
@@ -267,7 +328,7 @@ test("login, provider setup, HTML import, preview, test, campaign controls, reco
     Array.from({ length: 40 }, (_, i) => `queued${i}@example.net`).join("\n"),
   );
   const imported = await (
-    await context.request.post("/api/imports", {
+    await context.request.post(appPath("/api/imports"), {
       multipart: {
         paste: Array.from(
           { length: 40 },
@@ -278,7 +339,7 @@ test("login, provider setup, HTML import, preview, test, campaign controls, reco
     })
   ).json();
   const started = await (
-    await context.request.post("/api/campaigns", {
+    await context.request.post(appPath("/api/campaigns"), {
       data: {
         name: "Control verification",
         from: "sender@example.com",
@@ -290,7 +351,7 @@ test("login, provider setup, HTML import, preview, test, campaign controls, reco
       headers: { Origin: "https://localhost:3443" },
     })
   ).json();
-  await page.goto("/activity?campaignId=" + started.id);
+  await page.goto(appPath("/activity?campaignId=" + started.id));
   await page
     .getByRole("button", { name: "Pause campaign", exact: true })
     .click();
@@ -306,7 +367,9 @@ test("login, provider setup, HTML import, preview, test, campaign controls, reco
     .not.toBe(oldPid);
   await page.reload();
   const acceptedBefore = (
-    await (await context.request.get("/api/campaigns/" + started.id)).json()
+    await (
+      await context.request.get(appPath("/api/campaigns/" + started.id))
+    ).json()
   ).acceptedCount;
   await page
     .getByRole("button", { name: "Resume campaign", exact: true })
@@ -319,7 +382,7 @@ test("login, provider setup, HTML import, preview, test, campaign controls, reco
       async () =>
         (
           await (
-            await context.request.get("/api/campaigns/" + started.id)
+            await context.request.get(appPath("/api/campaigns/" + started.id))
           ).json()
         ).acceptedCount,
     )
@@ -333,7 +396,7 @@ test("login, provider setup, HTML import, preview, test, campaign controls, reco
   await expect
     .poll(async () => {
       const c = await (
-        await context.request.get("/api/campaigns/" + started.id)
+        await context.request.get(appPath("/api/campaigns/" + started.id))
       ).json();
       return c.state;
     })
@@ -342,7 +405,9 @@ test("login, provider setup, HTML import, preview, test, campaign controls, reco
     await page.setViewportSize({ width, height: 900 });
     for (const route of ["/providers", "/blast", "/activity"]) {
       await page.goto(
-        route === "/activity" ? route + "?campaignId=" + campaignId : route,
+        appPath(
+          route === "/activity" ? route + "?campaignId=" + campaignId : route,
+        ),
       );
       if (route === "/activity")
         await expect(
@@ -496,7 +561,7 @@ test("login, provider setup, HTML import, preview, test, campaign controls, reco
     page.getByRole("link", { name: "Blast", exact: true }),
   ).not.toBeVisible();
   await context.clearCookies();
-  await page.goto("/login");
+  await page.goto(appPath("/login"));
   await review("login-390");
   await page.setViewportSize({ width: 1366, height: 900 });
   await review("login-1366");

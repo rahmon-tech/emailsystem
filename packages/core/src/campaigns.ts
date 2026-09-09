@@ -11,6 +11,12 @@ import { AppError } from "./errors";
 import { json, compatible } from "./providers";
 import { digest, makeSignedToken } from "./security";
 import { transitionCampaign, unclaimedStates } from "./domain";
+import { inspectDestinations } from "./reputation";
+import {
+  trackingChoice,
+  createTrackedSnapshot,
+  trackingSummary,
+} from "./tracking";
 export const messageInput = z
   .object({
     name: headerText.min(1),
@@ -47,6 +53,10 @@ export const messageInput = z
       .max(5)
       .default([]),
     dailyBudget: dailyBudget.nullable().optional(),
+    tracking: z
+      .object({ enabled: z.boolean(), domainId: z.uuid().optional() })
+      .strict()
+      .optional(),
     scheduledAt: z.iso.datetime().optional(),
     startKey: z.uuid().optional(),
     tags: z.array(headerText.max(40)).max(10).default([]),
@@ -120,6 +130,19 @@ export async function preflight(userId: string, input: unknown) {
     );
   if (safety.pausedReason) problems.push(safety.pausedReason);
   const snapshot = normalizeEmail(data.html, data.preheader);
+  const [reputation, tracking] = await Promise.all([
+    inspectDestinations(userId, snapshot.html),
+    trackingChoice(userId, data.tracking),
+  ]);
+  problems.push(...reputation.problems);
+  if (tracking.problem) problems.push(tracking.problem);
+  if (
+    tracking.settings.blockUnknown &&
+    reputation.links.some((r) => r.state === "REPUTATION_UNKNOWN")
+  )
+    problems.push(
+      "Your link policy requires known reputation results. Review unknown destinations or update the policy.",
+    );
   if (!snapshot.text.trim())
     problems.push("The email body is empty after safety checks.");
   const message = {
@@ -135,12 +158,17 @@ export async function preflight(userId: string, input: unknown) {
     attachments: data.attachments,
     tags: data.tags,
     snapshotHash: snapshot.hash,
+    tracking: {
+      enabled: tracking.enabled,
+      hostname: tracking.domain?.hostname ?? null,
+    },
   };
   return {
     ready: !problems.length,
     problems,
     warnings: [
       ...snapshot.warnings,
+      ...reputation.warnings,
       ...(copies.length
         ? [
             `${copies.length} CC/BCC copies will be sent for every recipient and count toward provider limits.`,
@@ -148,6 +176,8 @@ export async function preflight(userId: string, input: unknown) {
         : []),
     ],
     count,
+    reputation: reputation.links,
+    tracking,
     safety: {
       campaignUnits: count * cost,
       availableUnits: Math.min(
@@ -181,7 +211,7 @@ export async function createCampaign(userId: string, input: unknown) {
     throw new AppError(422, "PREFLIGHT", result.problems.join(" "));
   // Unique owner + start key makes repeated browser submissions refer to one campaign.
   return db.$transaction(async (tx) => {
-    await tx.campaign.createMany({
+    const created = await tx.campaign.createMany({
       data: [
         {
           userId,
@@ -202,7 +232,20 @@ export async function createCampaign(userId: string, input: unknown) {
     const campaign = await tx.campaign.findUniqueOrThrow({
       where: { userId_startKey: { userId, startKey: key } },
     });
-    return campaign;
+    if (!created.count) return campaign;
+    const html = await createTrackedSnapshot(
+      tx,
+      userId,
+      campaign.id,
+      result.message.html,
+      result.tracking.domain,
+    );
+    return tx.campaign.update({
+      where: { id: campaign.id },
+      data: {
+        message: json({ ...result.message, html, snapshotHash: digest(html) }),
+      },
+    });
   });
 }
 export async function lockCampaign(
@@ -424,6 +467,12 @@ export async function campaignSummary(userId: string, id: string) {
   const summary = { ...c, message: undefined };
   return {
     ...summary,
+    tracking: {
+      ...(await trackingSummary(userId, id)),
+      enabled:
+        (c.message as { tracking?: { enabled: boolean } }).tracking?.enabled ??
+        false,
+    },
     safety,
     acceptedCount,
     counts: Object.fromEntries(counts.map((r) => [r.state, r._count])),

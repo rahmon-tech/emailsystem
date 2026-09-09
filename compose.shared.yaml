@@ -1,0 +1,7 @@
+# Use with compose.yaml on a VPS that already has a reverse proxy.
+# All service names, networks and volumes stay inside project `emailblast`.
+services:
+  web:
+    ports: ["127.0.0.1:${EMAILBLAST_PORT:-3087}:3000"]
+  proxy:
+    profiles: [standalone]

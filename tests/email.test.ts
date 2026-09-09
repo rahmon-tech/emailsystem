@@ -14,7 +14,7 @@ test("HTML import removes active content while keeping responsive tables and med
   assert(!/script|onclick|javascript:|<iframe|<form|<input/.test(result.html));
   assert(result.text.includes("Hello"));
 });
-test("email pipeline does not fetch remote CSS or resources and warns about removed conditional comments", () => {
+test("email pipeline does not fetch remote CSS or resources and warns about unsafe conditional content", () => {
   const result = normalizeEmail(
     '<link rel="stylesheet" href="http://localhost/private"><style>@import "http://localhost/private";p{background:url(javascript:bad())}</style><!--[if mso]><script>bad()</script><![endif]--><p>Hello</p>',
   );

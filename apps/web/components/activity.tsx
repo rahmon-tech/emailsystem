@@ -36,6 +36,7 @@ import {
   HubOutlined,
 } from "@mui/icons-material";
 import { api, date } from "./api-client";
+import { appPath } from "@emailsystem/core/paths";
 import {
   Failure,
   Loading,
@@ -56,6 +57,13 @@ type Campaign = {
 };
 type Summary = Campaign & {
   safety: SafetySummary;
+  tracking: {
+    enabled: boolean;
+    rawVisits: number;
+    likelyAutomated: number;
+    unclassified: number;
+    retentionDays: number;
+  };
   counts: Record<string, number>;
   acceptedCount: number;
   providers: { providerId: string; state: string; _count: number }[];
@@ -167,7 +175,9 @@ export function Activity() {
   }, [refresh, selected]);
   useEffect(() => {
     if (!selected) return;
-    const source = new EventSource("/api/activity?campaignId=" + selected);
+    const source = new EventSource(
+      appPath("/api/activity?campaignId=" + selected),
+    );
     source.onopen = () => setConnected(true);
     source.onerror = () => setConnected(false);
     source.onmessage = (e) => {
@@ -318,7 +328,11 @@ export function Activity() {
             title="No campaigns yet"
             description="Prepare your first email in Blast."
             action={
-              <Button variant="contained" href="/blast" startIcon={<Add />}>
+              <Button
+                variant="contained"
+                href={appPath("/blast")}
+                startIcon={<Add />}
+              >
                 Create a campaign
               </Button>
             }
@@ -489,7 +503,7 @@ export function Activity() {
                     <Tooltip title="Export CSV">
                       <IconButton
                         aria-label="Export CSV"
-                        href={`/api/campaigns/${selected}/export`}
+                        href={appPath(`/api/campaigns/${selected}/export`)}
                       >
                         <DownloadOutlined fontSize="small" />
                       </IconButton>
@@ -617,6 +631,38 @@ export function Activity() {
                     void refresh().catch((e) => setError(e.message));
                   }}
                 />
+                {summary.tracking.enabled && (
+                  <Card sx={{ p: 2 }}>
+                    <Typography variant="h6" sx={{ mb: 1 }}>
+                      Link visits
+                    </Typography>
+                    <Stack
+                      direction="row"
+                      spacing={3}
+                      sx={{ flexWrap: "wrap", rowGap: 1 }}
+                    >
+                      {[
+                        ["Raw visits", summary.tracking.rawVisits],
+                        ["Likely automated", summary.tracking.likelyAutomated],
+                        ["Unclassified", summary.tracking.unclassified],
+                      ].map(([label, value]) => (
+                        <Stack key={String(label)}>
+                          <Typography variant="h6">
+                            {Number(value).toLocaleString()}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            {label}
+                          </Typography>
+                        </Stack>
+                      ))}
+                    </Stack>
+                    <Typography variant="caption" color="text.secondary">
+                      Last {summary.tracking.retentionDays} days. Automated
+                      detection is an estimate; visits do not confirm human
+                      engagement.
+                    </Typography>
+                  </Card>
+                )}
               </Card>
               <Card sx={{ overflow: "hidden" }}>
                 <Tabs

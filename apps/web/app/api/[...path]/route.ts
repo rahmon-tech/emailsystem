@@ -7,4 +7,4 @@ async function handler(
 ) {
   return api(request, (await params).path);
 }
-export { handler as GET, handler as POST, handler as PUT };
+export { handler as GET, handler as POST, handler as PUT, handler as DELETE };

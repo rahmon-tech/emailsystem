@@ -14,6 +14,7 @@ import {
 import { reconcileEvents, ingestEvent } from "@emailsystem/core/events";
 import { unclaimedStates } from "@emailsystem/core/domain";
 import { log } from "@emailsystem/core/errors";
+import { retainTracking, verifyDomain } from "@emailsystem/core/tracking";
 const cfg = config();
 const connection = new Redis(cfg.REDIS_URL, { maxRetriesPerRequest: null });
 const queue = new Queue("email-deliveries", { connection });
@@ -133,6 +134,7 @@ async function pump() {
         for (const p of providers) await verifyProvider(p.userId, p.id);
       }
       if (iteration++ % 1800 === 0) {
+        await retainTracking();
         const date = new Date(
           Date.now() - cfg.ACTIVITY_RETENTION_DAYS * 86400000,
         );
@@ -161,6 +163,17 @@ async function pump() {
             },
           },
         });
+      }
+      if (iteration % 30 === 0) {
+        const domain = await db.trackingDomain.findFirst({
+          where: {
+            enabled: true,
+            lastCheckedAt: { lt: new Date(Date.now() - 86400000) },
+          },
+          orderBy: { lastCheckedAt: "asc" },
+        });
+        if (domain)
+          await verifyDomain(domain.userId, domain.id).catch(() => undefined);
       }
     } catch {
       log("worker.pump.failed");
