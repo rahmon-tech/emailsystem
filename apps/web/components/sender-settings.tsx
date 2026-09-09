@@ -46,10 +46,12 @@ export type SenderCatalog = {
 
 function DomainSenders({
   domain,
+  defaultExpanded,
   busy,
   run,
 }: {
   domain: SenderCatalog["domains"][number];
+  defaultExpanded: boolean;
   busy: boolean;
   run: (operation: () => Promise<unknown>) => Promise<void>;
 }) {
@@ -61,7 +63,7 @@ function DomainSenders({
     .map((part) => part.trim())
     .filter(Boolean);
   return (
-    <Accordion disableGutters>
+    <Accordion disableGutters defaultExpanded={defaultExpanded}>
       <AccordionSummary expandIcon={<ExpandMore />}>
         <Stack
           direction="row"
@@ -258,10 +260,11 @@ export function SenderSettings() {
                 Add domain
               </Button>
             </Stack>
-            {data?.domains.map((item) => (
+            {data?.domains.map((item, index) => (
               <DomainSenders
                 key={item.id}
                 domain={item}
+                defaultExpanded={index === 0}
                 busy={busy}
                 run={run}
               />
