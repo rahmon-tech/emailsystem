@@ -87,6 +87,10 @@ export const tags = [
   "pre",
   "code",
   "center",
+  "caption",
+  "map",
+  "area",
+  "font",
 ];
 const vml = [
   "v:roundrect",
@@ -116,7 +120,10 @@ const attributes: Record<string, string[]> = {
     "aria-label",
   ],
   a: ["href", "title", "target", "rel"],
-  img: ["src", "alt", "width", "height", "title"],
+  img: ["src", "alt", "width", "height", "title", "usemap"],
+  map: ["name"],
+  area: ["href", "alt", "shape", "coords", "target", "rel"],
+  font: ["face", "size", "color"],
   table: ["cellpadding", "cellspacing", "border", "width", "align", "role"],
   td: ["colspan", "rowspan"],
   th: ["colspan", "rowspan", "scope"],
@@ -158,8 +165,31 @@ export function htmlOptions(warnings: string[]): sanitizeHtml.IOptions {
     allowProtocolRelative: false,
     transformTags: {
       "*": (tagName, attribs) => {
+        if (![...tags, ...vml, "esoutlook"].includes(tagName))
+          warnings.push(
+            "Unsupported HTML was removed. Review the resulting layout.",
+          );
         if (Object.keys(attribs).some((k) => /^on/i.test(k)))
           warnings.push("Active event handlers were removed.");
+        for (const attribute of ["src", "href", "background"]) {
+          const value = attribs[attribute];
+          if (!value) continue;
+          const scheme = value
+            .match(/^([a-z][a-z0-9+.-]*):/i)?.[1]
+            .toLowerCase();
+          const allowed =
+            attribute === "href"
+              ? ["http", "https", "mailto", "tel"]
+              : ["http", "https", "cid"];
+          if (value.startsWith("//") || (scheme && !allowed.includes(scheme)))
+            warnings.push(
+              "An unsafe link or image source was removed. Review links and image placement.",
+            );
+          else if (!scheme && !value.startsWith("#"))
+            warnings.push(
+              "A relative link or image source needs an absolute URL to work reliably in email.",
+            );
+        }
         const style = attribs.style
           ? cleanCss(attribs.style, warnings)
           : undefined;

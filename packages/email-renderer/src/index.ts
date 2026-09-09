@@ -35,7 +35,10 @@ export function normalizeEmail(raw: string, preheader = "") {
       esoutlook: ["data-key"],
     },
   });
-  const withStyles = `<style>${styles.join("\n")}</style>${safe}`;
+  const styleBlock = `<style>${styles.join("\n")}</style>`;
+  const withStyles = /<head\b[^>]*>/i.test(safe)
+    ? safe.replace(/<head\b[^>]*>/i, (tag) => tag + styleBlock)
+    : styleBlock + safe;
   const inlined = conditional.restore(
     juice(withStyles, {
       applyStyleTags: true,
@@ -62,7 +65,8 @@ export function normalizeEmail(raw: string, preheader = "") {
     ? `<div style="display:none;max-height:0;overflow:hidden;mso-hide:all">${sanitizeHtml(preheader, { allowedTags: [], allowedAttributes: {} })}</div>`
     : "";
   const html = inlined.includes("<body")
-    ? inlined.replace(/(<body\b[^>]*>)/i, (tag) => tag + hidden)
+    ? "<!doctype html>" +
+      inlined.replace(/(<body\b[^>]*>)/i, (tag) => tag + hidden)
     : `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"></head><body>${hidden}${inlined}</body></html>`;
   return {
     html,

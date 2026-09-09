@@ -83,7 +83,8 @@ export async function inspectDestinations(
   html: string,
   optionalSources: ReputationSource[] = [],
 ) {
-  const links = emailLinks(html).filter((href) => /^https?:/i.test(href));
+  const allLinks = emailLinks(html);
+  const links = allLinks.filter((href) => /^https?:/i.test(href));
   if (links.length > 200)
     return {
       problems: ["Use at most 200 distinct web links per message."],
@@ -105,7 +106,13 @@ export async function inspectDestinations(
     },
   };
   const checked: { hostname: string; state: ReputationState }[] = [];
-  const problems: string[] = [];
+  const problems: string[] = allLinks.some(
+    (href) => !/^(https?:\/\/|mailto:|tel:|#)/i.test(href),
+  )
+    ? [
+        "Use absolute HTTP/HTTPS destinations for web links; relative links cannot work reliably in email.",
+      ]
+    : [];
   // Bounded concurrency and per-source deadlines prevent pre-flight fan-out.
   for (let index = 0; index < links.length; index += 8) {
     await Promise.all(

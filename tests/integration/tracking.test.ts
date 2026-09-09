@@ -1,4 +1,5 @@
 import { test, after } from "node:test";
+import { spawn } from "node:child_process";
 import assert from "node:assert/strict";
 import { db } from "@emailsystem/db";
 import { redis } from "@emailsystem/core/redis";
@@ -63,6 +64,34 @@ async function domain(userId: string) {
   await verifyDomain(userId, d.id, async () => true);
   return d;
 }
+test("installation account creation accepts bounded stdin without echoing the password", async () => {
+  const email = `cli-${crypto.randomUUID()}@example.com`,
+    password = "Synthetic-stdin-password-$&-2026";
+  const result = await new Promise<{ code: number | null; output: string }>(
+    (resolve, reject) => {
+      const child = spawn(
+        process.execPath,
+        ["--import", "tsx", "scripts/create-user.ts"],
+        { stdio: ["pipe", "pipe", "pipe"] },
+      );
+      let output = "";
+      child.stdout.on("data", (chunk: Buffer) => {
+        output += chunk.toString();
+      });
+      child.stderr.on("data", (chunk: Buffer) => {
+        output += chunk.toString();
+      });
+      child.on("error", reject);
+      child.on("exit", (code) => resolve({ code, output }));
+      child.stdin.end(`${email}\n${password}\n`);
+    },
+  );
+  assert.equal(result.code, 0);
+  assert(!result.output.includes(password));
+  const user = await db.user.findUniqueOrThrow({ where: { email } });
+  owners.push(user.id);
+  assert.notEqual(user.passwordHash, password);
+});
 test("direct sending needs no tracking domain; unknown reputation warns and only explicit policy blocks", async () => {
   const { user, data } = await fixture();
   const flight = await preflight(user.id, data);

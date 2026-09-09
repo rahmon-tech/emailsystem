@@ -43,6 +43,7 @@ for (const name of ["newsletter", "announcement"])
     const raw = fixture(name),
       normalized = normalizeEmail(raw);
     assert.deepEqual(structure(normalized.html), structure(raw));
+    assert.match(normalized.html, /^<!doctype html><html/i);
     assert.match(normalized.html, /@media/);
     assert.match(normalized.html, /padding: ?32px/);
     assert.match(normalized.html, /border-radius: ?6px/);
