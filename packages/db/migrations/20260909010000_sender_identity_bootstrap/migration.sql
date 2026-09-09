@@ -8,7 +8,7 @@ CREATE TABLE "AuthorizedDomain" (
     "domain" TEXT NOT NULL,
     "status" TEXT NOT NULL DEFAULT 'UNVERIFIED',
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
     CONSTRAINT "AuthorizedDomain_pkey" PRIMARY KEY ("id")
 );
 
@@ -22,7 +22,7 @@ CREATE TABLE "SenderIdentity" (
     "replyTo" TEXT NOT NULL DEFAULT '',
     "enabled" BOOLEAN NOT NULL DEFAULT true,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
     CONSTRAINT "SenderIdentity_pkey" PRIMARY KEY ("id")
 );
 
@@ -36,7 +36,7 @@ CREATE TABLE "ProviderDomainAuthorization" (
     "verifiedAt" TIMESTAMP(3),
     "safeDetail" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
     CONSTRAINT "ProviderDomainAuthorization_pkey" PRIMARY KEY ("id")
 );
 
@@ -57,7 +57,7 @@ CREATE UNIQUE INDEX "SenderIdentity_userId_email_key" ON "SenderIdentity"("userI
 CREATE UNIQUE INDEX "SenderIdentity_authorizedDomainId_localPart_key" ON "SenderIdentity"("authorizedDomainId", "localPart");
 CREATE INDEX "SenderIdentity_userId_enabled_idx" ON "SenderIdentity"("userId", "enabled");
 CREATE UNIQUE INDEX "ProviderDomainAuthorization_id_userId_key" ON "ProviderDomainAuthorization"("id", "userId");
-CREATE UNIQUE INDEX "ProviderDomainAuthorization_providerConnectionId_authorizedDomainId_key" ON "ProviderDomainAuthorization"("providerConnectionId", "authorizedDomainId");
+CREATE UNIQUE INDEX "ProviderDomainAuthorization_providerConnectionId_authorized_key" ON "ProviderDomainAuthorization"("providerConnectionId", "authorizedDomainId");
 CREATE INDEX "ProviderDomainAuthorization_userId_status_idx" ON "ProviderDomainAuthorization"("userId", "status");
 CREATE INDEX "ProviderDomainAuthorization_authorizedDomainId_status_idx" ON "ProviderDomainAuthorization"("authorizedDomainId", "status");
 CREATE INDEX "ProviderSenderAuthorization_userId_senderIdentityId_idx" ON "ProviderSenderAuthorization"("userId", "senderIdentityId");
@@ -68,7 +68,7 @@ ALTER TABLE "SenderIdentity" ADD CONSTRAINT "SenderIdentity_authorizedDomainId_u
 ALTER TABLE "ProviderDomainAuthorization" ADD CONSTRAINT "ProviderDomainAuthorization_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 ALTER TABLE "ProviderDomainAuthorization" ADD CONSTRAINT "ProviderDomainAuthorization_providerConnectionId_userId_fkey" FOREIGN KEY ("providerConnectionId", "userId") REFERENCES "ProviderConnection"("id", "userId") ON DELETE CASCADE ON UPDATE CASCADE;
 ALTER TABLE "ProviderDomainAuthorization" ADD CONSTRAINT "ProviderDomainAuthorization_authorizedDomainId_userId_fkey" FOREIGN KEY ("authorizedDomainId", "userId") REFERENCES "AuthorizedDomain"("id", "userId") ON DELETE CASCADE ON UPDATE CASCADE;
-ALTER TABLE "ProviderSenderAuthorization" ADD CONSTRAINT "ProviderSenderAuthorization_providerDomainAuthorizationId_userId_fkey" FOREIGN KEY ("providerDomainAuthorizationId", "userId") REFERENCES "ProviderDomainAuthorization"("id", "userId") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "ProviderSenderAuthorization" ADD CONSTRAINT "ProviderSenderAuthorization_providerDomainAuthorizationId__fkey" FOREIGN KEY ("providerDomainAuthorizationId", "userId") REFERENCES "ProviderDomainAuthorization"("id", "userId") ON DELETE CASCADE ON UPDATE CASCADE;
 ALTER TABLE "ProviderSenderAuthorization" ADD CONSTRAINT "ProviderSenderAuthorization_senderIdentityId_userId_fkey" FOREIGN KEY ("senderIdentityId", "userId") REFERENCES "SenderIdentity"("id", "userId") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- Preserve configured senders as explicit tenant-owned records. Existing real-provider
