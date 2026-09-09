@@ -1,6 +1,7 @@
 import { after, test } from "node:test";
 import assert from "node:assert/strict";
 import { db } from "@emailsystem/db";
+import { redis } from "@emailsystem/core/redis";
 import { createUser } from "@emailsystem/core/auth";
 import {
   applyBootstrapPlan,
@@ -14,6 +15,7 @@ const owners: string[] = [];
 after(async () => {
   await db.user.deleteMany({ where: { id: { in: owners } } });
   await db.$disconnect();
+  await redis.quit();
 });
 
 const environment = {
