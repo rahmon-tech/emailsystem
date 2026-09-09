@@ -471,3 +471,19 @@ test("login, provider setup, HTML import, preview, test, campaign controls, reco
   await review("login-1366");
   expect(errors).toEqual([]);
 });
+
+test.afterEach(async ({ page }, testInfo) => {
+  if (testInfo.status !== testInfo.expectedStatus) {
+    mkdirSync("test-results/ux-review", { recursive: true });
+    await page.screenshot({
+      path: "test-results/ux-review/failure.jpg",
+      type: "jpeg",
+      quality: 75,
+      animations: "disabled",
+    });
+    console.log(
+      "UX_ACCESSIBILITY",
+      (await page.locator("body").ariaSnapshot()).slice(0, 12000),
+    );
+  }
+});

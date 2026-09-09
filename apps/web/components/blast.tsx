@@ -950,6 +950,7 @@ export function Blast() {
         }
       >
         <DialogContent>
+          <Failure error={error} />
           {flight?.count.toLocaleString()} individual emails will enter the
           background queue. You can follow progress and pause sending in
           Activity.
@@ -1007,6 +1008,7 @@ export function Blast() {
       >
         <DialogContent>
           <Stack spacing={2} sx={{ pt: 1 }}>
+            <Failure error={error} />
             <TextField
               select
               label="Provider"

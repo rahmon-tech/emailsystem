@@ -889,6 +889,7 @@ export function Activity() {
         title="Cancel remaining sends?"
       >
         <DialogContent>
+          <Failure error={error} />
           Unclaimed recipients will be cancelled. Messages already accepted by a
           provider and attempts already in progress keep their actual outcomes.
         </DialogContent>

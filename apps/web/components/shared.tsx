@@ -209,20 +209,22 @@ export function ResponsiveDialog({
         },
       }}
     >
-      <DialogTitle
-        id={id}
+      <Box
         sx={{
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
           gap: 1,
+          flexShrink: 0,
+          borderBottom: 1,
+          borderColor: "divider",
           py: 1,
           px: { xs: 2, sm: 3 },
         }}
       >
-        <Box component="span" sx={{ minWidth: 0 }}>
+        <DialogTitle id={id} sx={{ minWidth: 0, p: 0, border: 0 }}>
           {title}
-        </Box>
+        </DialogTitle>
         <IconButton
           aria-label="Dismiss dialog"
           disabled={busy}
@@ -231,7 +233,7 @@ export function ResponsiveDialog({
         >
           <Close fontSize="small" />
         </IconButton>
-      </DialogTitle>
+      </Box>
       {children}
     </Dialog>
   );

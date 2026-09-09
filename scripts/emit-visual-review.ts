@@ -6,6 +6,7 @@ const directory = "test-results/ux-review";
 if (existsSync(directory)) {
   for (const name of readdirSync(directory).sort()) {
     if (
+      name !== "failure.jpg" &&
       !/^(providers|provider-picker|provider-dialog|blast|activity|login)-(390|1366)\.jpg$/.test(
         name,
       )
