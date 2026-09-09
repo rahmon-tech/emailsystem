@@ -1,17 +1,41 @@
 import { test, expect } from "@playwright/test";
-import { readFileSync } from "node:fs";
+import { mkdirSync, readFileSync } from "node:fs";
 test("login, provider setup, HTML import, preview, test, campaign controls, recovery and export", async ({
   page,
   context,
 }) => {
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(e.message));
+  mkdirSync("test-results/ux-review", { recursive: true });
+  const review = async (name: string, fullPage = true, resetScroll = true) => {
+    await page.mouse.move(0, 0);
+    if (resetScroll) await page.evaluate(() => window.scrollTo(0, 0));
+    await page.screenshot({
+      path: `test-results/ux-review/${name}.jpg`,
+      type: "jpeg",
+      quality: 75,
+      fullPage,
+      animations: "disabled",
+    });
+  };
+  const chooseProvider = async (name: string) => {
+    await page
+      .getByRole("button", { name: "Add provider", exact: true })
+      .first()
+      .click();
+    const picker = page.getByRole("dialog", {
+      name: "Add provider",
+      exact: true,
+    });
+    await picker.getByRole("button", { name, exact: true }).click();
+    await expect(picker).toHaveCount(0);
+  };
   await page.goto("/login");
   await page.getByLabel("Email address").fill("browser-test@example.com");
   await page.getByLabel("Password").fill("Isolated-browser-test-password-2026");
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await expect(page).toHaveURL(/providers/);
-  await expect(page.getByText("No providers configured yet.")).toBeVisible();
+  await expect(page.getByText("No providers yet")).toBeVisible();
   await page
     .getByRole("button", { name: "Sending safety", exact: true })
     .click();
@@ -37,7 +61,7 @@ test("login, provider setup, HTML import, preview, test, campaign controls, reco
     ["SMTP2GO", "API key"],
     ["Elastic Email", "API key (SendHttp)"],
   ]) {
-    await page.getByRole("button", { name: new RegExp(provider) }).click();
+    await chooseProvider(provider);
     const dialog = page.getByRole("dialog");
     // Required labels include the MUI asterisk. Restrict matching to inputs so
     // credential-help links with descriptive aria-labels cannot collide.
@@ -94,14 +118,14 @@ test("login, provider setup, HTML import, preview, test, campaign controls, reco
     }
     await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
   }
-  await page.getByRole("button", { name: /Custom SMTP/ }).click();
+  await chooseProvider("Custom SMTP");
   await expect(page.getByLabel("SMTP hostname")).toBeVisible();
   await page
     .getByRole("button", { name: "Sending limits and webhooks" })
     .click();
   await expect(page.getByLabel("Security", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Cancel", exact: true }).click();
-  await page.getByRole("button", { name: /Development Mock/ }).click();
+  await chooseProvider("Development Mock");
   await page.getByLabel("Connection name").fill("Browser verification");
   await page.getByLabel("From email").fill("invalid-address");
   await page
@@ -112,7 +136,7 @@ test("login, provider setup, HTML import, preview, test, campaign controls, reco
   await page
     .getByRole("button", { name: "Save & Verify", exact: true })
     .click();
-  await expect(page.getByText("healthy", { exact: true })).toBeVisible();
+  await expect(page.getByText("Healthy", { exact: true })).toBeVisible();
   const providers = await (await context.request.get("/api/providers")).json();
   expect(providers).toHaveLength(1);
   expect(providers[0]).not.toHaveProperty("credentials");
@@ -141,12 +165,31 @@ test("login, provider setup, HTML import, preview, test, campaign controls, reco
     ),
   });
   await expect(page.getByText("1 duplicate", { exact: true })).toBeVisible();
+  // Failed validation is visible beside the action, even below the composer.
+  await page
+    .getByRole("button", { name: "Run pre-flight", exact: true })
+    .click();
+  await expect(
+    page
+      .getByRole("region", { name: "Pre-flight", exact: true })
+      .getByRole("alert"),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Send campaign", exact: true }),
+  ).toBeDisabled();
   await page.getByLabel("Campaign name").fill("Browser campaign");
   await page.getByLabel("Subject").fill("Browser verification");
   await page
     .getByRole("textbox", { name: "Email body", exact: true })
     .fill("A rich text message");
   await page.getByRole("button", { name: "Bold", exact: true }).click();
+  await expect(
+    page.getByRole("button", { name: "Bold", exact: true }),
+  ).toHaveAttribute("aria-pressed", "true");
+  await page.getByRole("button", { name: "Underline", exact: true }).click();
+  await expect(
+    page.getByRole("button", { name: "Underline", exact: true }),
+  ).toHaveAttribute("aria-pressed", "true");
   await page.getByLabel("HTML file").setInputFiles({
     name: "message.html",
     mimeType: "text/html",
@@ -173,6 +216,15 @@ test("login, provider setup, HTML import, preview, test, campaign controls, reco
       .frameLocator('iframe[title="desktop email preview"]')
       .getByRole("heading", { name: "Delivery check" }),
   ).toBeVisible();
+  await page
+    .getByRole("button", { name: "Run pre-flight", exact: true })
+    .click();
+  await expect(page.getByText("Ready to send", { exact: true })).toBeVisible();
+  await page.getByLabel("Subject").fill("Updated browser verification");
+  await expect(
+    page.getByRole("button", { name: "Send campaign", exact: true }),
+  ).toBeDisabled();
+  await expect(page.getByText("Ready to send", { exact: true })).toHaveCount(0);
   await page
     .getByRole("button", { name: "Run pre-flight", exact: true })
     .click();
@@ -304,7 +356,92 @@ test("login, provider setup, HTML import, preview, test, campaign controls, reco
         await expect(page.getByLabel("From email")).toHaveValue(
           "sender@example.com",
         );
+      if (route === "/blast") {
+        await page.getByLabel("Recipient import").click();
+        await page
+          .getByRole("option", {
+            name: "contacts.csv · 2 recipients",
+            exact: true,
+          })
+          .click();
+        await page.getByLabel("Campaign name").fill("September update");
+        await page.getByLabel("Subject").fill("Something good is on the way");
+        await page
+          .getByLabel("Preview text")
+          .fill("A quick look at what’s new this month.");
+        await page
+          .getByRole("textbox", { name: "Email body", exact: true })
+          .fill(
+            "Hello there,\nWe’ve been working on a few things we think you’ll love. Here’s a quick look at what’s new this month.\nThanks for being part of the journey.",
+          );
+        await page
+          .getByRole("button", { name: "Run pre-flight", exact: true })
+          .click();
+        await expect(
+          page.getByText("Ready to send", { exact: true }),
+        ).toBeVisible();
+        await expect(
+          page.getByRole("button", { name: "Send campaign", exact: true }),
+        ).toBeEnabled();
+        // Pre-flight readiness and iframe painting are separate events. Check the
+        // actual message, then bring the frame into view before capturing it.
+        await expect(
+          page
+            .frameLocator('iframe[title="desktop email preview"]')
+            .locator("body"),
+        ).toContainText("Hello there,");
+        await page
+          .locator('iframe[title="desktop email preview"]')
+          .scrollIntoViewIfNeeded();
+        if (width === 390 || width === 1366)
+          await review(`preview-${width}`, false, false);
+      }
+      if (width === 390 || width === 1366) {
+        // A phone has no fixed sidebar; retain the painted preview viewport.
+        await review(
+          `${route.slice(1)}-${width}`,
+          true,
+          route !== "/blast" || width !== 390,
+        );
+      }
       if (route === "/providers") {
+        if (width === 390 || width === 1366) {
+          await page
+            .getByRole("button", { name: "Add provider", exact: true })
+            .first()
+            .click();
+          const picker = page.getByRole("dialog", {
+            name: "Add provider",
+            exact: true,
+          });
+          await expect(picker).toBeVisible();
+          await review(`provider-picker-${width}`, false);
+          await picker
+            .getByRole("button", { name: "Resend", exact: true })
+            .click();
+          await expect(picker).toHaveCount(0);
+          const providerForm = page.getByRole("dialog", {
+            name: "Connect Resend",
+            exact: true,
+          });
+          await expect(
+            providerForm.getByLabel("Connection name"),
+          ).toBeVisible();
+          await review(`provider-dialog-${width}`, false);
+          const bounds = await providerForm
+            .getByRole("button", { name: "Save & Verify", exact: true })
+            .boundingBox();
+          expect(bounds).not.toBeNull();
+          expect(bounds!.y + bounds!.height).toBeLessThanOrEqual(900);
+          expect(
+            await providerForm.evaluate(
+              (el) => el.scrollWidth <= el.clientWidth + 2,
+            ),
+          ).toBe(true);
+          await providerForm
+            .getByRole("button", { name: "Cancel", exact: true })
+            .click();
+        }
         await page
           .getByRole("button", { name: "Sending safety", exact: true })
           .click();
@@ -349,5 +486,35 @@ test("login, provider setup, HTML import, preview, test, campaign controls, reco
       ).toBe(true);
     }
   }
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page
+    .getByRole("button", { name: "Open navigation", exact: true })
+    .click();
+  await page.getByRole("link", { name: "Providers", exact: true }).click();
+  await expect(page).toHaveURL(/providers/);
+  await expect(
+    page.getByRole("link", { name: "Blast", exact: true }),
+  ).not.toBeVisible();
+  await context.clearCookies();
+  await page.goto("/login");
+  await review("login-390");
+  await page.setViewportSize({ width: 1366, height: 900 });
+  await review("login-1366");
   expect(errors).toEqual([]);
+});
+
+test.afterEach(async ({ page }, testInfo) => {
+  if (testInfo.status !== testInfo.expectedStatus) {
+    mkdirSync("test-results/ux-review", { recursive: true });
+    await page.screenshot({
+      path: "test-results/ux-review/failure.jpg",
+      type: "jpeg",
+      quality: 75,
+      animations: "disabled",
+    });
+    console.log(
+      "UX_ACCESSIBILITY",
+      (await page.locator("body").ariaSnapshot()).slice(0, 12000),
+    );
+  }
 });

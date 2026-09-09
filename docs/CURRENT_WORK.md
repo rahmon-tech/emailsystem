@@ -1,27 +1,19 @@
 # Current work
 
-## Completed milestone
+## UI refinement milestone
 
-The **central sending safety governor** is implemented and merged in [PR #3](https://github.com/rahmon-tech/emailsystem/pull/3), merge commit `17ca4e076e4e420021fce57b13a4d6d39c9c6a89`. The platform and provider catalog from PRs #1 and #2 remain intact. The starting main baseline was `846c2887bf72e7b84003b0d49a55eba498f69faa`.
+The premium email-workspace refinement is implemented in [PR #4](https://github.com/rahmon-tech/emailsystem/pull/4). It starts from verified main `c37d41b0852f318fa56d0cf9ce54483e93dce013`, after the completed sending safety milestone in PR #3.
 
-Verified application source: `d6b548dae04bf8992ec73a67a2b077ab6077a327`, [CI run 34290732223](https://github.com/rahmon-tech/emailsystem/actions/runs/34290732223). Its complete source tree was checked against all 104 local tracked files before merge. Subsequent documentation checkpoints preserve that application; [main branch runs](https://github.com/rahmon-tech/emailsystem/actions?query=branch%3Amain) identify the exact commit and CI result for deployment.
+Providers now centers connected accounts and an Add provider picker. Blast uses compact recipient summaries, progressive options, a grouped editor, actual email previews and visual pre-flight. Activity emphasizes delivery progress and key metrics with responsive campaign navigation. Login, the shell, states and all dialogs share a restrained accessible theme. No backend, provider adapter, queue, security, migration or deployment behavior changes; no dependencies added.
 
-## Implemented
+## Verification and visual review
 
-Independent rolling 24-hour account, sender-domain, provider and campaign budgets; To/CC/BCC recipient-unit costs; atomic Redis reservations before claims; bounded unstarted leases; durable transport-start markers and UNKNOWN accounting; PostgreSQL reconstruction after Redis loss; weighted routing and shared rate/quotas preserved; deferred campaigns with release times; deduplicated complaint/hard-bounce brakes and explicit administrator review; compact Providers settings, Blast capacity reporting and Activity usage/reasons. Controlled tests consume shared capacity without entering campaign statistics.
+[CI run 34294234923](https://github.com/rahmon-tech/emailsystem/actions/runs/34294234923), source `891caa994bfbe9b0b08b9de7e258cd4ad2dd21b7`, passed all **175 tests: 120 unit, 54 real PostgreSQL/Redis integration and one production HTTPS browser workflow**. It also passed fresh migrations, the verified-baseline upgrade rehearsal, schema drift checks, lint/type checks, production build, Caddy validation and Docker web/worker readiness.
 
-The fourth additive migration backfills historical attempt costs and UNKNOWN usage. CI rehearses an upgrade from the exact verified baseline, in addition to fresh database and drift checks. ARCHITECTURE.md defines windows, defaults, bounds, recovery and review semantics. SECURITY.md describes ownership and coordinated rollout.
+Twelve screenshots were manually inspected at 390 and 1366 pixels across Providers, provider picker/configuration, populated Blast, Activity and Login. The review identified and corrected header wrapping, mobile tab wrapping, toolbar color-control layout, campaign action spacing and text contrast. See [UX_REVIEW.md](UX_REVIEW.md) for findings and review evidence.
 
-## Verification
-
-**175 automated tests pass:** 120 unit, 54 real PostgreSQL/Redis integration and one production HTTPS browser workflow. All 154 previous tests remain. Coverage includes exact budget boundaries and copy costs, shared multi-process limits, concurrent reconstruction during claims, 150 recipients paced over a 100-unit budget across days, transport-start expiry, UNKNOWN preservation, unstarted release, authoritative/deduplicated outcomes, suppression, minimum samples, sticky review and tenant isolation.
-
-Lint/type checks, four fresh migrations, upgrade from exact baseline `846c288`, zero schema drift, production build, Caddy validation, Docker image build and web/worker readiness pass. Browser checks exercise Providers/Blast/Activity plus the safety dialog at 390, 430, 768, 1366 and 1536 pixels. Overflow and interaction checks are automated, with screenshots captured as CI artifacts. Provider transports are mocked.
-
-The initial safety run exposed a missing Redis cleanup in the provider test harness; that was repaired. A corrupt local build cache was cleared and the clean production build passed. These are resolved verification issues.
+The corrected UI also passed every gate in [run 34295470133](https://github.com/rahmon-tech/emailsystem/actions/runs/34295470133), source `2039e768d5ccf84ed5a56479040cd0748c30dfda`. Follow-up screenshots confirm the layout fixes. Preview capture now explicitly waits for and inspects the rendered iframe message. The final exact commit is tested again with all behavioral assertions and all five widths (390, 430, 768, 1366, 1536). [PR #4](https://github.com/rahmon-tech/emailsystem/pull/4) records the final source SHA, CI run, screenshot follow-up and merge result; [main runs](https://github.com/rahmon-tech/emailsystem/actions?query=branch%3Amain) identify the verified commit for deployment.
 
 ## Completion boundary
 
-This milestone is complete. **Stop here; no next product or architecture slice has been started.** Main CI must be checked on the exact commit selected for deployment.
-
-Live provider credentials, verified sending identities, webhook setup, controlled recipients and VPS/domain access remain necessary to prove real provider delivery and an actual deployment. No live provider or unseen VPS is claimed verified.
+This is a single UI milestone. Merge is gated on exact-SHA CI and review of the updated screenshots. Stop at its completion; no further product or architecture milestone is included. Live provider delivery and an actual VPS deployment still require their own credentials and environment; the browser evidence uses synthetic fixtures and mock transports.

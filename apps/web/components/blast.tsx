@@ -17,11 +17,12 @@ import {
   AccordionDetails,
   ToggleButtonGroup,
   ToggleButton,
-  Dialog,
-  DialogTitle,
   DialogContent,
   DialogActions,
   Divider,
+  Collapse,
+  IconButton,
+  Tooltip,
 } from "@mui/material";
 import {
   UploadFileOutlined,
@@ -33,12 +34,18 @@ import {
   SendOutlined,
   FactCheckOutlined,
   AttachFileOutlined,
+  EditNoteOutlined,
+  Refresh,
+  ScienceOutlined,
+  CheckCircleOutlined,
+  RadioButtonUnchecked,
+  VisibilityOutlined,
 } from "@mui/icons-material";
 import CodeMirror from "@uiw/react-codemirror";
 import { html as htmlLanguage } from "@codemirror/lang-html";
 import { RichEditor } from "./editor";
 import { api } from "./api-client";
-import { PageTitle, Failure } from "./shared";
+import { PageTitle, Failure, EmptyState, ResponsiveDialog } from "./shared";
 import type { ProviderRow } from "./providers";
 type ImportRow = {
   id: string;
@@ -66,8 +73,10 @@ export function Blast() {
   const router = useRouter();
   const [providers, setProviders] = useState<ProviderRow[]>([]),
     [imports, setImports] = useState<ImportRow[]>([]),
+    [loaded, setLoaded] = useState(false),
     [importId, setImportId] = useState(""),
     [paste, setPaste] = useState(""),
+    [editRecipients, setEditRecipients] = useState(false),
     [form, setForm] = useState({
       name: "",
       from: "",
@@ -87,6 +96,7 @@ export function Blast() {
     [view, setView] = useState("desktop"),
     [flight, setFlight] = useState<Flight | null>(null),
     [error, setError] = useState(""),
+    [errorAction, setErrorAction] = useState(""),
     [busy, setBusy] = useState(""),
     [confirm, setConfirm] = useState(false),
     [resetRich, setResetRich] = useState(false),
@@ -135,7 +145,10 @@ export function Blast() {
           }
         }
       })
-      .catch((e) => setError(e.message));
+      .catch((e) => setError(e.message))
+      .finally(() => {
+        if (active) setLoaded(true);
+      });
     return () => {
       active = false;
     };
@@ -162,6 +175,7 @@ export function Blast() {
   const run = async (name: string, fn: () => Promise<void>) => {
     setBusy(name);
     setError("");
+    setErrorAction(name);
     try {
       await fn();
     } catch (e) {
@@ -182,18 +196,20 @@ export function Blast() {
       setImportId(result.id);
       invalid();
       setPaste("");
+      setEditRecipients(false);
     });
   };
   const selected = imports.find((i) => i.id === importId);
   return (
     <>
       <PageTitle
-        eyebrow="NEW CAMPAIGN"
-        title="Prepare your next send"
-        description="Add recipients, shape your message, and check everything before it enters the queue."
+        title="Blast"
+        description="Prepare, preview, and launch your next email."
       />
-      <Failure error={error} />
-      {!providers.some((p) => p.enabled) && (
+      <Failure
+        error={["preflight", "test", "send"].includes(errorAction) ? "" : error}
+      />
+      {loaded && !providers.some((p) => p.enabled) && (
         <Alert severity="info" sx={{ mb: 3 }}>
           Add and verify at least one provider before sending.{" "}
           <Link href="/providers">Go to Providers</Link>
@@ -204,125 +220,182 @@ export function Blast() {
           display: "grid",
           gridTemplateColumns: {
             xs: "1fr",
-            lg: "minmax(0,1.1fr) minmax(0,1fr)",
+            lg: "minmax(0,1.15fr) minmax(0,1fr)",
           },
-          gap: 3,
+          gap: 2.5,
           alignItems: "start",
         }}
       >
-        <Stack spacing={3}>
-          <Card sx={{ p: { xs: 2.5, sm: 3 } }}>
+        <Stack spacing={2.5}>
+          <Card sx={{ p: { xs: 2, sm: 2.5 } }}>
             <Stack
               direction="row"
               spacing={1.5}
 
               sx={{ alignItems: "center", mb: 2.5 }}
             >
-              <Chip label="1" color="primary" size="small" />
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                sx={{ fontWeight: 600 }}
+              >
+                01
+              </Typography>
               <Typography variant="h6">Recipients</Typography>
             </Stack>
-            <Box
-              sx={{
-                border: "1px dashed #bccbeb",
-                borderRadius: 2,
-                p: 3,
-                textAlign: "center",
-                bgcolor: "#fbfcff",
-              }}
-            >
-              <UploadFileOutlined
-                color="primary"
-                sx={{ fontSize: 32, mb: 1 }}
-              />
-              <Typography sx={{ fontWeight: 600 }}>
-                Upload your recipient list
-              </Typography>
-              <Typography
-                color="text.secondary"
-
-                sx={{ fontSize: 13, mt: 0.5, mb: 2 }}
-              >
-                CSV, TXT or XLSX · one email column is enough
-              </Typography>
-              <Button variant="outlined" component="label" disabled={!!busy}>
-                {busy === "import" ? "Importing…" : "Choose file"}
-                <input
-                  hidden
-                  type="file"
-                  accept=".csv,.txt,.xlsx"
-                  aria-label="Recipient file"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (file) void upload(file);
-                    e.target.value = "";
-                  }}
-                />
-              </Button>
-            </Box>
-            <Accordion disableGutters sx={{ "&:before": { display: "none" } }}>
-              <AccordionSummary expandIcon={<ExpandMore />}>
-                <Typography sx={{ fontSize: 14 }}>
-                  Or paste email addresses
-                </Typography>
-              </AccordionSummary>
-              <AccordionDetails>
-                <TextField
-                  label="One email per line"
-                  multiline
-                  minRows={4}
-                  value={paste}
-                  onChange={(e) => setPaste(e.target.value)}
-                />
-                <Button
-                  sx={{ mt: 1 }}
-                  disabled={!!busy || !paste.trim()}
-                  onClick={() => void upload()}
-                >
-                  Import pasted addresses
-                </Button>
-              </AccordionDetails>
-            </Accordion>
-            {imports.length > 0 && (
-              <TextField
-                select
-                label="Recipient import"
-                value={importId}
-                onChange={(e) => {
-                  setImportId(e.target.value);
-                  invalid();
-                }}
-                sx={{ mt: 2 }}
-              >
-                {imports.map((i) => (
-                  <MenuItem key={i.id} value={i.id}>
-                    {i.filename} · {i.stats.sendable.toLocaleString()}{" "}
-                    recipients
-                  </MenuItem>
-                ))}
-              </TextField>
-            )}
             {selected && (
-              <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", mt: 2 }}>
-                {Object.entries(selected.stats).map(([k, v]) => (
-                  <Chip
-                    size="small"
-                    variant="outlined"
-                    color={k === "sendable" ? "success" : "default"}
-                    key={k}
-                    label={`${v.toLocaleString()} ${k}`}
-                  />
-                ))}
+              <Box sx={{ textAlign: "left", mb: 1.5 }}>
+                <Typography
+                  sx={{
+                    fontWeight: 650,
+                    fontSize: 20,
+                    color: "success.main",
+                    fontVariantNumeric: "tabular-nums",
+                  }}
+                >
+                  {selected.stats.sendable.toLocaleString()} ready
+                </Typography>
+                <Stack
+                  direction="row"
+                  sx={{ gap: 1, flexWrap: "wrap", mt: 0.5 }}
+                >
+                  {["duplicate", "invalid", "suppressed"].map((k, index) => (
+                    <Typography
+                      key={k}
+                      variant="caption"
+                      color="text.secondary"
+                    >
+                      {index > 0 ? "· " : ""}
+                      {(selected.stats[k] ?? 0).toLocaleString()}{" "}
+                      {k === "duplicate" && selected.stats[k] !== 1
+                        ? "duplicates"
+                        : k}
+                    </Typography>
+                  ))}
+                </Stack>
               </Box>
             )}
+            {selected && (
+              <Button
+                size="small"
+                startIcon={<UploadFileOutlined />}
+                onClick={() => setEditRecipients((v) => !v)}
+                sx={{ mt: 0.5 }}
+              >
+                {editRecipients ? "Done" : "Change list"}
+              </Button>
+            )}
+            <Collapse in={!selected || editRecipients}>
+              <Box
+                sx={{
+                  border: selected ? 0 : "1px dashed",
+                  borderColor: "divider",
+                  borderRadius: 2,
+                  p: selected ? 0 : 2.5,
+                  textAlign: "center",
+                  bgcolor: selected ? "transparent" : "action.hover",
+                }}
+              >
+                {!selected && (
+                  <>
+                    <Typography sx={{ fontWeight: 600 }}>
+                      Upload your recipient list
+                    </Typography>
+                    <Typography
+                      color="text.secondary"
+                      sx={{ fontSize: 12, mt: 0.5, mb: 1.5 }}
+                    >
+                      CSV, TXT or XLSX · one email column
+                    </Typography>
+                  </>
+                )}
+                <Button
+                  variant={selected ? "text" : "outlined"}
+                  startIcon={<UploadFileOutlined />}
+                  component="label"
+                  disabled={!!busy}
+                  sx={{ width: selected ? "100%" : "auto" }}
+                >
+                  {busy === "import"
+                    ? "Importing…"
+                    : selected
+                      ? "Replace list"
+                      : "Choose file"}
+                  <input
+                    hidden
+                    type="file"
+                    accept=".csv,.txt,.xlsx"
+                    aria-label="Recipient file"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) void upload(file);
+                      e.target.value = "";
+                    }}
+                  />
+                </Button>
+              </Box>
+              <Accordion
+                disableGutters
+                sx={{ "&:before": { display: "none" } }}
+              >
+                <AccordionSummary expandIcon={<ExpandMore />}>
+                  <Typography sx={{ fontSize: 14 }}>
+                    Or paste email addresses
+                  </Typography>
+                </AccordionSummary>
+                <AccordionDetails>
+                  <TextField
+                    label="One email per line"
+                    multiline
+                    minRows={4}
+                    value={paste}
+                    onChange={(e) => setPaste(e.target.value)}
+                  />
+                  <Button
+                    sx={{ mt: 1 }}
+                    disabled={!!busy || !paste.trim()}
+                    onClick={() => void upload()}
+                  >
+                    Import pasted addresses
+                  </Button>
+                </AccordionDetails>
+              </Accordion>
+              {imports.length > 0 && (
+                <TextField
+                  select
+                  label="Recipient import"
+                  value={importId}
+                  onChange={(e) => {
+                    setImportId(e.target.value);
+                    setEditRecipients(false);
+                    invalid();
+                  }}
+                  sx={{ mt: 2 }}
+                >
+                  {imports.map((i) => (
+                    <MenuItem key={i.id} value={i.id}>
+                      {i.filename} · {i.stats.sendable.toLocaleString()}{" "}
+                      recipients
+                    </MenuItem>
+                  ))}
+                </TextField>
+              )}
+            </Collapse>
           </Card>
-          <Card sx={{ p: { xs: 2.5, sm: 3 } }}>
+          <Card sx={{ p: { xs: 2, sm: 2.5 } }}>
             <Stack
               direction="row"
               spacing={1.5}
 
               sx={{ alignItems: "center", mb: 3 }}
             >
-              <Chip label="2" color="primary" size="small" />
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                sx={{ fontWeight: 600 }}
+              >
+                02
+              </Typography>
               <Typography variant="h6">Message</Typography>
             </Stack>
             <Stack spacing={2.5}>
@@ -337,26 +410,8 @@ export function Blast() {
                 value={form.from}
                 onChange={(e) => change("from", e.target.value)}
                 required
-                helperText="Use the same verified address on each provider you want to rotate."
+                helperText="Must match a verified provider sender."
               />
-              <Box
-                sx={{
-                  display: "grid",
-                  gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" },
-                  gap: 2,
-                }}
-              >
-                <TextField
-                  label="From name"
-                  value={form.fromName}
-                  onChange={(e) => change("fromName", e.target.value)}
-                />
-                <TextField
-                  label="Reply-To"
-                  value={form.replyTo}
-                  onChange={(e) => change("replyTo", e.target.value)}
-                />
-              </Box>
               <TextField
                 label="Subject"
                 value={form.subject}
@@ -367,19 +422,36 @@ export function Blast() {
                 label="Preview text"
                 value={form.preheader}
                 onChange={(e) => change("preheader", e.target.value)}
-                helperText="The short line shown beside the subject in an inbox."
+                helperText="Shown beside the subject in an inbox."
               />
               <Accordion
                 disableGutters
                 sx={{ "&:before": { display: "none" } }}
               >
                 <AccordionSummary expandIcon={<ExpandMore />}>
-                  <Typography sx={{ fontSize: 14 }}>
-                    CC, BCC, attachments and scheduling
-                  </Typography>
+                  <Typography sx={{ fontSize: 14 }}>More options</Typography>
                 </AccordionSummary>
                 <AccordionDetails>
                   <Stack spacing={2}>
+                    <Box
+                      sx={{
+                        display: "grid",
+                        gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" },
+                        gap: 2,
+                      }}
+                    >
+                      <TextField
+                        label="From name"
+                        value={form.fromName}
+                        onChange={(e) => change("fromName", e.target.value)}
+                      />
+                      <TextField
+                        label="Reply-To"
+                        value={form.replyTo}
+                        onChange={(e) => change("replyTo", e.target.value)}
+                      />
+                    </Box>
+
                     <TextField
                       label="CC (comma separated)"
                       value={form.cc}
@@ -484,8 +556,14 @@ export function Blast() {
                       setResetRich(true);
                   }}
                 >
-                  <ToggleButton value="rich">Rich text</ToggleButton>
-                  <ToggleButton value="source">HTML source</ToggleButton>
+                  <ToggleButton value="rich">
+                    <EditNoteOutlined fontSize="small" sx={{ mr: 0.75 }} />
+                    Rich text
+                  </ToggleButton>
+                  <ToggleButton value="source">
+                    <Code fontSize="small" sx={{ mr: 0.75 }} />
+                    Source
+                  </ToggleButton>
                 </ToggleButtonGroup>
                 <Button
                   component="label"
@@ -514,7 +592,7 @@ export function Blast() {
               {mode === "source" ? (
                 <>
                   <Typography sx={{ fontSize: 13 }} color="text.secondary">
-                    Imported HTML stays in source mode to preserve its layout.
+                    Source mode preserves your imported layout.
                   </Typography>
                   <CodeMirror
                     value={markup}
@@ -551,7 +629,15 @@ export function Blast() {
             </Stack>
           </Card>
         </Stack>
-        <Stack spacing={3} sx={{ position: { lg: "sticky" }, top: 24 }}>
+        <Stack
+          spacing={2.5}
+          sx={{
+            "@media (min-width:1200px) and (min-height:950px)": {
+              position: "sticky",
+              top: 24,
+            },
+          }}
+        >
           <Card sx={{ overflow: "hidden" }}>
             <Stack
               direction="row"
@@ -573,16 +659,32 @@ export function Blast() {
                   if (v) setView(v);
                 }}
               >
-                <ToggleButton value="desktop" aria-label="Desktop preview">
+                <ToggleButton
+                  value="desktop"
+                  aria-label="Desktop preview"
+                  title="Desktop preview"
+                >
                   <DesktopWindowsOutlined fontSize="small" />
                 </ToggleButton>
-                <ToggleButton value="mobile" aria-label="Mobile preview">
+                <ToggleButton
+                  value="mobile"
+                  aria-label="Mobile preview"
+                  title="Mobile preview"
+                >
                   <SmartphoneOutlined fontSize="small" />
                 </ToggleButton>
-                <ToggleButton value="text" aria-label="Plain-text preview">
+                <ToggleButton
+                  value="text"
+                  aria-label="Plain-text preview"
+                  title="Plain-text preview"
+                >
                   <TextFields fontSize="small" />
                 </ToggleButton>
-                <ToggleButton value="source" aria-label="Prepared HTML">
+                <ToggleButton
+                  value="source"
+                  aria-label="Prepared HTML"
+                  title="Prepared HTML"
+                >
                   <Code fontSize="small" />
                 </ToggleButton>
               </ToggleButtonGroup>
@@ -591,19 +693,21 @@ export function Blast() {
             <Box
               sx={{
                 p: 2,
-                bgcolor: "#eaf0f8",
+                bgcolor: "action.hover",
                 minHeight: 350,
                 display: "flex",
                 justifyContent: "center",
               }}
             >
               {!preview ? (
-                <Box sx={{ m: "auto", textAlign: "center", p: 3 }}>
-                  <Typography color="text.secondary">
-                    Your email preview will appear here.
-                  </Typography>
+                <Box sx={{ m: "auto", textAlign: "center" }}>
+                  <EmptyState
+                    icon={<VisibilityOutlined />}
+                    title="Your email, in context"
+                    description="Refresh to preview your message."
+                  />
                   <Button
-                    sx={{ mt: 2 }}
+                    startIcon={<Refresh />}
                     disabled={!!busy}
                     onClick={() =>
                       void run("preview", async () => {
@@ -626,7 +730,7 @@ export function Blast() {
                   sx={{
                     m: 0,
                     p: 2,
-                    bgcolor: "white",
+                    bgcolor: "background.paper",
                     whiteSpace: "pre-wrap",
                     wordBreak: "break-word",
                     width: "100%",
@@ -638,19 +742,48 @@ export function Blast() {
                   {view === "text" ? preview.text : preview.html}
                 </Box>
               ) : (
-                <iframe
-                  title={`${view} email preview`}
-                  sandbox=""
-                  referrerPolicy="no-referrer"
-                  srcDoc={preview.html}
-                  style={{
-                    width: view === "mobile" ? "min(390px, 100%)" : "100%",
-                    height: 520,
-                    border: 0,
-                    background: "white",
-                    borderRadius: view === "mobile" ? 16 : 4,
+                <Box
+                  sx={{
+                    width: view === "mobile" ? "min(360px, 100%)" : "100%",
+                    minWidth: 0,
+                    bgcolor: "background.paper",
+                    border: 1,
+                    borderColor: "divider",
+                    borderRadius: view === "mobile" ? 3 : 1.5,
+                    overflow: "hidden",
+                    transition: "width 180ms ease",
                   }}
-                />
+                >
+                  <Box
+                    sx={{
+                      px: 2,
+                      py: 1.5,
+                      borderBottom: 1,
+                      borderColor: "divider",
+                    }}
+                  >
+                    <Typography variant="caption" color="text.secondary">
+                      {form.fromName || form.from || "Sender"}
+                    </Typography>
+                    <Typography
+                      sx={{ fontSize: 14, fontWeight: 600, mt: 0.25 }}
+                    >
+                      {form.subject || "Subject"}
+                    </Typography>
+                  </Box>
+                  <iframe
+                    title={`${view} email preview`}
+                    sandbox=""
+                    referrerPolicy="no-referrer"
+                    srcDoc={preview.html}
+                    style={{
+                      display: "block",
+                      width: "100%",
+                      height: 390,
+                      border: 0,
+                    }}
+                  />
+                </Box>
               )}
             </Box>
             <Box
@@ -663,53 +796,108 @@ export function Blast() {
               }}
             >
               <Typography sx={{ fontSize: 12 }} color="text.secondary">
-                An unsubscribe link is added automatically.
+                Unsubscribe link included automatically.
               </Typography>
               {preview && (
-                <Button
-                  size="small"
-                  disabled={!!busy}
-                  onClick={() =>
-                    void run("preview", async () => {
-                      setPreview(
-                        await api<Preview>("preview", {
-                          html: markup,
-                          preheader: form.preheader,
-                          text: form.text,
-                        }),
-                      );
-                    })
-                  }
-                >
-                  Refresh
-                </Button>
+                <Tooltip title="Refresh preview">
+                  <IconButton
+                    aria-label="Refresh preview"
+                    disabled={!!busy}
+                    onClick={() =>
+                      void run("preview", async () => {
+                        setPreview(
+                          await api<Preview>("preview", {
+                            html: markup,
+                            preheader: form.preheader,
+                            text: form.text,
+                          }),
+                        );
+                      })
+                    }
+                  >
+                    <Refresh fontSize="small" />
+                  </IconButton>
+                </Tooltip>
               )}
             </Box>
           </Card>
-          <Card sx={{ p: 3 }}>
+          <Card
+            component="section"
+            aria-label="Pre-flight"
+            sx={{ p: { xs: 2, sm: 2.5 } }}
+          >
             <Stack spacing={2}>
-              <Typography variant="h6">Ready for a final check?</Typography>
-              <Typography sx={{ fontSize: 14 }} color="text.secondary">
-                We’ll check the recipients, message, and available sending
-                connections.
-              </Typography>
+              <Stack direction="row" sx={{ alignItems: "center", gap: 1.5 }}>
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  sx={{ fontWeight: 600 }}
+                >
+                  03
+                </Typography>
+                <Typography variant="h6">Pre-flight</Typography>
+              </Stack>
+              <Failure error={errorAction === "preflight" ? error : ""} />
+              {!flight && (
+                <Typography variant="body2" color="text.secondary">
+                  Check recipients, sender, and message before sending.
+                </Typography>
+              )}
               {flight && (
-                <Alert severity={flight.ready ? "success" : "warning"}>
-                  <Typography sx={{ fontWeight: 700 }}>
+                <Stack spacing={1.5}>
+                  <Typography
+                    sx={{
+                      fontWeight: 650,
+                      color: flight.ready ? "success.main" : "warning.main",
+                    }}
+                  >
                     {flight.ready ? "Ready to send" : "Action required"}
                   </Typography>
+                  <Box
+                    sx={{ display: "grid", gridTemplateColumns: "1fr", gap: 1 }}
+                  >
+                    {[
+                      [
+                        `${flight.count.toLocaleString()} recipients`,
+                        flight.count > 0,
+                      ],
+                      [
+                        `${flight.providers.length} eligible ${flight.providers.length === 1 ? "provider" : "providers"}`,
+                        flight.providers.length > 0,
+                      ],
+                      [
+                        flight.ready
+                          ? "Sender verified"
+                          : "Sender · see checks",
+                        flight.ready,
+                      ],
+                      ["HTML prepared", !!flight.previewHtml],
+                      ["Plain text ready", !!flight.text],
+                    ].map(([label, ok]) => (
+                      <Stack
+                        key={String(label)}
+                        direction="row"
+                        sx={{ alignItems: "center", gap: 1 }}
+                      >
+                        {ok ? (
+                          <CheckCircleOutlined
+                            sx={{ fontSize: 17, color: "success.main" }}
+                          />
+                        ) : (
+                          <RadioButtonUnchecked
+                            sx={{ fontSize: 17, color: "text.secondary" }}
+                          />
+                        )}
+                        <Typography variant="body2">{label}</Typography>
+                      </Stack>
+                    ))}
+                  </Box>
                   {flight.problems.map((p) => (
-                    <Typography sx={{ fontSize: 14 }} key={p}>
+                    <Alert severity="error" key={p}>
                       {p}
-                    </Typography>
+                    </Alert>
                   ))}
-                  {flight.ready && (
-                    <Typography sx={{ fontSize: 14 }}>
-                      {flight.count.toLocaleString()} recipients ·{" "}
-                      {flight.providers.length} eligible providers
-                    </Typography>
-                  )}
-                </Alert>
+                </Stack>
               )}
               {flight && (
                 <Typography variant="body2" color="text.secondary">
@@ -727,7 +915,8 @@ export function Blast() {
                 </Alert>
               ))}
               <Button
-                variant="outlined"
+                variant={flight?.ready ? "outlined" : "contained"}
+                loading={busy === "preflight"}
                 startIcon={<FactCheckOutlined />}
                 disabled={!!busy || !importId}
                 onClick={() =>
@@ -743,7 +932,7 @@ export function Blast() {
                 {busy === "preflight" ? "Checking…" : "Run pre-flight"}
               </Button>
               <Button
-                variant="contained"
+                variant={flight?.ready ? "contained" : "outlined"}
                 size="large"
                 startIcon={<SendOutlined />}
                 disabled={!!busy || !flight?.ready}
@@ -752,6 +941,7 @@ export function Blast() {
                 {form.scheduledAt ? "Schedule campaign" : "Send campaign"}
               </Button>
               <Button
+                startIcon={<ScienceOutlined />}
                 disabled={!!busy || !form.from || !form.subject}
                 onClick={() => {
                   setTestOpen(true);
@@ -764,13 +954,16 @@ export function Blast() {
           </Card>
         </Stack>
       </Box>
-      <Dialog open={confirm} onClose={() => setConfirm(false)}>
-        <DialogTitle>
-          {form.scheduledAt
-            ? "Schedule this campaign?"
-            : "Start this campaign?"}
-        </DialogTitle>
+      <ResponsiveDialog
+        open={confirm}
+        onClose={() => setConfirm(false)}
+        busy={busy === "send"}
+        title={
+          form.scheduledAt ? "Schedule this campaign?" : "Start this campaign?"
+        }
+      >
         <DialogContent>
+          <Failure error={errorAction === "send" ? error : ""} />
           {flight?.count.toLocaleString()} individual emails will enter the
           background queue. You can follow progress and pause sending in
           Activity.
@@ -793,9 +986,12 @@ export function Blast() {
             {busy === "send" ? "Queuing…" : "Confirm send"}
           </Button>
         </DialogActions>
-      </Dialog>
-      <Dialog open={resetRich} onClose={() => setResetRich(false)}>
-        <DialogTitle>Start fresh in rich text?</DialogTitle>
+      </ResponsiveDialog>
+      <ResponsiveDialog
+        open={resetRich}
+        onClose={() => setResetRich(false)}
+        title="Start fresh in rich text?"
+      >
         <DialogContent>
           This clears the current HTML. Keep source mode to preserve an imported
           layout.
@@ -803,6 +999,8 @@ export function Blast() {
         <DialogActions>
           <Button onClick={() => setResetRich(false)}>Keep HTML</Button>
           <Button
+            variant="contained"
+            color="error"
             onClick={() => {
               updateMarkup("<p></p>");
               setMode("rich");
@@ -812,16 +1010,18 @@ export function Blast() {
             Start fresh
           </Button>
         </DialogActions>
-      </Dialog>
-      <Dialog
+      </ResponsiveDialog>
+      <ResponsiveDialog
         open={testOpen}
         onClose={() => setTestOpen(false)}
-        fullWidth
-        maxWidth="sm"
+        busy={busy === "test"}
+        title="Test this message"
+        width={520}
+        mobileFullScreen
       >
-        <DialogTitle>Test this message</DialogTitle>
         <DialogContent>
           <Stack spacing={2} sx={{ pt: 1 }}>
+            <Failure error={errorAction === "test" ? error : ""} />
             <TextField
               select
               label="Provider"
@@ -849,6 +1049,8 @@ export function Blast() {
           <Button onClick={() => setTestOpen(false)}>Close</Button>
           <Button
             variant="contained"
+            startIcon={<ScienceOutlined />}
+            loading={busy === "test"}
             disabled={!!busy || !testRecipient || !testProvider}
             onClick={() =>
               void run("test", async () => {
@@ -870,7 +1072,7 @@ export function Blast() {
             {busy === "test" ? "Sending…" : "Send test"}
           </Button>
         </DialogActions>
-      </Dialog>
+      </ResponsiveDialog>
     </>
   );
 }

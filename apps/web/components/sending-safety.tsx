@@ -8,10 +8,8 @@ import {
   Box,
   Button,
   Checkbox,
-  Dialog,
   DialogActions,
   DialogContent,
-  DialogTitle,
   FormControlLabel,
   LinearProgress,
   MenuItem,
@@ -21,12 +19,10 @@ import {
   TextField,
   Tooltip,
   Typography,
-  useMediaQuery,
-  useTheme,
 } from "@mui/material";
 import { ExpandMore, ShieldOutlined } from "@mui/icons-material";
 import { api } from "./api-client";
-import { Failure, Loading } from "./shared";
+import { Failure, Loading, ResponsiveDialog } from "./shared";
 import {
   safetySettings,
   type SafetySettings,
@@ -63,14 +59,12 @@ export function SafetyReview({
     [busy, setBusy] = useState(false),
     [error, setError] = useState("");
   return (
-    <Dialog
+    <ResponsiveDialog
       open={open}
-      onClose={busy ? undefined : close}
-      fullWidth
-      maxWidth="xs"
-      aria-labelledby="review-title"
+      onClose={close}
+      busy={busy}
+      title="Review safety pause"
     >
-      <DialogTitle id="review-title">Review safety pause</DialogTitle>
       <DialogContent>
         <Stack spacing={2}>
           <Failure error={error} />
@@ -117,7 +111,7 @@ export function SafetyReview({
           Record review
         </Button>
       </DialogActions>
-    </Dialog>
+    </ResponsiveDialog>
   );
 }
 export function SendingSafety() {
@@ -127,7 +121,6 @@ export function SendingSafety() {
     [busy, setBusy] = useState(false),
     [saved, setSaved] = useState(false),
     [review, setReview] = useState(false);
-  const mobile = useMediaQuery(useTheme().breakpoints.down("sm"));
   useEffect(() => {
     if (!open) return;
     let live = true;
@@ -186,15 +179,14 @@ export function SendingSafety() {
       >
         Sending safety
       </Button>
-      <Dialog
+      <ResponsiveDialog
         open={open}
-        onClose={busy ? undefined : () => setOpen(false)}
-        fullWidth
-        maxWidth="sm"
-        fullScreen={mobile}
-        aria-labelledby="safety-title"
+        onClose={() => setOpen(false)}
+        busy={busy}
+        title="Sending safety"
+        width={640}
+        mobileFullScreen
       >
-        <DialogTitle id="safety-title">Sending safety</DialogTitle>
         <DialogContent>
           <Stack spacing={2.5} sx={{ pt: 1 }}>
             <Failure error={error} />
@@ -323,7 +315,7 @@ export function SendingSafety() {
             )}
           </Stack>
         </DialogContent>
-        <DialogActions sx={{ p: 2 }}>
+        <DialogActions>
           <Button disabled={busy} onClick={() => setOpen(false)}>
             Close
           </Button>
@@ -369,7 +361,7 @@ export function SendingSafety() {
             {busy ? "Saving…" : "Save safety settings"}
           </Button>
         </DialogActions>
-      </Dialog>
+      </ResponsiveDialog>
       <SafetyReview
         open={review}
         close={() => setReview(false)}
@@ -408,7 +400,11 @@ export function SafetyMetrics({
       .filter((n): n is number => n !== null)
       .sort((a, b) => a - b)[0];
   return (
-    <Stack spacing={2} sx={{ mt: 3 }} aria-label="Sending safety usage">
+    <Stack
+      spacing={1.5}
+      sx={{ mt: 2, p: 2, bgcolor: "action.hover", borderRadius: 2 }}
+      aria-label="Sending safety usage"
+    >
       <Box
         sx={{
           display: "grid",
@@ -430,10 +426,13 @@ export function SafetyMetrics({
                 direction="row"
                 sx={{ justifyContent: "space-between", gap: 1, mb: 1 }}
               >
-                <Typography variant="body2">
+                <Typography variant="caption">
                   {b.scope === "account" ? "Account · 24h" : "Domain · 24h"}
                 </Typography>
-                <Typography variant="body2">
+                <Typography
+                  variant="caption"
+                  sx={{ fontVariantNumeric: "tabular-nums" }}
+                >
                   {b.used.toLocaleString()} / {b.limit?.toLocaleString()}
                 </Typography>
               </Stack>

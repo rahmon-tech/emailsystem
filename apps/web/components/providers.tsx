@@ -7,10 +7,6 @@ import {
   Stack,
   Typography,
   Button,
-  Avatar,
-  Chip,
-  Dialog,
-  DialogTitle,
   DialogContent,
   DialogActions,
   TextField,
@@ -26,6 +22,9 @@ import {
   Snackbar,
   IconButton,
   Tooltip,
+  Menu,
+  ListItemIcon,
+  alpha,
 } from "@mui/material";
 import {
   Add,
@@ -35,7 +34,18 @@ import {
   PowerSettingsNew,
   EditOutlined,
   DeleteOutlined,
-  Close,
+  MoreHoriz,
+  HubOutlined,
+  NorthEastRounded,
+  CloudQueue,
+  AlternateEmail,
+  GridView,
+  ForumOutlined,
+  MarkEmailReadOutlined,
+  AirplanemodeActive,
+  SwapHoriz,
+  DynamicFeed,
+  DnsOutlined,
 } from "@mui/icons-material";
 import {
   catalog,
@@ -45,7 +55,14 @@ import {
 } from "@emailsystem/providers/catalog";
 import type { ProviderType } from "@emailsystem/providers/catalog";
 import { api, date } from "./api-client";
-import { PageTitle, Status, Loading, Failure } from "./shared";
+import {
+  PageTitle,
+  Status,
+  Loading,
+  Failure,
+  EmptyState,
+  ResponsiveDialog,
+} from "./shared";
 export interface ProviderRow {
   id: string;
   name: string;
@@ -81,8 +98,46 @@ export interface ProviderRow {
     createdAt: string;
   }[];
 }
+// Distinct symbolic treatments from the existing MUI icon set; no remote brand assets.
+const providerIcons = {
+  resend: NorthEastRounded,
+  ses: CloudQueue,
+  mailgun: AlternateEmail,
+  sendgrid: GridView,
+  brevo: ForumOutlined,
+  postmark: MarkEmailReadOutlined,
+  mailjet: AirplanemodeActive,
+  smtp2go: SwapHoriz,
+  elastic: DynamicFeed,
+  smtp: DnsOutlined,
+  mock: ScienceOutlined,
+};
+function ProviderMark({ type }: { type: ProviderType }) {
+  const Icon = providerIcons[type];
+  return (
+    <Box
+      sx={{
+        display: "grid",
+        placeItems: "center",
+        width: 42,
+        height: 42,
+        flexShrink: 0,
+        borderRadius: 2.5,
+        bgcolor: alpha(definition(type).color, 0.12),
+        color: "text.primary",
+      }}
+    >
+      <Icon sx={{ fontSize: 23 }} />
+    </Box>
+  );
+}
 export function Providers() {
   const [items, setItems] = useState<ProviderRow[] | null>(null),
+    [picker, setPicker] = useState(false),
+    [menu, setMenu] = useState<{
+      anchor: HTMLElement;
+      row: ProviderRow;
+    } | null>(null),
     [allowMock, setAllowMock] = useState(false),
     [appUrl, setAppUrl] = useState(""),
     [error, setError] = useState(""),
@@ -134,239 +189,298 @@ export function Providers() {
   return (
     <>
       <PageTitle
-        eyebrow="CONNECTIONS"
-        title="Your sending providers"
-        action={<SendingSafety />}
-        description="Connect your email services. We’ll check each connection before it can send."
+        title="Providers"
+        description="Your sending connections, at a glance."
+        action={
+          <Stack
+            direction="row"
+            spacing={1}
+            sx={{
+              alignItems: "center",
+              justifyContent: { xs: "space-between", sm: "flex-end" },
+            }}
+          >
+            <SendingSafety />
+            <Button
+              variant="contained"
+              startIcon={<Add />}
+              onClick={() => setPicker(true)}
+            >
+              Add provider
+            </Button>
+          </Stack>
+        }
       />
       <Failure error={error} />
-      <Box sx={{ mb: 4 }}>
-        <Typography variant="h6" sx={{ mb: 2 }}>
-          Add a sending provider
-        </Typography>
-        <Box
-          sx={{
-            display: "grid",
-            gridTemplateColumns: {
-              xs: "repeat(2,minmax(0,1fr))",
-              sm: "repeat(3,minmax(0,1fr))",
-              lg: "repeat(5,minmax(0,1fr))",
-            },
-            gap: 1.5,
-          }}
-        >
-          {catalog
-            .filter((p) => p.id !== "mock" || allowMock)
-            .map((p) => (
-              <Button
-                key={p.id}
-                onClick={() => setSelected({ type: p.id })}
-                sx={{
-                  bgcolor: "white",
-                  color: "text.primary",
-                  justifyContent: "flex-start",
-                  py: 2,
-                  px: 2,
-                  border: "1px solid transparent",
-                  "&:hover": { borderColor: "primary.main", bgcolor: "white" },
-                }}
-              >
-                <Avatar
-                  variant="rounded"
-                  sx={{
-                    bgcolor: p.color,
-                    width: 32,
-                    height: 32,
-                    fontSize: 12,
-                    mr: 1.5,
-                    fontWeight: 800,
-                  }}
-                >
-                  {p.name.slice(0, 2)}
-                </Avatar>
-                {p.name}
-              </Button>
-            ))}
-        </Box>
-      </Box>
-      <Stack
-        direction="row"
-
-        sx={{ justifyContent: "space-between", alignItems: "center", mb: 2 }}
-      >
-        <Typography variant="h6">Connected providers</Typography>
-        <Chip
-          size="small"
-          label={`${items?.filter((p) => p.enabled).length ?? 0} active`}
-        />
-      </Stack>
       {items === null ? (
         <Loading />
       ) : items.length === 0 ? (
-        <Card sx={{ p: { xs: 4, sm: 7 }, textAlign: "center" }}>
-          <Avatar
-            sx={{
-              mx: "auto",
-              mb: 2,
-              bgcolor: "#eaf0ff",
-              color: "primary.main",
-            }}
-          >
-            <Add />
-          </Avatar>
-          <Typography variant="h6">No providers configured yet.</Typography>
-          <Typography color="text.secondary" sx={{ mt: 1 }}>
-            Choose a service above to add your first connection.
-          </Typography>
+        <Card>
+          <EmptyState
+            icon={<HubOutlined />}
+            title="No providers yet"
+            description="Connect your first sending service."
+            action={
+              <Button startIcon={<Add />} onClick={() => setPicker(true)}>
+                Add provider
+              </Button>
+            }
+          />
         </Card>
       ) : (
-        <Box
-          sx={{
-            display: "grid",
-            gridTemplateColumns: { xs: "1fr", xl: "1fr 1fr" },
-            gap: 2,
-          }}
-        >
-          {items.map((p) => (
-            <Card key={p.id} sx={{ p: 2.5 }}>
-              <Stack sx={{ gap: 1.5, alignItems: "center" }} direction="row">
-                <Avatar
-                  variant="rounded"
-                  sx={{ bgcolor: definition(p.type).color, fontSize: 14 }}
-                >
-                  {definition(p.type).name.slice(0, 2)}
-                </Avatar>
-                <Box sx={{ flex: 1, minWidth: 0 }}>
-                  <Typography sx={{ fontWeight: 700 }}>{p.name}</Typography>
-                  <Typography sx={{ fontSize: 13 }} color="text.secondary">
-                    {definition(p.type).name} · {p.transport.toUpperCase()}
-                  </Typography>
-                </Box>
-                <Status value={p.health} />
-              </Stack>
-              <Typography sx={{ fontSize: 14, mt: 2 }}>
-                {p.settings.fromEmail}
-              </Typography>
-              <Stack
-                direction="row"
-
-                sx={{ gap: 2, mt: 1, mb: 2, flexWrap: "wrap" }}
+        <>
+          <Stack
+            direction="row"
+            sx={{
+              justifyContent: "space-between",
+              alignItems: "center",
+              mb: 1.5,
+            }}
+          >
+            <Typography variant="body2" sx={{ fontWeight: 600 }}>
+              Connections{" "}
+              <Box component="span" sx={{ color: "text.secondary", ml: 0.5 }}>
+                {items.length}
+              </Box>
+            </Typography>
+            <Typography variant="caption" color="text.secondary">
+              {items.filter((p) => p.enabled).length} active
+            </Typography>
+          </Stack>
+          <Box
+            sx={{
+              display: "grid",
+              gridTemplateColumns: { xs: "1fr", lg: "repeat(2,minmax(0,1fr))" },
+              gap: 2,
+            }}
+          >
+            {items.map((p) => (
+              <Card
+                key={p.id}
+                sx={{
+                  p: { xs: 2, sm: 2.5 },
+                  alignSelf: "start",
+                  transition: "border-color 160ms",
+                  "&:hover": { borderColor: "text.disabled" },
+                }}
               >
-                <Typography sx={{ fontSize: 13 }} color="text.secondary">
-                  Checked {date(p.verifiedAt)}
-                </Typography>
-                <Typography sx={{ fontSize: 13 }} color="text.secondary">
-                  Weight {p.weight}
-                </Typography>
-                <Typography sx={{ fontSize: 13 }} color="text.secondary">
-                  {p.recentAcceptance === null
-                    ? "No recent sends"
-                    : `${p.recentAcceptance}% accepted today`}
-                </Typography>
-              </Stack>
-              <Stack
-                sx={{ justifyContent: "space-between", alignItems: "center" }}
-                direction="row"
-              >
-                <Button
-                  startIcon={<CheckCircleOutlined />}
-                  disabled={busy === p.id}
-                  onClick={() => void run(p.id, "verify")}
-                >
-                  {busy === p.id ? "Checking…" : "Verify"}
-                </Button>
-                <Stack direction="row">
-                  <Tooltip title="Send test email">
+                <Stack direction="row" sx={{ alignItems: "center", gap: 1.5 }}>
+                  <ProviderMark type={p.type} />
+                  <Box sx={{ flex: 1, minWidth: 0 }}>
+                    <Typography sx={{ fontWeight: 650 }}>{p.name}</Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      {definition(p.type).name} · {p.transport.toUpperCase()}
+                    </Typography>
+                  </Box>
+                  <Tooltip title="More actions">
                     <IconButton
-                      aria-label={`Test ${p.name}`}
-                      onClick={() => setTest(p)}
+                      aria-label={`More actions for ${p.name}`}
+                      onClick={(e) =>
+                        setMenu({ anchor: e.currentTarget, row: p })
+                      }
+                      sx={{ mr: -1 }}
                     >
-                      <ScienceOutlined fontSize="small" />
-                    </IconButton>
-                  </Tooltip>
-                  <Tooltip title="Edit connection">
-                    <IconButton
-                      aria-label={`Edit ${p.name}`}
-                      onClick={() => setSelected({ type: p.type, row: p })}
-                    >
-                      <EditOutlined fontSize="small" />
-                    </IconButton>
-                  </Tooltip>
-                  <Tooltip title="Disable">
-                    <IconButton
-                      aria-label={`Disable ${p.name}`}
-                      disabled={!p.enabled || busy === p.id}
-                      onClick={() => void run(p.id, "disable")}
-                    >
-                      <PowerSettingsNew fontSize="small" />
-                    </IconButton>
-                  </Tooltip>
-                  <Tooltip title="Delete">
-                    <IconButton
-                      aria-label={`Delete ${p.name}`}
-                      onClick={() => setRemove(p)}
-                    >
-                      <DeleteOutlined fontSize="small" />
+                      <MoreHoriz fontSize="small" />
                     </IconButton>
                   </Tooltip>
                 </Stack>
-              </Stack>
-              {p.verifications[0] && (
-                <Accordion
-                  disableGutters
+                <Typography sx={{ mt: 2, fontSize: 13 }}>
+                  {p.settings.fromEmail}
+                </Typography>
+                <Stack
+                  direction="row"
                   sx={{
-                    boxShadow: "none",
-                    "&:before": { display: "none" },
-                    mt: 1,
+                    mt: 1.5,
+                    alignItems: "center",
+                    gap: 1,
+                    justifyContent: "space-between",
+                    flexWrap: "wrap",
                   }}
                 >
-                  <AccordionSummary expandIcon={<ExpandMore />}>
-                    <Typography sx={{ fontSize: 14 }}>
-                      Verification details
+                  <Status
+                    value={p.enabled ? p.health : "DISABLED"}
+                    busy={busy === p.id}
+                  />
+                  <Typography variant="caption" color="text.secondary">
+                    {p.recentAcceptance === null
+                      ? "No recent sends"
+                      : `${p.recentAcceptance}% accepted today`}
+                  </Typography>
+                </Stack>
+                <Stack
+                  direction="row"
+                  sx={{
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    mt: 1.5,
+                    pt: 1.5,
+                    borderTop: 1,
+                    borderColor: "divider",
+                    gap: 1,
+                  }}
+                >
+                  <Tooltip
+                    title={`Last verified: ${date(p.verifiedAt)} · Weight ${p.weight} · ${p.perMinute}/min`}
+                  >
+                    <Typography variant="caption" color="text.secondary">
+                      {p.verifiedAt
+                        ? `Verified ${new Date(p.verifiedAt).toLocaleDateString()}`
+                        : "Not verified"}
                     </Typography>
-                  </AccordionSummary>
-                  <AccordionDetails>
-                    <Stack spacing={1.5}>
-                      {p.verifications[0].checks.map((check, i) => (
-                        <Box key={i}>
-                          <Stack
-                            sx={{ alignItems: "center" }}
-                            direction="row"
-                            spacing={1}
-                          >
-                            <Chip
-                              size="small"
-                              label={check.status}
-                              color={
-                                check.status === "passed"
-                                  ? "success"
-                                  : check.status === "failed"
-                                    ? "warning"
-                                    : "default"
-                              }
-                              variant="outlined"
-                            />
-                            <Typography sx={{ fontWeight: 600, fontSize: 14 }}>
-                              {check.name}
+                  </Tooltip>
+                  <Stack direction="row" spacing={0.25}>
+                    <Tooltip title="Verify connection">
+                      <IconButton
+                        aria-label={`Verify ${p.name}`}
+                        disabled={busy === p.id}
+                        onClick={() => void run(p.id, "verify")}
+                      >
+                        <CheckCircleOutlined fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                    <Tooltip title="Send test email">
+                      <IconButton
+                        aria-label={`Test ${p.name}`}
+                        onClick={() => setTest(p)}
+                      >
+                        <ScienceOutlined fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                    <Tooltip title="Edit connection">
+                      <IconButton
+                        aria-label={`Edit ${p.name}`}
+                        onClick={() => setSelected({ type: p.type, row: p })}
+                      >
+                        <EditOutlined fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                  </Stack>
+                </Stack>
+                {p.verifications[0] && (
+                  <Accordion>
+                    <AccordionSummary expandIcon={<ExpandMore />}>
+                      <Typography variant="body2">
+                        Verification details
+                      </Typography>
+                    </AccordionSummary>
+                    <AccordionDetails>
+                      <Stack spacing={1.5}>
+                        {p.verifications[0].checks.map((check, i) => (
+                          <Box key={i}>
+                            <Stack
+                              direction="row"
+                              sx={{ alignItems: "center", gap: 1 }}
+                            >
+                              <Status value={check.status} />
+                              <Typography
+                                variant="body2"
+                                sx={{ fontWeight: 600 }}
+                              >
+                                {check.name}
+                              </Typography>
+                            </Stack>
+                            <Typography
+                              variant="caption"
+                              color="text.secondary"
+                              sx={{ mt: 0.5, display: "block" }}
+                            >
+                              {check.detail}
                             </Typography>
-                          </Stack>
-                          <Typography
-                            color="text.secondary"
-
-                            sx={{ fontSize: 13, mt: 0.5 }}
-                          >
-                            {check.detail}
-                          </Typography>
-                        </Box>
-                      ))}
-                    </Stack>
-                  </AccordionDetails>
-                </Accordion>
-              )}
-            </Card>
-          ))}
-        </Box>
+                          </Box>
+                        ))}
+                      </Stack>
+                    </AccordionDetails>
+                  </Accordion>
+                )}
+              </Card>
+            ))}
+          </Box>
+        </>
       )}
+      <Menu anchorEl={menu?.anchor} open={!!menu} onClose={() => setMenu(null)}>
+        <MenuItem
+          disabled={!menu?.row.enabled || busy === menu?.row.id}
+          onClick={() => {
+            if (menu) void run(menu.row.id, "disable");
+            setMenu(null);
+          }}
+        >
+          <ListItemIcon>
+            <PowerSettingsNew fontSize="small" />
+          </ListItemIcon>
+          Disable
+        </MenuItem>
+        <MenuItem
+          sx={{ color: "error.main" }}
+          onClick={() => {
+            setRemove(menu?.row ?? null);
+            setMenu(null);
+          }}
+        >
+          <ListItemIcon>
+            <DeleteOutlined fontSize="small" color="error" />
+          </ListItemIcon>
+          Delete
+        </MenuItem>
+      </Menu>
+      <ResponsiveDialog
+        open={picker}
+        onClose={() => setPicker(false)}
+        title="Add provider"
+        width={660}
+        mobileFullScreen
+      >
+        <DialogContent>
+          <Typography color="text.secondary" sx={{ mb: 2.5 }}>
+            Choose a sending service.
+          </Typography>
+          <Box
+            sx={{
+              display: "grid",
+              gridTemplateColumns: {
+                xs: "repeat(2,minmax(0,1fr))",
+                sm: "repeat(3,minmax(0,1fr))",
+              },
+              gap: 1.5,
+            }}
+          >
+            {catalog
+              .filter((p) => p.id !== "mock" || allowMock)
+              .map((p) => (
+                <Button
+                  key={p.id}
+                  onClick={() => {
+                    setPicker(false);
+                    setSelected({ type: p.id });
+                  }}
+                  sx={{
+                    flexDirection: "column",
+                    gap: 1.5,
+                    color: "text.primary",
+                    p: 2,
+                    border: 1,
+                    borderColor: "divider",
+                    "&:hover": {
+                      borderColor: "primary.main",
+                      bgcolor: "action.hover",
+                    },
+                  }}
+                >
+                  <ProviderMark type={p.id} />
+                  <Typography
+                    component="span"
+                    sx={{ fontSize: 13, fontWeight: 600 }}
+                  >
+                    {p.name}
+                  </Typography>
+                </Button>
+              ))}
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setPicker(false)}>Close</Button>
+        </DialogActions>
+      </ResponsiveDialog>
       {selected && (
         <ProviderForm
           key={selected.row?.id ?? selected.type}
@@ -388,8 +502,11 @@ export function Providers() {
           onResult={reload}
         />
       )}
-      <Dialog open={!!remove} onClose={() => setRemove(null)}>
-        <DialogTitle>Delete this connection?</DialogTitle>
+      <ResponsiveDialog
+        open={!!remove}
+        onClose={() => setRemove(null)}
+        title="Delete this connection?"
+      >
         <DialogContent>
           Future sending through {remove?.name} will stop. Its past delivery
           records remain available.
@@ -398,6 +515,8 @@ export function Providers() {
           <Button onClick={() => setRemove(null)}>Keep connection</Button>
           <Button
             color="error"
+            variant="contained"
+            startIcon={<DeleteOutlined />}
             onClick={async () => {
               if (remove) await run(remove.id, "delete");
               setRemove(null);
@@ -406,7 +525,7 @@ export function Providers() {
             Delete connection
           </Button>
         </DialogActions>
-      </Dialog>
+      </ResponsiveDialog>
       <Snackbar
         open={!!toast}
         autoHideDuration={5000}
@@ -476,23 +595,25 @@ function ProviderForm({
   const change = (key: string, value: unknown) =>
     setSettings((s) => ({ ...s, [key]: value }));
   return (
-    <Dialog open onClose={busy ? undefined : onClose} fullWidth maxWidth="sm">
-      <DialogTitle
-        sx={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-        }}
-      >
-        {row ? "Edit" : "Connect"} {d.name}
-        <IconButton
-          onClick={onClose}
-          disabled={busy}
-          aria-label="Close provider form"
+    <ResponsiveDialog
+      open
+      onClose={onClose}
+      busy={busy}
+      title={
+        <Stack
+          component="span"
+          direction="row"
+          sx={{ alignItems: "center", gap: 1.5 }}
         >
-          <Close />
-        </IconButton>
-      </DialogTitle>
+          <ProviderMark type={type} />
+          <span>
+            {row ? "Edit" : "Connect"} {d.name}
+          </span>
+        </Stack>
+      }
+      width={660}
+      mobileFullScreen
+    >
       <DialogContent>
         <Stack spacing={2.5} sx={{ pt: 1 }}>
           <Failure error={error} />
@@ -699,7 +820,7 @@ function ProviderForm({
                 <Box
                   sx={{
                     display: "grid",
-                    gridTemplateColumns: "1fr 1fr",
+                    gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" },
                     gap: 2,
                   }}
                 >
@@ -821,13 +942,15 @@ function ProviderForm({
           </Accordion>
         </Stack>
       </DialogContent>
-      <DialogActions sx={{ p: 3 }}>
+      <DialogActions>
         <Button onClick={onClose} disabled={busy}>
           Cancel
         </Button>
         <Button
           variant="contained"
           disabled={busy}
+          loading={busy}
+          startIcon={<CheckCircleOutlined />}
           onClick={async () => {
             setBusy(true);
             setError("");
@@ -858,7 +981,7 @@ function ProviderForm({
           {busy ? "Saving and verifying…" : "Save & Verify"}
         </Button>
       </DialogActions>
-    </Dialog>
+    </ResponsiveDialog>
   );
 }
 function TestDialog({
@@ -884,8 +1007,14 @@ function TestDialog({
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false);
   return (
-    <Dialog open onClose={busy ? undefined : onClose} fullWidth maxWidth="sm">
-      <DialogTitle>Test {row.name}</DialogTitle>
+    <ResponsiveDialog
+      open
+      onClose={onClose}
+      busy={busy}
+      title={`Test ${row.name}`}
+      width={520}
+      mobileFullScreen
+    >
       <DialogContent>
         <Stack spacing={2} sx={{ pt: 1 }}>
           <Failure error={error} />
@@ -955,6 +1084,8 @@ function TestDialog({
         <Button onClick={onClose}>Close</Button>
         <Button
           variant="contained"
+          loading={busy}
+          startIcon={<ScienceOutlined />}
           disabled={busy || !recipient}
           onClick={async () => {
             setBusy(true);
@@ -978,6 +1109,6 @@ function TestDialog({
               : "Send Test Email"}
         </Button>
       </DialogActions>
-    </Dialog>
+    </ResponsiveDialog>
   );
 }

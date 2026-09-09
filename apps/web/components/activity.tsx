@@ -8,10 +8,8 @@ import {
   Button,
   Card,
   Chip,
-  Dialog,
   DialogActions,
   DialogContent,
-  DialogTitle,
   Divider,
   LinearProgress,
   MenuItem,
@@ -20,6 +18,9 @@ import {
   Tabs,
   TextField,
   Typography,
+  IconButton,
+  Tooltip,
+  Snackbar,
 } from "@mui/material";
 import {
   Add,
@@ -29,9 +30,20 @@ import {
   Stop,
   ShieldOutlined,
   GraphicEq,
+  Refresh,
+  Search,
+  PeopleOutlined,
+  HubOutlined,
 } from "@mui/icons-material";
 import { api, date } from "./api-client";
-import { Failure, Loading, PageTitle, Status } from "./shared";
+import {
+  Failure,
+  Loading,
+  PageTitle,
+  Status,
+  EmptyState,
+  ResponsiveDialog,
+} from "./shared";
 type Campaign = {
   id: string;
   name: string;
@@ -98,6 +110,7 @@ export function Activity() {
     [names, setNames] = useState<Record<string, string>>({});
   const [error, setError] = useState(""),
     [loading, setLoading] = useState(true),
+    [toast, setToast] = useState(""),
     [busy, setBusy] = useState(false),
     [cancel, setCancel] = useState(false),
     [tab, setTab] = useState(0);
@@ -191,6 +204,13 @@ export function Activity() {
       await api("campaigns/" + selected + "/" + kind, {});
       setCancel(false);
       await refresh();
+      setToast(
+        kind === "pause"
+          ? "Campaign paused."
+          : kind === "resume"
+            ? "Campaign resumed."
+            : "Remaining sends cancelled.",
+      );
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -219,96 +239,136 @@ export function Activity() {
         0,
       )
     : 0;
-  const metrics = summary
-    ? ([
+  const metrics: [string, number][] = summary
+    ? [
+        ["Delivered", summary.counts.DELIVERED ?? 0],
+        ["Provider accepted", summary.acceptedCount],
+        ["Failed", summary.counts.FAILED ?? 0],
+        [
+          "Remaining",
+          (summary.counts.PENDING ?? 0) +
+            (summary.counts.QUEUED ?? 0) +
+            (summary.counts.PROCESSING ?? 0) +
+            (summary.counts.DEFERRED ?? 0),
+        ],
+      ]
+    : [];
+  const secondary: [string, number][] = summary
+    ? [
         ["Recipients", summary.intendedRecipientCount],
         [
           "Queued",
           (summary.counts.PENDING ?? 0) + (summary.counts.QUEUED ?? 0),
         ],
         ["Processing", summary.counts.PROCESSING ?? 0],
-        ["Provider accepted", summary.acceptedCount],
-        ["Delivered", summary.counts.DELIVERED ?? 0],
         ["Deferred", summary.counts.DEFERRED ?? 0],
         [
           "Bounced",
           (summary.counts.HARD_BOUNCED ?? 0) +
             (summary.counts.SOFT_BOUNCED ?? 0),
         ],
-        ["Failed", summary.counts.FAILED ?? 0],
         ["Suppressed", summary.counts.SUPPRESSED ?? 0],
         ["Unknown", summary.counts.UNKNOWN ?? 0],
         ["Cancelled", summary.counts.CANCELLED ?? 0],
         ["Complaints", summary.counts.COMPLAINED ?? 0],
-      ] as [string, number][])
+      ]
     : [];
+  function selectCampaign(id: string) {
+    setSelected(id);
+    setSummary(null);
+    setEvents([]);
+    setConnected(false);
+    setDeliveryPage({ items: [], nextCursor: null });
+    window.history.replaceState(null, "", "/activity?campaignId=" + id);
+  }
   return (
     <>
       <PageTitle
-        eyebrow="ACTIVITY"
-        title="Every send, accounted for."
-        description="Follow campaign progress, manage sending, and inspect recipient outcomes."
+        title="Activity"
+        description="Follow your campaigns, from queue to delivery."
         action={
-          <Button
-            startIcon={<ShieldOutlined />}
-            onClick={() => {
-              setSuppressionOpen(true);
-              void inspectSuppression();
-            }}
-          >
-            Suppressions
-          </Button>
+          <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
+            <Tooltip title="Refresh activity">
+              <IconButton
+                aria-label="Refresh activity"
+                onClick={() => void refresh().catch((e) => setError(e.message))}
+              >
+                <Refresh fontSize="small" />
+              </IconButton>
+            </Tooltip>
+            <Button
+              startIcon={<ShieldOutlined />}
+              onClick={() => {
+                setSuppressionOpen(true);
+                void inspectSuppression();
+              }}
+            >
+              Suppressions
+            </Button>
+          </Stack>
         }
       />
       <Failure error={error} />
       {loading ? (
         <Loading />
       ) : !campaigns.length ? (
-        <Card sx={{ p: { xs: 3, sm: 6 }, textAlign: "center" }}>
-          <GraphicEq sx={{ fontSize: 46, color: "primary.main", mb: 2 }} />
-          <Typography variant="h5">Your campaigns will appear here.</Typography>
-          <Typography color="text.secondary" sx={{ my: 2 }}>
-            Create your first message in Blast. Activity will track it as it
-            sends.
-          </Typography>
-          <Button variant="contained" href="/blast" startIcon={<Add />}>
-            Create a campaign
-          </Button>
+        <Card>
+          <EmptyState
+            icon={<GraphicEq />}
+            title="No campaigns yet"
+            description="Prepare your first email in Blast."
+            action={
+              <Button variant="contained" href="/blast" startIcon={<Add />}>
+                Create a campaign
+              </Button>
+            }
+          />
         </Card>
       ) : (
         <Box
           sx={{
             display: "grid",
-            gridTemplateColumns: { xs: "1fr", lg: "280px minmax(0,1fr)" },
-            gap: 3,
+            gridTemplateColumns: { xs: "1fr", lg: "220px minmax(0,1fr)" },
+            gap: 2.5,
           }}
         >
-          <Stack spacing={1.5}>
-            <Typography variant="overline" color="text.secondary">
+          <Stack spacing={1.25} sx={{ alignSelf: "start", minWidth: 0 }}>
+            <TextField
+              select
+              label="Campaign"
+              value={selected}
+              onChange={(e) => selectCampaign(e.target.value)}
+              sx={{ display: { xs: "block", lg: "none" } }}
+            >
+              {campaigns.map((c) => (
+                <MenuItem key={c.id} value={c.id}>
+                  {c.name}
+                </MenuItem>
+              ))}
+            </TextField>
+            <Typography
+              variant="caption"
+              color="text.secondary"
+              sx={{ display: { xs: "none", lg: "block" }, fontWeight: 600 }}
+            >
               Campaigns
             </Typography>
             {campaigns.map((c) => (
               <Card
                 key={c.id}
                 component="button"
-                onClick={() => {
-                  setSelected(c.id);
-                  setSummary(null);
-                  setEvents([]);
-                  setConnected(false);
-                  setDeliveryPage({ items: [], nextCursor: null });
-                  window.history.replaceState(
-                    null,
-                    "",
-                    "/activity?campaignId=" + c.id,
-                  );
-                }}
+                onClick={() => selectCampaign(c.id)}
+                aria-pressed={c.id === selected}
                 sx={{
-                  p: 2,
+                  display: { xs: "none", lg: "block" },
+                  p: 1.75,
                   textAlign: "left",
                   cursor: "pointer",
-                  border: 0,
-                  outline: c.id === selected ? "2px solid #2457e0" : "none",
+                  borderColor: c.id === selected ? "primary.main" : "divider",
+                  bgcolor:
+                    c.id === selected ? "action.selected" : "background.paper",
+                  transition: "background-color 160ms",
+                  "&:hover": { bgcolor: "action.hover" },
                   font: "inherit",
                 }}
               >
@@ -349,28 +409,34 @@ export function Activity() {
             )}
           </Stack>
           {!selected ? (
-            <Card sx={{ p: 5, textAlign: "center", alignSelf: "start" }}>
-              <Typography variant="h6">Choose a campaign</Typography>
-              <Typography color="text.secondary" sx={{ mt: 1 }}>
-                Open a campaign to see its progress and live events.
-              </Typography>
+            <Card sx={{ alignSelf: "start" }}>
+              <EmptyState
+                icon={<GraphicEq />}
+                title="Choose a campaign"
+                description="See its progress and latest events."
+              />
             </Card>
           ) : !summary ? (
             <Loading />
           ) : (
-            <Stack spacing={3} sx={{ minWidth: 0 }}>
-              <Card sx={{ p: { xs: 2.5, sm: 3 } }}>
+            <Stack spacing={2.5} sx={{ minWidth: 0 }}>
+              <Card sx={{ p: { xs: 2, sm: 2.5 } }}>
                 <Stack
-                  sx={{ justifyContent: "space-between", gap: 2 }}
-                  direction={{ xs: "column", sm: "row" }}
+                  sx={{
+                    justifyContent: "space-between",
+                    gap: 2,
+                    flexWrap: "wrap",
+                    alignItems: "flex-start",
+                  }}
+                  direction="row"
                 >
-                  <Box>
+                  <Box sx={{ flex: 1, minWidth: { xs: 210, sm: 0 } }}>
                     <Stack
                       sx={{ alignItems: "center", gap: 1, flexWrap: "wrap" }}
                       direction="row"
                     >
                       <Typography
-                        variant="h5"
+                        variant="h6"
                         sx={{ overflowWrap: "anywhere" }}
                       >
                         {summary.name}
@@ -387,6 +453,7 @@ export function Activity() {
                   <Stack sx={{ gap: 1, flexWrap: "wrap" }} direction="row">
                     {["QUEUED", "SENDING"].includes(summary.state) && (
                       <Button
+                        variant="outlined"
                         aria-label="Pause campaign"
                         startIcon={<Pause />}
                         disabled={busy}
@@ -398,6 +465,7 @@ export function Activity() {
                     {summary.state === "PAUSED" &&
                       !summary.safety.pausedReason && (
                         <Button
+                          variant="contained"
                           aria-label="Resume campaign"
                           startIcon={<PlayArrow />}
                           disabled={busy}
@@ -418,21 +486,16 @@ export function Activity() {
                         Cancel
                       </Button>
                     )}
-                    <Button
-                      href={`/api/campaigns/${selected}/export`}
-                      startIcon={<DownloadOutlined />}
-                    >
-                      Export CSV
-                    </Button>
+                    <Tooltip title="Export CSV">
+                      <IconButton
+                        aria-label="Export CSV"
+                        href={`/api/campaigns/${selected}/export`}
+                      >
+                        <DownloadOutlined fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
                   </Stack>
                 </Stack>
-                <SafetyMetrics
-                  safety={summary.safety}
-                  campaignId={summary.id}
-                  refresh={() => {
-                    void refresh().catch((e) => setError(e.message));
-                  }}
-                />
                 {summary.safeError &&
                   summary.safeError !== summary.safety.pausedReason && (
                     <Alert severity="warning" sx={{ mt: 2 }}>
@@ -463,55 +526,147 @@ export function Activity() {
                           )
                         : 0
                     }
-                    sx={{ height: 7, borderRadius: 5 }}
+                    aria-label="Dispatch progress"
                   />
                 </Box>
-                <Typography sx={{ fontSize: 12 }} color="text.secondary">
-                  Acceptance means the provider took responsibility for a
-                  message. Delivery is confirmed separately by its webhook.
-                </Typography>
                 <Box
                   sx={{
                     display: "grid",
                     gridTemplateColumns: {
-                      xs: "repeat(2,1fr)",
-                      sm: "repeat(3,1fr)",
-                      xl: "repeat(4,1fr)",
+                      xs: "repeat(2,minmax(0,1fr))",
+                      sm: "repeat(4,minmax(0,1fr))",
                     },
-                    gap: 2.5,
-                    mt: 3,
+                    gap: 2,
+                    mt: 2.5,
                   }}
                 >
                   {metrics.map(([name, value]) => (
                     <Box key={name}>
                       <Typography
-                        variant="h5"
-                        color={
-                          name === "Delivered"
-                            ? "success.main"
-                            : name === "Unknown" && value
-                              ? "warning.main"
-                              : "text.primary"
-                        }
+                        sx={{
+                          fontSize: 26,
+                          fontWeight: 650,
+                          letterSpacing: "-.03em",
+                          fontVariantNumeric: "tabular-nums",
+                          color:
+                            name === "Delivered"
+                              ? "success.main"
+                              : name === "Failed" && value
+                                ? "error.main"
+                                : "text.primary",
+                        }}
                       >
                         {value.toLocaleString()}
                       </Typography>
-                      <Typography sx={{ fontSize: 12 }} color="text.secondary">
-                        {name}
-                      </Typography>
+                      <Tooltip
+                        title={
+                          name === "Provider accepted"
+                            ? "Accepted by the provider. Delivery requires a separate webhook confirmation."
+                            : name === "Remaining"
+                              ? "Pending, queued, processing and deferred recipients."
+                              : name
+                        }
+                      >
+                        <Typography variant="caption" color="text.secondary">
+                          {name}
+                        </Typography>
+                      </Tooltip>
                     </Box>
                   ))}
                 </Box>
+                <Stack
+                  direction="row"
+                  sx={{
+                    mt: 2.5,
+                    pt: 2,
+                    borderTop: 1,
+                    borderColor: "divider",
+                    columnGap: 2,
+                    rowGap: 1,
+                    flexWrap: "wrap",
+                  }}
+                >
+                  {secondary.map(([name, value]) => (
+                    <Typography
+                      variant="caption"
+                      color="text.secondary"
+                      key={name}
+                    >
+                      {name}{" "}
+                      <Box
+                        component="span"
+                        sx={{
+                          ml: 0.5,
+                          fontWeight: 600,
+                          color:
+                            name === "Unknown" && value
+                              ? "warning.main"
+                              : "text.primary",
+                          fontVariantNumeric: "tabular-nums",
+                        }}
+                      >
+                        {value.toLocaleString()}
+                      </Box>
+                    </Typography>
+                  ))}
+                </Stack>
+                <SafetyMetrics
+                  safety={summary.safety}
+                  campaignId={summary.id}
+                  refresh={() => {
+                    void refresh().catch((e) => setError(e.message));
+                  }}
+                />
               </Card>
               <Card sx={{ overflow: "hidden" }}>
                 <Tabs
                   value={tab}
                   onChange={(_, v) => setTab(v)}
-                  variant="scrollable"
+                  variant="fullWidth"
+                  sx={{
+                    "& .MuiTab-root": {
+                      whiteSpace: "nowrap",
+                      minWidth: 0,
+                      px: { xs: 1, sm: 2 },
+                    },
+                  }}
                 >
-                  <Tab label="Live events" />
-                  <Tab label="Recipients" />
-                  <Tab label="Provider breakdown" />
+                  <Tab
+                    icon={
+                      <GraphicEq
+                        sx={{
+                          fontSize: 17,
+                          display: { xs: "none", sm: "block" },
+                        }}
+                      />
+                    }
+                    iconPosition="start"
+                    label="Live events"
+                  />
+                  <Tab
+                    icon={
+                      <PeopleOutlined
+                        sx={{
+                          fontSize: 17,
+                          display: { xs: "none", sm: "block" },
+                        }}
+                      />
+                    }
+                    iconPosition="start"
+                    label="Recipients"
+                  />
+                  <Tab
+                    icon={
+                      <HubOutlined
+                        sx={{
+                          fontSize: 17,
+                          display: { xs: "none", sm: "block" },
+                        }}
+                      />
+                    }
+                    iconPosition="start"
+                    label="Providers"
+                  />
                 </Tabs>
                 <Divider />
                 {tab === 0 ? (
@@ -521,11 +676,7 @@ export function Activity() {
 
                       sx={{ gap: 2, alignItems: "center", px: 2.5, py: 2 }}
                     >
-                      <Chip
-                        size="small"
-                        color={connected ? "success" : "default"}
-                        label={connected ? "Live" : "Reconnecting"}
-                      />
+                      <Status value={connected ? "LIVE" : "RECONNECTING"} />
                       <TextField
                         select
                         label="Event filter"
@@ -548,17 +699,20 @@ export function Activity() {
                       aria-label="Campaign events"
                       aria-live="polite"
                       sx={{
-                        bgcolor: "#101e32",
-                        color: "#d7e4f8",
+                        bgcolor: "action.hover",
+                        color: "text.primary",
                         p: 2.5,
-                        height: 350,
+                        height: 310,
                         overflow: "auto",
                         fontFamily: "ui-monospace, SFMono-Regular, monospace",
                         fontSize: 12,
                       }}
                     >
                       {!events.length ? (
-                        <Typography sx={{ fontSize: 13 }} color="#93a7c5">
+                        <Typography
+                          sx={{ fontSize: 13 }}
+                          color="text.secondary"
+                        >
                           Waiting for campaign events…
                         </Typography>
                       ) : (
@@ -569,7 +723,8 @@ export function Activity() {
                               key={e.id}
                               sx={{
                                 py: 1,
-                                borderBottom: "1px solid #24334a",
+                                borderBottom: 1,
+                                borderColor: "divider",
                                 overflowWrap: "anywhere",
                               }}
                             >
@@ -577,10 +732,13 @@ export function Activity() {
                                 sx={{ gap: 1.5, flexWrap: "wrap" }}
                                 direction="row"
                               >
-                                <Box component="time" sx={{ color: "#8099b9" }}>
+                                <Box
+                                  component="time"
+                                  sx={{ color: "text.secondary" }}
+                                >
                                   {new Date(e.createdAt).toLocaleTimeString()}
                                 </Box>
-                                <Box sx={{ color: "#90b3ff" }}>
+                                <Box sx={{ color: "text.primary" }}>
                                   {e.providerName ?? "EmailSystem"}
                                 </Box>
                                 <Box>{e.maskedEmail}</Box>
@@ -588,16 +746,16 @@ export function Activity() {
                                   sx={{
                                     color:
                                       e.kind === "DELIVERED"
-                                        ? "#70dcac"
+                                        ? "success.main"
                                         : e.kind === "UNKNOWN"
-                                          ? "#ffc66f"
-                                          : "#d7e4f8",
+                                          ? "warning.main"
+                                          : "text.secondary",
                                   }}
                                 >
                                   {e.kind}
                                 </Box>
                               </Stack>
-                              <Box sx={{ mt: 0.5, color: "#a1b3cc" }}>
+                              <Box sx={{ mt: 0.5, color: "text.secondary" }}>
                                 {e.message}
                               </Box>
                             </Box>
@@ -622,7 +780,8 @@ export function Activity() {
                       ))}
                     </TextField>
                     <Button
-                      sx={{ ml: 1, mb: 2 }}
+                      startIcon={<Refresh />}
+                      sx={{ ml: { sm: 1 }, mb: 2 }}
                       onClick={() => {
                         deliveryPagesLoaded.current = false;
                         void api<Page<Delivery>>(
@@ -642,7 +801,11 @@ export function Activity() {
                       deliveryPage.items.map((d) => (
                         <Box
                           key={d.id}
-                          sx={{ py: 1.5, borderBottom: "1px solid #edf1f7" }}
+                          sx={{
+                            py: 1.5,
+                            borderBottom: 1,
+                            borderColor: "divider",
+                          }}
                         >
                           <Stack
                             sx={{ gap: 1, justifyContent: "space-between" }}
@@ -752,9 +915,14 @@ export function Activity() {
           )}
         </Box>
       )}
-      <Dialog open={cancel} onClose={() => setCancel(false)}>
-        <DialogTitle>Cancel remaining sends?</DialogTitle>
+      <ResponsiveDialog
+        open={cancel}
+        onClose={() => setCancel(false)}
+        busy={busy}
+        title="Cancel remaining sends?"
+      >
         <DialogContent>
+          <Failure error={error} />
           Unclaimed recipients will be cancelled. Messages already accepted by a
           provider and attempts already in progress keep their actual outcomes.
         </DialogContent>
@@ -769,14 +937,14 @@ export function Activity() {
             Confirm cancellation
           </Button>
         </DialogActions>
-      </Dialog>
-      <Dialog
+      </ResponsiveDialog>
+      <ResponsiveDialog
         open={suppressionOpen}
         onClose={() => setSuppressionOpen(false)}
-        fullWidth
-        maxWidth="sm"
+        title="Suppressed recipients"
+        width={600}
+        mobileFullScreen
       >
-        <DialogTitle>Suppressed recipients</DialogTitle>
         <DialogContent>
           <Typography color="text.secondary" sx={{ fontSize: 14, mb: 2 }}>
             Hard bounces, complaints, and unsubscribes are excluded from future
@@ -789,9 +957,17 @@ export function Activity() {
               value={suppressionEmail}
               onChange={(e) => setSuppressionEmail(e.target.value)}
             />
-            <Button onClick={() => void inspectSuppression()}>Search</Button>
+            <Tooltip title="Search">
+              <IconButton
+                aria-label="Search suppressions"
+                onClick={() => void inspectSuppression()}
+              >
+                <Search fontSize="small" />
+              </IconButton>
+            </Tooltip>
           </Stack>
           <Button
+            startIcon={<ShieldOutlined />}
             sx={{ my: 1 }}
             disabled={!suppressionEmail.includes("@") || busy}
             onClick={async () => {
@@ -814,7 +990,10 @@ export function Activity() {
             </Typography>
           ) : (
             suppressions.map((s) => (
-              <Box key={s.id} sx={{ py: 1, borderBottom: "1px solid #edf1f7" }}>
+              <Box
+                key={s.id}
+                sx={{ py: 1, borderBottom: 1, borderColor: "divider" }}
+              >
                 <Typography sx={{ overflowWrap: "anywhere" }}>
                   {s.email}
                 </Typography>
@@ -828,7 +1007,13 @@ export function Activity() {
         <DialogActions>
           <Button onClick={() => setSuppressionOpen(false)}>Close</Button>
         </DialogActions>
-      </Dialog>
+      </ResponsiveDialog>
+      <Snackbar
+        open={!!toast}
+        autoHideDuration={4000}
+        onClose={() => setToast("")}
+        message={toast}
+      />
     </>
   );
 }

@@ -20,6 +20,9 @@ import {
   MenuRounded,
   ExpandMore,
   MailOutlined,
+  LogoutOutlined,
+  ChevronRight,
+  PersonOutlined,
 } from "@mui/icons-material";
 import { api } from "./api-client";
 const sections = [
@@ -40,29 +43,22 @@ export function Shell({
     [anchor, setAnchor] = useState<HTMLElement | null>(null);
   const navigation = (
     <Box
-      sx={{ p: 3, height: "100%", display: "flex", flexDirection: "column" }}
+      sx={{ p: 2.5, height: "100%", display: "flex", flexDirection: "column" }}
     >
-      <Stack direction="row" spacing={1.3} sx={{ alignItems: "center", mb: 6 }}>
+      <Stack direction="row" spacing={1.3} sx={{ alignItems: "center", mb: 5 }}>
         <Avatar
           variant="rounded"
-          sx={{ bgcolor: "primary.main", width: 36, height: 36 }}
+          sx={{ bgcolor: "primary.main", width: 30, height: 30 }}
         >
           <MailOutlined fontSize="small" />
         </Avatar>
         <Typography
-          sx={{ fontWeight: 800, fontSize: 19, letterSpacing: "-.04em" }}
+          sx={{ fontWeight: 700, fontSize: 17, letterSpacing: "-.04em" }}
         >
           EmailSystem
         </Typography>
       </Stack>
-      <Typography
-        color="text.secondary"
-
-        sx={{ fontSize: 12, fontWeight: 700, mb: 2, letterSpacing: 1 }}
-      >
-        WORKSPACE
-      </Typography>
-      <Stack spacing={1}>
+      <Stack component="nav" aria-label="Main navigation" spacing={0.5}>
         {sections.map((s) => (
           <Button
             component={Link}
@@ -70,25 +66,34 @@ export function Shell({
             href={s.path}
             onClick={() => setMobile(false)}
             startIcon={<s.icon />}
+            aria-current={pathname === s.path ? "page" : undefined}
             sx={{
               justifyContent: "flex-start",
-              p: 1.5,
+              px: 1.5,
+              py: 1.2,
               color: pathname === s.path ? "primary.main" : "text.secondary",
-              bgcolor: pathname === s.path ? "#eaf0ff" : "transparent",
+              bgcolor: pathname === s.path ? "action.selected" : "transparent",
             }}
           >
             {s.label}
           </Button>
         ))}
       </Stack>
-      <Box sx={{ mt: "auto", pt: 6 }}>
-        <Typography sx={{ fontSize: 14, fontWeight: 600 }}>
-          Your sending workspace
+      <Stack
+        direction="row"
+        sx={{
+          mt: "auto",
+          pt: 3,
+          gap: 1,
+          alignItems: "center",
+          color: "text.secondary",
+        }}
+      >
+        <PersonOutlined fontSize="small" />
+        <Typography variant="caption" noWrap title={email}>
+          {email}
         </Typography>
-        <Typography sx={{ fontSize: 13 }} color="text.secondary">
-          Providers, messages, and delivery activity in one place.
-        </Typography>
-      </Box>
+      </Stack>
     </Box>
   );
   return (
@@ -96,11 +101,13 @@ export function Shell({
       <Box
         component="aside"
         sx={{
-          width: 230,
+          width: 208,
           display: { xs: "none", md: "block" },
           position: "fixed",
           inset: "0 auto 0 0",
-          bgcolor: "white",
+          borderRight: 1,
+          borderColor: "divider",
+          bgcolor: "background.paper",
         }}
       >
         {navigation}
@@ -112,41 +119,48 @@ export function Shell({
       >
         {navigation}
       </Drawer>
-      <Box sx={{ flex: 1, minWidth: 0, ml: { md: "230px" } }}>
+      <Box sx={{ flex: 1, minWidth: 0, ml: { md: "208px" } }}>
         <Box
           component="header"
           sx={{
-            height: 76,
-            px: { xs: 2, md: 5 },
+            height: 64,
+            px: { xs: 2, md: 4 },
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
-            bgcolor: "white",
-            borderBottom: "1px solid #edf1f7",
+            bgcolor: "background.paper",
+            borderBottom: 1,
+            borderColor: "divider",
           }}
         >
           <Stack sx={{ alignItems: "center" }} direction="row" spacing={1}>
             <IconButton
               aria-label="Open navigation"
+              aria-expanded={mobile}
               onClick={() => setMobile(true)}
               sx={{ display: { md: "none" } }}
             >
               <MenuRounded />
             </IconButton>
-            <Typography sx={{ fontSize: 14 }} color="text.secondary">
-              Workspace{" "}
-              <Box component="span" sx={{ mx: 1.5, color: "#c3cbd9" }}>
-                /
-              </Box>
-              <Box
-                component="span"
-                sx={{ color: "text.primary", fontWeight: 600 }}
-              >
-                {sections.find((s) => s.path === pathname)?.label}
-              </Box>
+            <Typography
+              sx={{ display: { xs: "none", sm: "block" }, fontSize: 13 }}
+              color="text.secondary"
+            >
+              Workspace
+            </Typography>
+            <ChevronRight
+              sx={{
+                display: { xs: "none", sm: "block" },
+                fontSize: 15,
+                color: "text.secondary",
+              }}
+            />
+            <Typography sx={{ fontSize: 13, fontWeight: 600 }}>
+              {sections.find((s) => s.path === pathname)?.label}
             </Typography>
           </Stack>
           <Button
+            aria-label="Account menu"
             color="inherit"
             onClick={(e) => setAnchor(e.currentTarget)}
             endIcon={<ExpandMore />}
@@ -156,18 +170,21 @@ export function Shell({
               sx={{
                 width: 32,
                 height: 32,
-                bgcolor: "#e9effb",
+                bgcolor: "action.selected",
                 color: "primary.main",
                 mr: { sm: 1 },
                 fontSize: 14,
               }}
             >
-              {email.slice(0, 2).toUpperCase()}
+              <PersonOutlined fontSize="small" />
             </Avatar>
             <Box
               component="span"
               sx={{
-                display: { xs: "none", sm: "inline" },
+                display: { xs: "none", sm: "block" },
+                whiteSpace: "nowrap",
+                fontSize: 13,
+                textAlign: "left",
                 maxWidth: 180,
                 overflow: "hidden",
                 textOverflow: "ellipsis",
@@ -189,13 +206,14 @@ export function Shell({
                 router.refresh();
               }}
             >
+              <LogoutOutlined fontSize="small" sx={{ mr: 1 }} />
               Sign out
             </MenuItem>
           </Menu>
         </Box>
         <Box
           component="main"
-          sx={{ p: { xs: 2, sm: 3, lg: 5 }, maxWidth: 1600, mx: "auto" }}
+          sx={{ p: { xs: 2, sm: 3, lg: 4 }, maxWidth: 1480, mx: "auto" }}
         >
           {children}
         </Box>

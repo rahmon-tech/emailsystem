@@ -1,1 +1,59 @@
-*{box-sizing:border-box}html,body{margin:0;min-height:100%;overflow-wrap:anywhere}a{color:inherit}.tiptap{min-height:280px;padding:22px;outline:none;font-size:16px;line-height:1.7}.tiptap img{max-width:100%}.tiptap blockquote{border-left:3px solid #b4c5ed;margin-left:0;padding-left:16px}.tiptap a{color:#2457e0;text-decoration:underline}.cm-editor{font-size:14px}.cm-scroller{overflow:auto!important}button,input,textarea,select{font:inherit}iframe{max-width:100%}::selection{background:#d3e0ff}
+* {
+  box-sizing: border-box;
+}
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+  overflow-wrap: anywhere;
+}
+a {
+  color: inherit;
+}
+.tiptap {
+  min-height: 280px;
+  padding: 20px;
+  font-size: 14px;
+  line-height: 1.7;
+}
+.tiptap:focus-visible {
+  outline-offset: -3px;
+}
+.tiptap img {
+  max-width: 100%;
+}
+.tiptap blockquote {
+  border-left: 3px solid var(--editor-border);
+  margin-left: 0;
+  padding-left: 16px;
+}
+.tiptap a {
+  color: var(--editor-link);
+  text-decoration: underline;
+}
+.cm-editor {
+  font-size: 13px;
+  border: 1px solid var(--editor-border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.cm-scroller {
+  overflow: auto !important;
+}
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+iframe {
+  max-width: 100%;
+}
+::selection {
+  background: var(--selection);
+}
+@media (max-width: 599px) {
+  .tiptap {
+    padding: 16px;
+  }
+}

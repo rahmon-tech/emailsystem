@@ -1,4 +1,5 @@
 "use client";
+import { ResponsiveDialog } from "./shared";
 import { useState } from "react";
 import { EditorContent, useEditor, useEditorState } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
@@ -29,12 +30,11 @@ import { TextStyle } from "@tiptap/extension-text-style";
 import Color from "@tiptap/extension-color";
 import {
   Box,
+  Skeleton,
   IconButton,
   Tooltip,
   MenuItem,
   Select,
-  Dialog,
-  DialogTitle,
   DialogContent,
   DialogActions,
   TextField,
@@ -44,6 +44,7 @@ import {
   FormatBold,
   FormatItalic,
   FormatUnderlined,
+  FormatColorText,
   StrikethroughS,
   FormatListBulleted,
   FormatListNumbered,
@@ -96,9 +97,26 @@ export function RichEditor({
       italic: editor?.isActive("italic"),
       underline: editor?.isActive("underline"),
       strike: editor?.isActive("strike"),
+      bullet: editor?.isActive("bulletList"),
+      ordered: editor?.isActive("orderedList"),
+      left: editor?.isActive({ textAlign: "left" }),
+      center: editor?.isActive({ textAlign: "center" }),
+      right: editor?.isActive({ textAlign: "right" }),
+      link: editor?.isActive("link"),
+      quote: editor?.isActive("blockquote"),
+      heading: editor?.isActive("heading", { level: 1 })
+        ? "h1"
+        : editor?.isActive("heading", { level: 2 })
+          ? "h2"
+          : "p",
+      undo: editor?.can().undo(),
+      redo: editor?.can().redo(),
     }),
   });
-  if (!editor) return <Box sx={{ minHeight: 330 }} />;
+  if (!editor)
+    return (
+      <Skeleton variant="rounded" height={360} aria-label="Loading editor" />
+    );
   const buttons = [
     {
       label: "Bold",
@@ -126,31 +144,37 @@ export function RichEditor({
     },
     {
       label: "Bullet list",
+      active: state?.bullet,
       icon: FormatListBulleted,
       run: () => editor.chain().focus().toggleBulletList().run(),
     },
     {
       label: "Numbered list",
+      active: state?.ordered,
       icon: FormatListNumbered,
       run: () => editor.chain().focus().toggleOrderedList().run(),
     },
     {
       label: "Align left",
+      active: state?.left,
       icon: FormatAlignLeft,
       run: () => editor.chain().focus().setTextAlign("left").run(),
     },
     {
       label: "Align center",
+      active: state?.center,
       icon: FormatAlignCenter,
       run: () => editor.chain().focus().setTextAlign("center").run(),
     },
     {
       label: "Align right",
+      active: state?.right,
       icon: FormatAlignRight,
       run: () => editor.chain().focus().setTextAlign("right").run(),
     },
     {
       label: "Insert link",
+      active: state?.link,
       icon: Link,
       run: () => {
         setUrl("");
@@ -180,16 +204,19 @@ export function RichEditor({
     },
     {
       label: "Blockquote",
+      active: state?.quote,
       icon: FormatQuote,
       run: () => editor.chain().focus().toggleBlockquote().run(),
     },
     {
       label: "Undo",
+      disabled: !state?.undo,
       icon: Undo,
       run: () => editor.chain().focus().undo().run(),
     },
     {
       label: "Redo",
+      disabled: !state?.redo,
       icon: Redo,
       run: () => editor.chain().focus().redo().run(),
     },
@@ -198,7 +225,8 @@ export function RichEditor({
     <>
       <Box
         sx={{
-          border: "1px solid #dde5f1",
+          border: 1,
+          borderColor: "divider",
           borderRadius: 2,
           overflow: "hidden",
         }}
@@ -209,21 +237,16 @@ export function RichEditor({
             gap: 0.2,
             flexWrap: "wrap",
             p: 1,
-            bgcolor: "#f8faff",
-            borderBottom: "1px solid #e7edf5",
+            bgcolor: "action.hover",
+            borderBottom: 1,
+            borderColor: "divider",
           }}
         >
           <Select
             size="small"
-            value={
-              editor.isActive("heading", { level: 1 })
-                ? "h1"
-                : editor.isActive("heading", { level: 2 })
-                  ? "h2"
-                  : "p"
-            }
+            value={state?.heading ?? "p"}
             inputProps={{ "aria-label": "Text style" }}
-            sx={{ height: 34, mr: 1 }}
+            sx={{ height: 42, mr: 0.5, fontSize: 12, minWidth: 112 }}
             onChange={(e) => {
               if (e.target.value === "p")
                 editor.chain().focus().setParagraph().run();
@@ -239,54 +262,98 @@ export function RichEditor({
             <MenuItem value="h1">Heading 1</MenuItem>
             <MenuItem value="h2">Heading 2</MenuItem>
           </Select>
-          {buttons.map((b) => (
-            <Tooltip key={b.label} title={b.label}>
-              <IconButton
-                size="small"
-                aria-label={b.label}
-                onClick={b.run}
-                sx={{
-                  color: b.active ? "primary.main" : "text.secondary",
-                  bgcolor: b.active ? "#e0eaff" : "transparent",
-                }}
-              >
-                <b.icon fontSize="small" />
-              </IconButton>
-            </Tooltip>
-          ))}
-          <Tooltip title="Text color">
-            <input
-              type="color"
-              aria-label="Text color"
-              defaultValue="#17243b"
-              onChange={(e) =>
-                editor.chain().focus().setColor(e.target.value).run()
-              }
-              style={{
-                width: 30,
-                height: 30,
-                border: 0,
-                background: "none",
-                cursor: "pointer",
+          {[
+            buttons.slice(0, 4),
+            buttons.slice(4, 6),
+            buttons.slice(6, 9),
+            buttons.slice(9, 14),
+            buttons.slice(14),
+          ].map((group, i) => (
+            <Box
+              key={i}
+              sx={{
+                display: "flex",
+                alignItems: "center",
+                borderLeft: i ? 1 : 0,
+                borderColor: "divider",
+                pl: i ? 0.5 : 0,
               }}
-            />
-          </Tooltip>
+            >
+              {group.map((b) => (
+                <Tooltip key={b.label} title={b.label}>
+                  <span>
+                    <IconButton
+                      aria-label={b.label}
+                      aria-pressed={
+                        b.active === undefined ? undefined : !!b.active
+                      }
+                      disabled={b.disabled}
+                      onClick={b.run}
+                      sx={{
+                        color: b.active ? "primary.main" : "text.secondary",
+                        bgcolor: b.active ? "action.selected" : "transparent",
+                      }}
+                    >
+                      <b.icon fontSize="small" />
+                    </IconButton>
+                  </span>
+                </Tooltip>
+              ))}
+              {i === 2 && (
+                <Tooltip title="Text color">
+                  <Box
+                    component="label"
+                    sx={{
+                      position: "relative",
+                      display: "grid",
+                      placeItems: "center",
+                      width: 42,
+                      height: 42,
+                      borderRadius: 1,
+                      color: "text.secondary",
+                      "&:focus-within": {
+                        outline: "2px solid",
+                        outlineColor: "primary.main",
+                        outlineOffset: 2,
+                      },
+                    }}
+                  >
+                    <FormatColorText fontSize="small" />
+                    <input
+                      type="color"
+                      aria-label="Text color"
+                      defaultValue="#17243b"
+                      onChange={(e) =>
+                        editor.chain().focus().setColor(e.target.value).run()
+                      }
+                      style={{
+                        position: "absolute",
+                        inset: 0,
+                        width: "100%",
+                        height: "100%",
+                        opacity: 0,
+                        cursor: "pointer",
+                      }}
+                    />
+                  </Box>
+                </Tooltip>
+              )}
+            </Box>
+          ))}
         </Box>
         <EditorContent editor={editor} />
       </Box>
-      <Dialog
+      <ResponsiveDialog
         open={!!dialog}
         onClose={() => setDialog(null)}
-        fullWidth
-        maxWidth="xs"
-      >
-        <DialogTitle>
-          {dialog === "image"
+        title={
+          dialog === "image"
             ? "Add image"
             : dialog === "button"
               ? "Add linked button"
-              : "Add link"}
-        </DialogTitle>
+              : "Add link"
+        }
+      >
         <DialogContent>
           <TextField
             autoFocus
@@ -299,6 +366,7 @@ export function RichEditor({
         <DialogActions>
           <Button onClick={() => setDialog(null)}>Cancel</Button>
           <Button
+            variant="contained"
             disabled={!/^https:\/\//i.test(url)}
             onClick={() => {
               if (dialog === "image")
@@ -337,7 +405,7 @@ export function RichEditor({
             Insert
           </Button>
         </DialogActions>
-      </Dialog>
+      </ResponsiveDialog>
     </>
   );
 }
