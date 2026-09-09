@@ -178,7 +178,7 @@ export function TrackingSettings() {
                   </AccordionDetails>
                 </Accordion>
                 <Typography variant="caption" color="text.secondary">
-                  Daily aggregate visit totals are kept for {data.retentionDays}
+                  Daily aggregate visit totals are kept for {data.retentionDays}{" "}
                   days; links expire after {data.linkLifetimeDays} days. No IP
                   address, browser fingerprint, cookies, or request headers are
                   stored. “Likely automated” is heuristic and a visit never
