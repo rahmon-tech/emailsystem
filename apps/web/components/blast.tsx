@@ -96,6 +96,7 @@ export function Blast() {
     [view, setView] = useState("desktop"),
     [flight, setFlight] = useState<Flight | null>(null),
     [error, setError] = useState(""),
+    [errorAction, setErrorAction] = useState(""),
     [busy, setBusy] = useState(""),
     [confirm, setConfirm] = useState(false),
     [resetRich, setResetRich] = useState(false),
@@ -174,6 +175,7 @@ export function Blast() {
   const run = async (name: string, fn: () => Promise<void>) => {
     setBusy(name);
     setError("");
+    setErrorAction(name);
     try {
       await fn();
     } catch (e) {
@@ -204,7 +206,9 @@ export function Blast() {
         title="Blast"
         description="Prepare, preview, and launch your next email."
       />
-      <Failure error={error} />
+      <Failure
+        error={["preflight", "test", "send"].includes(errorAction) ? "" : error}
+      />
       {loaded && !providers.some((p) => p.enabled) && (
         <Alert severity="info" sx={{ mb: 3 }}>
           Add and verify at least one provider before sending.{" "}
@@ -255,13 +259,17 @@ export function Blast() {
                   direction="row"
                   sx={{ gap: 1, flexWrap: "wrap", mt: 0.5 }}
                 >
-                  {["duplicate", "invalid", "suppressed"].map((k) => (
+                  {["duplicate", "invalid", "suppressed"].map((k, index) => (
                     <Typography
                       key={k}
                       variant="caption"
                       color="text.secondary"
                     >
-                      {(selected.stats[k] ?? 0).toLocaleString()} {k}
+                      {index > 0 ? "· " : ""}
+                      {(selected.stats[k] ?? 0).toLocaleString()}{" "}
+                      {k === "duplicate" && selected.stats[k] !== 1
+                        ? "duplicates"
+                        : k}
                     </Typography>
                   ))}
                 </Stack>
@@ -813,7 +821,11 @@ export function Blast() {
               )}
             </Box>
           </Card>
-          <Card sx={{ p: { xs: 2, sm: 2.5 } }}>
+          <Card
+            component="section"
+            aria-label="Pre-flight"
+            sx={{ p: { xs: 2, sm: 2.5 } }}
+          >
             <Stack spacing={2}>
               <Stack direction="row" sx={{ alignItems: "center", gap: 1.5 }}>
                 <Typography
@@ -825,6 +837,7 @@ export function Blast() {
                 </Typography>
                 <Typography variant="h6">Pre-flight</Typography>
               </Stack>
+              <Failure error={errorAction === "preflight" ? error : ""} />
               {!flight && (
                 <Typography variant="body2" color="text.secondary">
                   Check recipients, sender, and message before sending.
@@ -849,7 +862,7 @@ export function Blast() {
                         flight.count > 0,
                       ],
                       [
-                        `${flight.providers.length} eligible providers`,
+                        `${flight.providers.length} eligible ${flight.providers.length === 1 ? "provider" : "providers"}`,
                         flight.providers.length > 0,
                       ],
                       [
@@ -950,7 +963,7 @@ export function Blast() {
         }
       >
         <DialogContent>
-          <Failure error={error} />
+          <Failure error={errorAction === "send" ? error : ""} />
           {flight?.count.toLocaleString()} individual emails will enter the
           background queue. You can follow progress and pause sending in
           Activity.
@@ -1008,7 +1021,7 @@ export function Blast() {
       >
         <DialogContent>
           <Stack spacing={2} sx={{ pt: 1 }}>
-            <Failure error={error} />
+            <Failure error={errorAction === "test" ? error : ""} />
             <TextField
               select
               label="Provider"

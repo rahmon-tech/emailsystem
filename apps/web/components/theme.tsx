@@ -4,10 +4,10 @@ const theme = createTheme({
   palette: {
     primary: { main: "#465acb", dark: "#3446a5" },
     background: { default: "#f7f8fa", paper: "#ffffff" },
-    text: { primary: "#202633", secondary: "#697181" },
+    text: { primary: "#202633", secondary: "#646c7b" },
     divider: "#e8ebf0",
     success: { main: "#23795b" },
-    warning: { main: "#a56a17" },
+    warning: { main: "#955e12" },
     error: { main: "#bd4350" },
     info: { main: "#486b99" },
     action: { hover: "#f3f5f9", selected: "#edf0fb", focus: "#e5e9f8" },

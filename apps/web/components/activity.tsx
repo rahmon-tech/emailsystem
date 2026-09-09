@@ -422,10 +422,15 @@ export function Activity() {
             <Stack spacing={2.5} sx={{ minWidth: 0 }}>
               <Card sx={{ p: { xs: 2, sm: 2.5 } }}>
                 <Stack
-                  sx={{ justifyContent: "space-between", gap: 2 }}
-                  direction={{ xs: "column", sm: "row" }}
+                  sx={{
+                    justifyContent: "space-between",
+                    gap: 2,
+                    flexWrap: "wrap",
+                    alignItems: "flex-start",
+                  }}
+                  direction="row"
                 >
-                  <Box>
+                  <Box sx={{ flex: 1, minWidth: { xs: 210, sm: 0 } }}>
                     <Stack
                       sx={{ alignItems: "center", gap: 1, flexWrap: "wrap" }}
                       direction="row"
@@ -618,19 +623,47 @@ export function Activity() {
                   value={tab}
                   onChange={(_, v) => setTab(v)}
                   variant="fullWidth"
+                  sx={{
+                    "& .MuiTab-root": {
+                      whiteSpace: "nowrap",
+                      minWidth: 0,
+                      px: { xs: 1, sm: 2 },
+                    },
+                  }}
                 >
                   <Tab
-                    icon={<GraphicEq sx={{ fontSize: 17 }} />}
+                    icon={
+                      <GraphicEq
+                        sx={{
+                          fontSize: 17,
+                          display: { xs: "none", sm: "block" },
+                        }}
+                      />
+                    }
                     iconPosition="start"
                     label="Live events"
                   />
                   <Tab
-                    icon={<PeopleOutlined sx={{ fontSize: 17 }} />}
+                    icon={
+                      <PeopleOutlined
+                        sx={{
+                          fontSize: 17,
+                          display: { xs: "none", sm: "block" },
+                        }}
+                      />
+                    }
                     iconPosition="start"
                     label="Recipients"
                   />
                   <Tab
-                    icon={<HubOutlined sx={{ fontSize: 17 }} />}
+                    icon={
+                      <HubOutlined
+                        sx={{
+                          fontSize: 17,
+                          display: { xs: "none", sm: "block" },
+                        }}
+                      />
+                    }
                     iconPosition="start"
                     label="Providers"
                   />

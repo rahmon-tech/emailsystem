@@ -58,7 +58,7 @@ export function Shell({
           EmailSystem
         </Typography>
       </Stack>
-      <Stack spacing={0.5}>
+      <Stack component="nav" aria-label="Main navigation" spacing={0.5}>
         {sections.map((s) => (
           <Button
             component={Link}
@@ -136,6 +136,7 @@ export function Shell({
           <Stack sx={{ alignItems: "center" }} direction="row" spacing={1}>
             <IconButton
               aria-label="Open navigation"
+              aria-expanded={mobile}
               onClick={() => setMobile(true)}
               sx={{ display: { md: "none" } }}
             >
@@ -180,7 +181,10 @@ export function Shell({
             <Box
               component="span"
               sx={{
-                display: { xs: "none", sm: "inline" },
+                display: { xs: "none", sm: "block" },
+                whiteSpace: "nowrap",
+                fontSize: 13,
+                textAlign: "left",
                 maxWidth: 180,
                 overflow: "hidden",
                 textOverflow: "ellipsis",

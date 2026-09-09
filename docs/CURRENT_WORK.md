@@ -1,19 +1,19 @@
 # Current work
 
-## Active milestone
+## UI refinement milestone
 
-Premium UI refinement across Providers, Blast, Activity, Login, navigation and all dialogs. Starts from verified main `c37d41b0852f318fa56d0cf9ce54483e93dce013` after the completed sending safety milestone in PR #3. The previous main CI run was [34291501322](https://github.com/rahmon-tech/emailsystem/actions/runs/34291501322), with 175 passing tests.
+The premium email-workspace refinement is implemented in [PR #4](https://github.com/rahmon-tech/emailsystem/pull/4). It starts from verified main `c37d41b0852f318fa56d0cf9ce54483e93dce013`, after the completed sending safety milestone in PR #3.
 
-## Scope
+Providers now centers connected accounts and an Add provider picker. Blast uses compact recipient summaries, progressive options, a grouped editor, actual email previews and visual pre-flight. Activity emphasizes delivery progress and key metrics with responsive campaign navigation. Login, the shell, states and all dialogs share a restrained accessible theme. No backend, provider adapter, queue, security, migration or deployment behavior changes; no dependencies added.
 
-A compact three-item shell; central restrained theme and accessible status indicators; provider picker and compact connection cards; shared task-sized dialogs with mobile fullscreen forms and safe action footers; progressive recipient/message composition; grouped rich editor controls and email previews; visual pre-flight checks; scannable campaign metrics and a quiet live feed. Provider identity uses distinct symbols from the already installed MUI icon set, with no remote brand assets or additional dependencies.
+## Verification and visual review
 
-Only UI, browser verification and milestone documentation change. Backend/provider/queue/security/migration/deployment behavior remains at the verified baseline. Existing API operations, retry semantics, safety review, cancellation, pagination, SSE and sending guards are retained.
+[CI run 34294234923](https://github.com/rahmon-tech/emailsystem/actions/runs/34294234923), source `891caa994bfbe9b0b08b9de7e258cd4ad2dd21b7`, passed all **175 tests: 120 unit, 54 real PostgreSQL/Redis integration and one production HTTPS browser workflow**. It also passed fresh migrations, the verified-baseline upgrade rehearsal, schema drift checks, lint/type checks, production build, Caddy validation and Docker web/worker readiness.
 
-## Verification in progress
+Twelve screenshots were manually inspected at 390 and 1366 pixels across Providers, provider picker/configuration, populated Blast, Activity and Login. The review identified and corrected header wrapping, mobile tab wrapping, toolbar color-control layout, campaign action spacing and text contrast. See [UX_REVIEW.md](UX_REVIEW.md) for findings and review evidence.
 
-Local lint, typecheck, all 120 unit tests and the production build pass. The production HTTPS browser workflow retains all existing behavior assertions and all five widths (390, 430, 768, 1366, 1536), and adds picker, formatting-state, stale pre-flight, mobile navigation and dialog footer checks.
+The final exact commit is tested again with all behavioral assertions and all five widths (390, 430, 768, 1366, 1536). [PR #4](https://github.com/rahmon-tech/emailsystem/pull/4) records the final source SHA, CI run, screenshot follow-up and merge result; [main runs](https://github.com/rahmon-tech/emailsystem/actions?query=branch%3Amain) identify the verified commit for deployment.
 
-CI must still run all 54 real PostgreSQL/Redis integration tests, migration/upgrade/drift checks, the production browser workflow and container readiness gates on the exact commit. Representative screenshots at 390 and 1366 are captured for manual inspection, including populated Blast, Activity, the provider picker and provider form. Full screenshots remain in the browser-verification artifact; bounded JPEG copies of synthetic fixtures are also emitted in CI logs to support text-only artifact clients.
+## Completion boundary
 
-Do not merge until exact-SHA CI and manual visual review are complete. Findings and resolution will be recorded in `docs/UX_REVIEW.md`.
+This is a single UI milestone. Merge is gated on exact-SHA CI and review of the updated screenshots. Stop at its completion; no further product or architecture milestone is included. Live provider delivery and an actual VPS deployment still require their own credentials and environment; the browser evidence uses synthetic fixtures and mock transports.

@@ -44,6 +44,7 @@ import {
   FormatBold,
   FormatItalic,
   FormatUnderlined,
+  FormatColorText,
   StrikethroughS,
   FormatListBulleted,
   FormatListNumbered,
@@ -298,25 +299,47 @@ export function RichEditor({
                   </span>
                 </Tooltip>
               ))}
+              {i === 2 && (
+                <Tooltip title="Text color">
+                  <Box
+                    component="label"
+                    sx={{
+                      position: "relative",
+                      display: "grid",
+                      placeItems: "center",
+                      width: 42,
+                      height: 42,
+                      borderRadius: 1,
+                      color: "text.secondary",
+                      "&:focus-within": {
+                        outline: "2px solid",
+                        outlineColor: "primary.main",
+                        outlineOffset: 2,
+                      },
+                    }}
+                  >
+                    <FormatColorText fontSize="small" />
+                    <input
+                      type="color"
+                      aria-label="Text color"
+                      defaultValue="#17243b"
+                      onChange={(e) =>
+                        editor.chain().focus().setColor(e.target.value).run()
+                      }
+                      style={{
+                        position: "absolute",
+                        inset: 0,
+                        width: "100%",
+                        height: "100%",
+                        opacity: 0,
+                        cursor: "pointer",
+                      }}
+                    />
+                  </Box>
+                </Tooltip>
+              )}
             </Box>
           ))}
-          <Tooltip title="Text color">
-            <input
-              type="color"
-              aria-label="Text color"
-              defaultValue="#17243b"
-              onChange={(e) =>
-                editor.chain().focus().setColor(e.target.value).run()
-              }
-              style={{
-                width: 42,
-                height: 42,
-                border: 0,
-                background: "none",
-                cursor: "pointer",
-              }}
-            />
-          </Tooltip>
         </Box>
         <EditorContent editor={editor} />
       </Box>

@@ -8,6 +8,8 @@ test("login, provider setup, HTML import, preview, test, campaign controls, reco
   page.on("pageerror", (e) => errors.push(e.message));
   mkdirSync("test-results/ux-review", { recursive: true });
   const review = async (name: string, fullPage = true) => {
+    await page.mouse.move(0, 0);
+    await page.evaluate(() => window.scrollTo(0, 0));
     await page.screenshot({
       path: `test-results/ux-review/${name}.jpg`,
       type: "jpeg",
@@ -163,6 +165,18 @@ test("login, provider setup, HTML import, preview, test, campaign controls, reco
     ),
   });
   await expect(page.getByText("1 duplicate", { exact: true })).toBeVisible();
+  // Failed validation is visible beside the action, even below the composer.
+  await page
+    .getByRole("button", { name: "Run pre-flight", exact: true })
+    .click();
+  await expect(
+    page
+      .getByRole("region", { name: "Pre-flight", exact: true })
+      .getByRole("alert"),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Send campaign", exact: true }),
+  ).toBeDisabled();
   await page.getByLabel("Campaign name").fill("Browser campaign");
   await page.getByLabel("Subject").fill("Browser verification");
   await page
