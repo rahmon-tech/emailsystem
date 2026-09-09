@@ -59,7 +59,7 @@ test("login, provider setup, HTML import, preview, test, campaign controls, reco
   for (const [provider, credential] of [
     ["Resend", "API key"],
     ["Amazon SES", "Access Key ID"],
-    ["Mailgun", "API key"],
+    ["Mailgun", "Sending API key"],
     ["SendGrid", "API key"],
     ["Brevo", "API key"],
     ["Postmark", "Server token"],
@@ -133,12 +133,12 @@ test("login, provider setup, HTML import, preview, test, campaign controls, reco
   await page.getByRole("button", { name: "Cancel", exact: true }).click();
   await chooseProvider("Development Mock");
   await page.getByLabel("Connection name").fill("Browser verification");
-  await page.getByLabel("From email").fill("invalid-address");
+  await page.getByLabel("Verification sender email").fill("invalid-address");
   await page
     .getByRole("button", { name: "Save & Verify", exact: true })
     .click();
   await expect(page.getByRole("alert")).toContainText(/email/i);
-  await page.getByLabel("From email").fill("sender@example.com");
+  await page.getByLabel("Verification sender email").fill("sender@example.com");
   await page
     .getByRole("button", { name: "Save & Verify", exact: true })
     .click();
@@ -148,6 +148,20 @@ test("login, provider setup, HTML import, preview, test, campaign controls, reco
   ).json();
   expect(providers).toHaveLength(1);
   expect(providers[0]).not.toHaveProperty("credentials");
+  await page.getByRole("button", { name: "Senders", exact: true }).click();
+  const sendersDialog = page.getByRole("dialog", {
+    name: "Domains & senders",
+    exact: true,
+  });
+  await expect(
+    sendersDialog.getByText("example.com", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    sendersDialog.getByText("sender@example.com", { exact: true }),
+  ).toBeVisible();
+  await sendersDialog
+    .getByRole("button", { name: "Done", exact: true })
+    .click();
   await page
     .getByRole("button", { name: "Test Browser verification", exact: true })
     .click();
@@ -256,10 +270,6 @@ test("login, provider setup, HTML import, preview, test, campaign controls, reco
   await expect(page.getByText("Ready to send", { exact: true })).toBeVisible();
   await page.getByText("More options", { exact: true }).click();
   await page.getByLabel("Track clicks", { exact: true }).check();
-  await page.getByLabel("Campaign tracking hostname").click();
-  await page
-    .getByRole("option", { name: "click.browser-example.com", exact: true })
-    .click();
   await page.getByText("More options", { exact: true }).click();
   await page.getByLabel("Subject").fill("Updated browser verification");
   await expect(
@@ -303,7 +313,6 @@ test("login, provider setup, HTML import, preview, test, campaign controls, reco
   });
   const visited = await context.request.get(appPath(`/r/${tracked.token}`), {
     headers: {
-      Host: "click.browser-example.com",
       "User-Agent": "Proofpoint scanner",
     },
     maxRedirects: 0,
@@ -418,7 +427,7 @@ test("login, provider setup, HTML import, preview, test, campaign controls, reco
           page.getByText("Browser verification", { exact: true }),
         ).toBeVisible();
       else
-        await expect(page.getByLabel("From email")).toHaveValue(
+        await expect(page.getByLabel("Sender identity")).toContainText(
           "sender@example.com",
         );
       if (route === "/blast") {

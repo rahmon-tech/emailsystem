@@ -15,20 +15,20 @@ import {
   prepareCampaign,
 } from "@emailsystem/core/campaigns";
 import {
-  addTrackingDomain,
-  verifyDomain,
-  disableDomain,
   getTracking,
   saveTrackingSettings,
   redirectVisit,
   retainTracking,
 } from "@emailsystem/core/tracking";
+import { absoluteAppUrl } from "@emailsystem/core/server-paths";
+
 const owners: string[] = [];
 after(async () => {
   await db.user.deleteMany({ where: { id: { in: owners } } });
   await db.$disconnect();
   await redis.quit();
 });
+
 async function fixture() {
   const user = await createUser(
     `tracking-${crypto.randomUUID()}@example.com`,
@@ -47,26 +47,22 @@ async function fixture() {
     Buffer.from("reader@example.net"),
     "people.txt",
   );
-  const data = {
-    name: "Tracking test",
-    subject: "Faithful copy",
-    from: "sender@example.com",
-    importId: list.id,
-    html: '<p>A faithful message. <a href="https://example.com/offer?a=1&amp;b=2">Read more</a> <a href="mailto:support@example.com">Ask us</a></p>',
-    startKey: crypto.randomUUID(),
+  return {
+    user,
+    data: {
+      name: "Tracking test",
+      subject: "Faithful copy",
+      from: "sender@example.com",
+      importId: list.id,
+      html: '<p>A faithful message. <a href="https://example.com/offer?a=1&amp;b=2">Read more</a> <a href="https://example.com/offer?a=1&amp;b=2">Again</a> <a href="mailto:support@example.com">Ask us</a></p>',
+      startKey: crypto.randomUUID(),
+    },
   };
-  return { user, data };
 }
-async function domain(userId: string) {
-  const d = await addTrackingDomain(userId, {
-    hostname: `click-${crypto.randomUUID()}.example.com`,
-  });
-  await verifyDomain(userId, d.id, async () => true);
-  return d;
-}
+
 test("installation account creation accepts bounded stdin without echoing the password", async () => {
-  const email = `cli-${crypto.randomUUID()}@example.com`,
-    password = "Synthetic-stdin-password-$&-2026";
+  const email = `cli-${crypto.randomUUID()}@example.com`;
+  const password = "Synthetic-stdin-password-$&-2026";
   const result = await new Promise<{ code: number | null; output: string }>(
     (resolve, reject) => {
       const child = spawn(
@@ -75,12 +71,8 @@ test("installation account creation accepts bounded stdin without echoing the pa
         { stdio: ["pipe", "pipe", "pipe"] },
       );
       let output = "";
-      child.stdout.on("data", (chunk: Buffer) => {
-        output += chunk.toString();
-      });
-      child.stderr.on("data", (chunk: Buffer) => {
-        output += chunk.toString();
-      });
+      child.stdout.on("data", (chunk: Buffer) => (output += chunk.toString()));
+      child.stderr.on("data", (chunk: Buffer) => (output += chunk.toString()));
       child.on("error", reject);
       child.on("exit", (code) => resolve({ code, output }));
       child.stdin.end(`${email}\n${password}\n`);
@@ -92,12 +84,16 @@ test("installation account creation accepts bounded stdin without echoing the pa
   owners.push(user.id);
   assert.notEqual(user.passwordHash, password);
 });
-test("direct sending needs no tracking domain; unknown reputation warns and only explicit policy blocks", async () => {
+
+test("direct sending needs no click tracking; unknown reputation warns and only explicit policy blocks", async () => {
   const { user, data } = await fixture();
+  const tracking = await getTracking(user.id);
+  assert.equal(tracking.settings.defaultEnabled, false);
+  assert.equal(tracking.appUrl, process.env.APP_URL?.replace(/\/$/, ""));
   const flight = await preflight(user.id, data);
   assert(flight.ready);
   assert(!flight.tracking.enabled);
-  assert(flight.warnings.some((w) => w.includes("unknown")));
+  assert(flight.warnings.some((warning) => warning.includes("unknown")));
   assert.equal(
     (
       await inspectDestinations(user.id, data.html, [
@@ -111,103 +107,68 @@ test("direct sending needs no tracking domain; unknown reputation warns and only
     ).links[0].state,
     "REPUTATION_CLEAN",
   );
-  const c = await createCampaign(user.id, data);
+  const campaign = await createCampaign(user.id, data);
   assert.match(
-    (c.message as { html: string }).html,
+    (campaign.message as { html: string }).html,
     /href="https:\/\/example.com\/offer\?a=1&amp;b=2"/,
   );
   assert.equal(await db.trackingLink.count({ where: { userId: user.id } }), 0);
-  await saveTrackingSettings(user.id, { blockUnknown: true });
+  await saveTrackingSettings(user.id, {
+    defaultEnabled: false,
+    blockUnknown: true,
+  });
   assert(!(await preflight(user.id, data)).ready);
-  await saveTrackingSettings(user.id, { blockUnknown: false });
+  await saveTrackingSettings(user.id, {
+    defaultEnabled: false,
+    blockUnknown: false,
+  });
   assert((await preflight(user.id, data)).ready);
 });
-test("unverified, disabled, expired and foreign hostnames cannot enable tracking; defaults require explicit choice", async () => {
-  const { user, data } = await fixture(),
-    other = await fixture();
-  const unverified = await addTrackingDomain(user.id, {
-    hostname: `unverified-${crypto.randomUUID()}.example.com`,
-  });
-  await assert.rejects(() =>
-    saveTrackingSettings(user.id, {
-      defaultEnabled: true,
-      defaultDomainId: unverified.id,
-    }),
-  );
-  const mine = await domain(user.id),
-    theirs = await domain(other.user.id);
-  assert.equal((await getTracking(user.id)).settings.defaultEnabled, false);
+
+test("tracking is an explicit campaign or administrator choice and never gates sending", async () => {
+  const { user, data } = await fixture();
+  assert((await preflight(user.id, data)).ready);
   assert(
-    !(
-      await preflight(user.id, {
-        ...data,
-        tracking: { enabled: true, domainId: theirs.id },
-      })
-    ).ready,
-  );
-  await disableDomain(user.id, mine.id);
-  assert(
-    !(
-      await preflight(user.id, {
-        ...data,
-        tracking: { enabled: true, domainId: mine.id },
-      })
-    ).ready,
+    (await preflight(user.id, { ...data, tracking: { enabled: true } })).ready,
   );
   assert(
     (await preflight(user.id, { ...data, tracking: { enabled: false } })).ready,
   );
-  await verifyDomain(user.id, mine.id, async () => true);
   await saveTrackingSettings(user.id, {
     defaultEnabled: true,
-    defaultDomainId: mine.id,
+    blockUnknown: false,
   });
   assert((await preflight(user.id, data)).tracking.enabled);
-  await db.trackingDomain.update({
-    where: { id: mine.id },
-    data: { verifiedUntil: new Date(0) },
+  await saveTrackingSettings(user.id, {
+    defaultEnabled: false,
+    blockUnknown: false,
   });
-  assert((await preflight(user.id, data)).ready);
   assert(!(await preflight(user.id, data)).tracking.enabled);
 });
-test("verification cannot silently undo a concurrent administrator disable", async () => {
-  const { user } = await fixture(),
-    d = await domain(user.id);
-  await assert.rejects(
-    () =>
-      verifyDomain(user.id, d.id, async () => {
-        await disableDomain(user.id, d.id);
-        return true;
-      }),
-    /changed/,
-  );
-  assert.equal(
-    (await db.trackingDomain.findUniqueOrThrow({ where: { id: d.id } }))
-      .enabled,
-    false,
-  );
-});
-test("campaign links are stable across duplicate submissions, scoped to selected hostname and immutable destinations", async () => {
-  const { user, data } = await fixture(),
-    first = await domain(user.id),
-    second = await domain(user.id);
-  const input = { ...data, tracking: { enabled: true, domainId: first.id } };
-  const [a, b] = await Promise.all([
+
+test("campaign links are stable across duplicate submissions, canonical, and immutable", async () => {
+  const { user, data } = await fixture();
+  const input = { ...data, tracking: { enabled: true } };
+  const [first, duplicate] = await Promise.all([
     createCampaign(user.id, input),
     createCampaign(user.id, input),
   ]);
-  assert.equal(a.id, b.id);
+  assert.equal(first.id, duplicate.id);
   const links = await db.trackingLink.findMany({
-    where: { campaignId: a.id, userId: user.id },
+    where: { campaignId: first.id, userId: user.id },
   });
   assert.equal(links.length, 1);
-  assert.equal(links[0].domainId, first.id);
   assert.equal(links[0].destination, "https://example.com/offer?a=1&b=2");
+  assert.equal(
+    (first.message as { html: string }).html.split(
+      absoluteAppUrl(`/r/${links[0].token}`),
+    ).length - 1,
+    2,
+  );
   assert.match(
-    (a.message as { html: string }).html,
+    (first.message as { html: string }).html,
     /mailto:support@example.com/,
   );
-  assert(!JSON.stringify(a.message).includes(second.hostname));
   const off = await createCampaign(user.id, {
     ...data,
     startKey: crypto.randomUUID(),
@@ -218,49 +179,73 @@ test("campaign links are stable across duplicate submissions, scoped to selected
     0,
   );
 });
-test("redirects reject forged hosts/tokens, ignore query destinations, and visits never change delivery state", async () => {
-  const { user, data } = await fixture(),
-    d = await domain(user.id);
-  const c = await createCampaign(user.id, {
+
+test("redirects reject forged hosts, paths and tokens; visits never change delivery state", async () => {
+  const { user, data } = await fixture();
+  const campaign = await createCampaign(user.id, {
     ...data,
-    tracking: { enabled: true, domainId: d.id },
+    tracking: { enabled: true },
   });
-  await prepareCampaign(c.id);
-  const before = await db.delivery.findMany({ where: { campaignId: c.id } });
+  await prepareCampaign(campaign.id);
+  const before = await db.delivery.findMany({
+    where: { campaignId: campaign.id },
+  });
   const link = await db.trackingLink.findFirstOrThrow({
-    where: { campaignId: c.id },
+    where: { campaignId: campaign.id },
   });
-  const req = (host: string, method = "GET", ua = "Mozilla/5.0") =>
-    new Request(
-      `https://${host}/r/${link.token}?url=https://attacker.example`,
-      {
-        method,
-        headers: {
-          host,
-          "user-agent": ua,
-          "x-real-ip": "198.51.100.42",
-          cookie: "unrelated=secret",
-        },
+  const canonical = new URL(absoluteAppUrl(`/r/${link.token}`));
+  const request = (
+    method = "GET",
+    userAgent = "Mozilla/5.0",
+    host = canonical.host,
+    url = canonical.href + "?url=https://attacker.example",
+  ) =>
+    new Request(url, {
+      method,
+      headers: {
+        host,
+        "user-agent": userAgent,
+        "x-real-ip": "198.51.100.42",
+        cookie: "unrelated=secret",
       },
-    );
+    });
   assert.equal(
-    (await redirectVisit(req("other.example.com"), link.token)).status,
+    (
+      await redirectVisit(
+        request("GET", "Mozilla", "other.example"),
+        link.token,
+      )
+    ).status,
     410,
   );
-  assert.equal((await redirectVisit(req(d.hostname), "forged")).status, 410);
+  assert.equal(
+    (
+      await redirectVisit(
+        request(
+          "GET",
+          "Mozilla",
+          canonical.host,
+          new URL("/wrong", canonical).href,
+        ),
+        link.token,
+      )
+    ).status,
+    410,
+  );
+  assert.equal((await redirectVisit(request(), "forged")).status, 410);
   const results = await Promise.all([
-    redirectVisit(req(d.hostname), link.token),
-    redirectVisit(req(d.hostname, "HEAD"), link.token),
-    redirectVisit(req(d.hostname, "GET", "Proofpoint scanner"), link.token),
+    redirectVisit(request(), link.token),
+    redirectVisit(request("HEAD"), link.token),
+    redirectVisit(request("GET", "Proofpoint scanner"), link.token),
   ]);
-  for (const r of results) {
-    assert.equal(r.status, 302);
-    assert.equal(r.headers.get("location"), link.destination);
-    assert.equal(r.headers.get("referrer-policy"), "no-referrer");
-    assert(!r.headers.has("set-cookie"));
+  for (const response of results) {
+    assert.equal(response.status, 302);
+    assert.equal(response.headers.get("location"), link.destination);
+    assert.equal(response.headers.get("referrer-policy"), "no-referrer");
+    assert(!response.headers.has("set-cookie"));
   }
   assert.deepEqual(
-    await db.delivery.findMany({ where: { campaignId: c.id } }),
+    await db.delivery.findMany({ where: { campaignId: campaign.id } }),
     before,
   );
   const visits = await db.trackingVisitDay.findMany({
@@ -276,47 +261,43 @@ test("redirects reject forged hosts/tokens, ignore query destinations, and visit
     "rawVisits",
     "userId",
   ]);
-  const summary = await campaignSummary(user.id, c.id);
+  const summary = await campaignSummary(user.id, campaign.id);
   assert.equal(summary.tracking.unclassified, 1);
-  await disableDomain(user.id, d.id);
-  assert.equal((await redirectVisit(req(d.hostname), link.token)).status, 410);
 });
-test("denied destinations are tenant-scoped, block before send and revoke existing redirects", async () => {
-  const a = await fixture(),
-    b = await fixture(),
-    d = await domain(a.user.id);
-  const c = await createCampaign(a.user.id, {
-    ...a.data,
-    tracking: { enabled: true, domainId: d.id },
+
+test("denied destinations are tenant-scoped, block preflight, and revoke existing redirects", async () => {
+  const first = await fixture();
+  const second = await fixture();
+  const campaign = await createCampaign(first.user.id, {
+    ...first.data,
+    tracking: { enabled: true },
   });
   const link = await db.trackingLink.findFirstOrThrow({
-    where: { campaignId: c.id },
+    where: { campaignId: campaign.id },
   });
   await db.deniedDestination.create({
-    data: { userId: a.user.id, hostname: "example.com" },
+    data: { userId: first.user.id, hostname: "example.com" },
   });
-  assert(!(await preflight(a.user.id, a.data)).ready);
-  assert((await preflight(b.user.id, b.data)).ready);
+  assert(!(await preflight(first.user.id, first.data)).ready);
+  assert((await preflight(second.user.id, second.data)).ready);
+  const target = new URL(absoluteAppUrl(`/r/${link.token}`));
   assert.equal(
     (
       await redirectVisit(
-        new Request(`https://${d.hostname}/r/${link.token}`, {
-          headers: { host: d.hostname },
-        }),
+        new Request(target, { headers: { host: target.host } }),
         link.token,
       )
     ).status,
     410,
   );
 });
-test("tracking APIs enforce sessions, CSRF and ownership; database rejects cross-tenant relations", async () => {
-  const a = await fixture(),
-    b = await fixture(),
-    da = await domain(a.user.id),
-    dbb = await domain(b.user.id);
-  const c = await createCampaign(a.user.id, a.data);
+
+test("tracking APIs enforce sessions and CSRF; records reject cross-tenant campaign relations", async () => {
+  const first = await fixture();
+  const second = await fixture();
+  const campaign = await createCampaign(first.user.id, first.data);
   const session = await login(
-    b.user.email,
+    second.user.email,
     "Isolated tracking test password 2026",
     "tracking-tests",
   );
@@ -326,6 +307,7 @@ test("tracking APIs enforce sessions, CSRF and ownership; database rejects cross
     method: string,
     token = session.token,
     requestOrigin = origin,
+    body = "{}",
   ) =>
     api(
       new Request(origin + "/api/" + path, {
@@ -335,34 +317,37 @@ test("tracking APIs enforce sessions, CSRF and ownership; database rejects cross
           Origin: requestOrigin,
           "Content-Type": "application/json",
         },
-        ...(method !== "GET" ? { body: "{}" } : {}),
+        ...(method !== "GET" ? { body } : {}),
       }),
       path.split("/"),
     );
   assert.equal((await call("tracking", "GET", "")).status, 401);
   assert.equal(
-    (
-      await call(
-        `tracking/${da.id}/disable`,
-        "POST",
-        session.token,
-        "https://wrong.example",
-      )
-    ).status,
+    (await call("tracking", "PUT", session.token, "https://wrong.example"))
+      .status,
     403,
   );
-  assert.equal((await call(`tracking/${da.id}/disable`, "POST")).status, 404);
-  assert.equal((await call(`tracking/${da.id}/verify`, "POST")).status, 404);
+  assert.equal(
+    (
+      await call(
+        "tracking",
+        "PUT",
+        session.token,
+        origin,
+        JSON.stringify({ defaultEnabled: true, blockUnknown: false }),
+      )
+    ).status,
+    200,
+  );
   const owned = await (await call("tracking", "GET")).json();
-  assert.equal(owned.domains.length, 1);
-  assert.equal(owned.domains[0].id, dbb.id);
-  await assert.rejects(() => campaignSummary(b.user.id, c.id));
+  assert.equal(owned.domains, undefined);
+  assert.equal(owned.settings.defaultEnabled, true);
+  await assert.rejects(() => campaignSummary(second.user.id, campaign.id));
   await assert.rejects(() =>
     db.trackingLink.create({
       data: {
-        userId: a.user.id,
-        campaignId: c.id,
-        domainId: dbb.id,
+        userId: second.user.id,
+        campaignId: campaign.id,
         token: crypto.randomUUID(),
         destination: "https://example.com",
         expiresAt: new Date(),
@@ -370,15 +355,15 @@ test("tracking APIs enforce sessions, CSRF and ownership; database rejects cross
     }),
   );
 });
-test("retention removes expired links and old visit totals while keeping recent totals", async () => {
-  const { user, data } = await fixture(),
-    d = await domain(user.id);
-  const c = await createCampaign(user.id, {
+
+test("retention removes expired links and old totals while preserving recent aggregates", async () => {
+  const { user, data } = await fixture();
+  const campaign = await createCampaign(user.id, {
     ...data,
-    tracking: { enabled: true, domainId: d.id },
+    tracking: { enabled: true },
   });
   const link = await db.trackingLink.findFirstOrThrow({
-    where: { campaignId: c.id },
+    where: { campaignId: campaign.id },
   });
   await db.trackingVisitDay.createMany({
     data: [

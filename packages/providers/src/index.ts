@@ -101,14 +101,22 @@ export interface HttpRequest {
   headers: Record<string, string>;
   body?: string | FormData;
 }
-function auth(c: Connection): Record<string, string> {
+function auth(
+  c: Connection,
+  purpose: "send" | "verify" = "send",
+): Record<string, string> {
   const s = c.credentials;
   switch (definition(c.type).api?.auth) {
     case "bearer":
       return { Authorization: `Bearer ${s.apiKey}` };
     case "basic-api":
       return {
-        Authorization: `Basic ${Buffer.from("api:" + s.apiKey).toString("base64")}`,
+        Authorization: `Basic ${Buffer.from(
+          "api:" +
+            (purpose === "verify" && s.managementApiKey
+              ? s.managementApiKey
+              : s.apiKey),
+        ).toString("base64")}`,
       };
     case "basic":
       return {
@@ -844,7 +852,7 @@ export async function verifyConnection(
       {
         url: ep.verifyUrl!,
         method: c.type === "smtp2go" ? "POST" : "GET",
-        headers: { ...auth(c), "Content-Type": "application/json" },
+        headers: { ...auth(c, "verify"), "Content-Type": "application/json" },
         ...(c.type === "smtp2go" ? { body: "{}" } : {}),
       },
       deps,
@@ -930,11 +938,48 @@ export async function verifyConnection(
         ),
       );
     }
+    if (strategy === "domain") {
+      const configured = c.settings.domain;
+      const providerDomain = obj(obj(data).domain);
+      const ready =
+        typeof configured === "string" &&
+        providerDomain.name === configured &&
+        ["active", "verified"].includes(
+          String(providerDomain.state ?? providerDomain.status).toLowerCase(),
+        );
+      return result(
+        ready ? "HEALTHY" : "DOMAIN_UNVERIFIED",
+        ready,
+        check("Authentication", "passed", "API credential authenticated."),
+        check(
+          "Domain",
+          ready ? "passed" : "failed",
+          ready
+            ? "Sending domain verified."
+            : "Sending domain is absent, disabled, or unverified.",
+        ),
+      );
+    }
     if (strategy === "server-stream") {
+      const serverName =
+        typeof obj(data).Name === "string"
+          ? String(obj(data).Name)
+              .replace(/[\r\n]/g, " ")
+              .slice(0, 120)
+          : "";
+      const serverId =
+        typeof obj(data).ID === "number" || typeof obj(data).ID === "string"
+          ? String(obj(data).ID).slice(0, 40)
+          : "";
+      const serverDetail =
+        serverName || serverId
+          ? `Authenticated Postmark server${serverName ? ` “${serverName}”` : ""}${serverId ? ` (ID ${serverId})` : ""}.`
+          : "Supplied server token authenticated.";
       if (obj(data).DeliveryType === "Sandbox")
         return result(
           "SANDBOX",
           false,
+          check("Server token", "passed", serverDetail),
           check(
             "Server mode",
             "failed",
@@ -966,7 +1011,7 @@ export async function verifyConnection(
       return result(
         "HEALTHY",
         true,
-        check("Server token", "passed", "Supplied server token authenticated."),
+        check("Server token", "passed", serverDetail),
         check("Message Stream", "passed", "Broadcast stream confirmed."),
         check("Sender", "unknown", "Verify your sender signature in Postmark."),
       );

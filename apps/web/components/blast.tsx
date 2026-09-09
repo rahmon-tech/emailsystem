@@ -46,6 +46,7 @@ import {
 import CodeMirror from "@uiw/react-codemirror";
 import { html as htmlLanguage } from "@codemirror/lang-html";
 import type { TrackingConfig } from "./tracking-settings";
+import type { SenderCatalog } from "./sender-settings";
 import { RichEditor } from "./editor";
 import { api } from "./api-client";
 import { PageTitle, Failure, EmptyState, ResponsiveDialog } from "./shared";
@@ -57,7 +58,13 @@ type ImportRow = {
 };
 type Preview = { html: string; text: string };
 type Flight = {
-  tracking: { enabled: boolean; hostname: string | null };
+  tracking: { enabled: boolean; appUrl: string | null };
+  sender: {
+    id: string;
+    email: string;
+    domain: string;
+    eligibleProviderCount: number;
+  };
   reputation: { hostname: string; state: string }[];
   ready: boolean;
   problems: string[];
@@ -79,7 +86,10 @@ export function Blast() {
   const [trackingConfig, setTrackingConfig] = useState<TrackingConfig | null>(
     null,
   );
-  const [tracking, setTracking] = useState({ enabled: false, domainId: "" });
+  const [tracking, setTracking] = useState({ enabled: false });
+  const [senderCatalog, setSenderCatalog] = useState<SenderCatalog | null>(
+    null,
+  );
   const [providers, setProviders] = useState<ProviderRow[]>([]),
     [imports, setImports] = useState<ImportRow[]>([]),
     [loaded, setLoaded] = useState(false),
@@ -88,6 +98,7 @@ export function Blast() {
     [editRecipients, setEditRecipients] = useState(false),
     [form, setForm] = useState({
       name: "",
+      senderIdentityId: "",
       from: "",
       fromName: "",
       replyTo: "",
@@ -134,13 +145,7 @@ export function Blast() {
       .then((data) => {
         if (!active) return;
         setTrackingConfig(data);
-        const domain = data.domains.find(
-          (d) => d.id === data.settings.defaultDomainId && d.usable,
-        );
-        setTracking({
-          enabled: data.settings.defaultEnabled && !!domain,
-          domainId: domain?.id ?? "",
-        });
+        setTracking({ enabled: data.settings.defaultEnabled });
         generation.current++;
         setFlight(null);
       })
@@ -150,24 +155,32 @@ export function Blast() {
     void Promise.all([
       api<ProviderRow[]>("providers"),
       api<ImportRow[]>("imports"),
+      api<SenderCatalog>("senders"),
     ])
-      .then(([p, i]) => {
+      .then(([p, i, senderData]) => {
         if (active) {
           setProviders(p);
           setImports(i);
-          const first = p.find((x) => x.enabled);
+          setSenderCatalog(senderData);
+          const first = senderData.domains
+            .flatMap((domain) => domain.senders)
+            .find(
+              (sender) =>
+                sender.enabled && sender.availableProviderIds.length > 0,
+            );
           if (first) {
             setForm((s) =>
-              s.from
+              s.senderIdentityId
                 ? s
                 : {
                     ...s,
-                    from: first.settings.fromEmail,
-                    fromName: first.settings.fromName,
-                    replyTo: first.settings.replyTo,
+                    senderIdentityId: first.id,
+                    from: first.email,
+                    fromName: first.displayName,
+                    replyTo: first.replyTo,
                   },
             );
-            setTestProvider(first.id);
+            setTestProvider(first.availableProviderIds[0] ?? "");
           }
         }
       })
@@ -199,7 +212,6 @@ export function Blast() {
     startKey: startKey.current,
     tracking: {
       enabled: tracking.enabled,
-      domainId: tracking.domainId || undefined,
     },
   });
   const run = async (name: string, fn: () => Promise<void>) => {
@@ -230,6 +242,11 @@ export function Blast() {
     });
   };
   const selected = imports.find((i) => i.id === importId);
+  const hasEligibleSender = senderCatalog?.domains.some((domain) =>
+    domain.senders.some(
+      (sender) => sender.enabled && sender.availableProviderIds.length > 0,
+    ),
+  );
   return (
     <>
       <PageTitle
@@ -239,10 +256,10 @@ export function Blast() {
       <Failure
         error={["preflight", "test", "send"].includes(errorAction) ? "" : error}
       />
-      {loaded && !providers.some((p) => p.enabled) && (
+      {loaded && !hasEligibleSender && (
         <Alert severity="info" sx={{ mb: 3 }}>
-          Add and verify at least one provider before sending.{" "}
-          <Link href="/providers">Go to Providers</Link>
+          Verify a provider and sender identity before sending.{" "}
+          <Link href="/providers">Manage providers and senders</Link>
         </Alert>
       )}
       <Box
@@ -261,7 +278,6 @@ export function Blast() {
             <Stack
               direction="row"
               spacing={1.5}
-
               sx={{ alignItems: "center", mb: 2.5 }}
             >
               <Typography
@@ -416,7 +432,6 @@ export function Blast() {
             <Stack
               direction="row"
               spacing={1.5}
-
               sx={{ alignItems: "center", mb: 3 }}
             >
               <Typography
@@ -436,12 +451,43 @@ export function Blast() {
                 required
               />
               <TextField
-                label="From email"
-                value={form.from}
-                onChange={(e) => change("from", e.target.value)}
+                select
+                label="Sender identity"
+                value={form.senderIdentityId}
+                onChange={(event) => {
+                  const sender = senderCatalog?.domains
+                    .flatMap((domain) => domain.senders)
+                    .find((item) => item.id === event.target.value);
+                  if (!sender) return;
+                  setForm((current) => ({
+                    ...current,
+                    senderIdentityId: sender.id,
+                    from: sender.email,
+                    fromName: sender.displayName,
+                    replyTo: sender.replyTo,
+                  }));
+                  setTestProvider(sender.availableProviderIds[0] ?? "");
+                  invalid();
+                }}
                 required
-                helperText="Must match a verified provider sender."
-              />
+                helperText="Only enabled identities with at least one eligible provider appear."
+              >
+                {senderCatalog?.domains.flatMap((domain) =>
+                  domain.senders
+                    .filter(
+                      (sender) =>
+                        sender.enabled &&
+                        sender.availableProviderIds.length > 0,
+                    )
+                    .map((sender) => (
+                      <MenuItem key={sender.id} value={sender.id}>
+                        {sender.email} · {sender.availableProviderIds.length}{" "}
+                        provider
+                        {sender.availableProviderIds.length === 1 ? "" : "s"}
+                      </MenuItem>
+                    )),
+                )}
+              </TextField>
               <TextField
                 label="Subject"
                 value={form.subject}
@@ -463,68 +509,32 @@ export function Blast() {
                 </AccordionSummary>
                 <AccordionDetails>
                   <Stack spacing={2}>
-                    <Box
-                      sx={{
-                        display: "grid",
-                        gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" },
-                        gap: 2,
-                      }}
-                    >
-                      <TextField
-                        label="From name"
-                        value={form.fromName}
-                        onChange={(e) => change("fromName", e.target.value)}
-                      />
-                      <TextField
-                        label="Reply-To"
-                        value={form.replyTo}
-                        onChange={(e) => change("replyTo", e.target.value)}
-                      />
-                    </Box>
+                    <Typography variant="body2" color="text.secondary">
+                      Display name: {form.fromName || "None"} · Reply-to:{" "}
+                      {form.replyTo || "uses sender address"}. Edit these in
+                      Providers → Senders.
+                    </Typography>
 
                     <FormControlLabel
                       control={
                         <Switch
                           checked={tracking.enabled}
-                          disabled={
-                            !trackingConfig?.domains.some((d) => d.usable)
-                          }
                           onChange={(_, enabled) => {
-                            setTracking((s) => ({ ...s, enabled }));
+                            setTracking({ enabled });
                             invalid();
                           }}
                         />
                       }
                       label="Track clicks"
                     />
-                    {tracking.enabled ? (
-                      <TextField
-                        select
-                        label="Campaign tracking hostname"
-                        value={tracking.domainId}
-                        onChange={(e) => {
-                          setTracking((s) => ({
-                            ...s,
-                            domainId: e.target.value,
-                          }));
-                          invalid();
-                        }}
-                      >
-                        <MenuItem value="">Choose a hostname</MenuItem>
-                        {trackingConfig?.domains
-                          .filter((d) => d.usable)
-                          .map((d) => (
-                            <MenuItem key={d.id} value={d.id}>
-                              {d.hostname}
-                            </MenuItem>
-                          ))}
-                      </TextField>
-                    ) : (
-                      <Typography variant="caption" color="text.secondary">
-                        Safe links stay direct.{" "}
+                    <Typography variant="caption" color="text.secondary">
+                      {tracking.enabled
+                        ? `Links use ${trackingConfig?.appUrl ?? "this app"}/r/…; scanner visits are only heuristic analytics.`
+                        : "Safe links stay direct. "}
+                      {!tracking.enabled && (
                         <Link href="/providers">Manage link settings</Link>
-                      </Typography>
-                    )}
+                      )}
+                    </Typography>
                     <TextField
                       label="CC (comma separated)"
                       value={form.cc}
@@ -939,16 +949,14 @@ export function Blast() {
                         flight.providers.length > 0,
                       ],
                       [
-                        flight.ready
-                          ? "Sender verified"
-                          : "Sender · see checks",
-                        flight.ready,
+                        `Sender · ${flight.sender.email}`,
+                        flight.sender.eligibleProviderCount > 0,
                       ],
                       ["HTML prepared", !!flight.previewHtml],
                       ["Plain text ready", !!flight.text],
                       [
                         flight.tracking.enabled
-                          ? `Tracking · ${flight.tracking.hostname}`
+                          ? `Tracking · ${flight.tracking.appUrl}/r/…`
                           : "Tracking off · direct links",
                         true,
                       ],
@@ -1021,7 +1029,7 @@ export function Blast() {
               </Button>
               <Button
                 startIcon={<ScienceOutlined />}
-                disabled={!!busy || !form.from || !form.subject}
+                disabled={!!busy || !form.senderIdentityId || !form.subject}
                 onClick={() => {
                   setTestOpen(true);
                   setTestResult("");
@@ -1108,7 +1116,15 @@ export function Blast() {
               onChange={(e) => setTestProvider(e.target.value)}
             >
               {providers
-                .filter((p) => p.enabled && p.settings.fromEmail === form.from)
+                .filter((provider) => {
+                  const sender = senderCatalog?.domains
+                    .flatMap((domain) => domain.senders)
+                    .find((item) => item.id === form.senderIdentityId);
+                  return (
+                    provider.enabled &&
+                    !!sender?.availableProviderIds.includes(provider.id)
+                  );
+                })
                 .map((p) => (
                   <MenuItem key={p.id} value={p.id}>
                     {p.name}

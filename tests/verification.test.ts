@@ -52,7 +52,7 @@ for (const type of [
     });
     assert.equal(
       v.usable,
-      ["resend", "sendgrid", "postmark", "mailjet"].includes(type),
+      ["resend", "mailgun", "sendgrid", "postmark", "mailjet"].includes(type),
     );
     assert(v.checks.length);
     assert(!JSON.stringify(v).includes("key-secret"));
@@ -84,6 +84,57 @@ for (const type of [
     assert.notEqual(denied.status, "AUTH_ERROR");
   });
 }
+test("Mailgun keeps management verification and sending credentials separated", async () => {
+  const base = connection("mailgun");
+  const c = {
+    ...base,
+    credentials: {
+      ...base.credentials,
+      apiKey: "synthetic-send-only",
+      managementApiKey: "synthetic-management-only",
+    },
+  };
+  let authorization = "";
+  await verifyConnection(c, {
+    fetch: async (_url, init) => {
+      authorization = new Headers(init?.headers).get("authorization") ?? "";
+      return Response.json(responses.mailgun);
+    },
+  });
+  assert.equal(
+    Buffer.from(authorization.replace(/^Basic /, ""), "base64").toString(),
+    "api:synthetic-management-only",
+  );
+  let sendAuthorization = "";
+  await send(
+    c,
+    {
+      from: "sender@example.com",
+      fromName: "",
+      to: "recipient@example.net",
+      cc: [],
+      bcc: [],
+      replyTo: "",
+      subject: "Synthetic",
+      html: "<p>Synthetic</p>",
+      text: "Synthetic",
+      headers: {},
+      attachments: [],
+    },
+    { attemptId: "synthetic", idempotencyKey: "synthetic" },
+    {
+      fetch: async (_url, init) => {
+        sendAuthorization =
+          new Headers(init?.headers).get("authorization") ?? "";
+        return Response.json({ id: "synthetic-message" });
+      },
+    },
+  );
+  assert.equal(
+    Buffer.from(sendAuthorization.replace(/^Basic /, ""), "base64").toString(),
+    "api:synthetic-send-only",
+  );
+});
 test("Resend sending-only Save & Verify never sends email", async () => {
   for (const [status, name] of [
     [401, "restricted_api_key"],

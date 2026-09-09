@@ -31,16 +31,16 @@ import {
 } from "./campaigns";
 import { normalizeEmail, renderSnapshot } from "@emailsystem/email";
 import { messageInput, deliveryMessage } from "./campaigns";
-import { getConnection, compatible } from "./providers";
 import { csvCell } from "./security";
-import {
-  getTracking,
-  saveTrackingSettings,
-  addTrackingDomain,
-  verifyDomain,
-  disableDomain,
-} from "./tracking";
+import { getTracking, saveTrackingSettings } from "./tracking";
 import { canonicalDomain, inspectDestinations } from "./reputation";
+import {
+  addAuthorizedDomain,
+  addSenderIdentities,
+  listSenders,
+  setSenderEnabled,
+} from "./senders";
+import { absoluteAppUrl } from "./server-paths";
 const uuid = (s: string) => z.uuid().parse(s);
 export async function api(request: Request, parts: string[]) {
   try {
@@ -107,23 +107,6 @@ export async function api(request: Request, parts: string[]) {
         return response(
           await saveTrackingSettings(user.id, await readJson(request, 2048)),
         );
-      if (method === "POST" && !id)
-        return response(
-          await addTrackingDomain(user.id, await readJson(request, 2048)),
-          201,
-        );
-      if (id) uuid(id);
-      if (method === "POST" && action === "verify") {
-        if (!(await consumeLimit(`tracking-verify:${user.id}`, 10, 3600)))
-          throw new AppError(
-            429,
-            "RATE",
-            "Verification limit reached. Try again later.",
-          );
-        return response(await verifyDomain(user.id, id));
-      }
-      if (method === "POST" && action === "disable")
-        return response(await disableDomain(user.id, id));
     }
     if (area === "denied-destinations") {
       if (method === "POST" && !id) {
@@ -154,6 +137,28 @@ export async function api(request: Request, parts: string[]) {
           throw new AppError(404, "NOT_FOUND", "Denied domain not found.");
         return response({ removed: true });
       }
+    }
+    if (area === "senders") {
+      if (method === "GET" && !id) return response(await listSenders(user.id));
+      if (method === "POST" && id === "domain")
+        return response(
+          await addAuthorizedDomain(user.id, await readJson(request, 2048)),
+          201,
+        );
+      if (id) uuid(id);
+      if (method === "POST" && action === "add")
+        return response(
+          await addSenderIdentities(
+            user.id,
+            id,
+            await readJson(request, 32000),
+          ),
+          201,
+        );
+      if (method === "POST" && ["enable", "disable"].includes(action))
+        return response(
+          await setSenderEnabled(user.id, id, action === "enable"),
+        );
     }
     if (area === "providers") {
       if (method === "GET" && !id) {
@@ -208,11 +213,22 @@ export async function api(request: Request, parts: string[]) {
           .object({
             recipient: z.email(),
             testMode: z.boolean().default(false),
+            senderIdentityId: z.uuid().optional(),
           })
           .strict()
           .parse(await readJson(request, 2048));
         return response(
-          await testProvider(user.id, id, data.recipient, data.testMode),
+          await testProvider(
+            user.id,
+            id,
+            data.recipient,
+            data.testMode,
+            undefined,
+            {},
+            data.senderIdentityId
+              ? { senderIdentityId: data.senderIdentityId }
+              : undefined,
+          ),
         );
       }
       if (method === "POST" && ["disable", "delete"].includes(action)) {
@@ -289,7 +305,7 @@ export async function api(request: Request, parts: string[]) {
       return response({
         html: renderSnapshot(
           snapshot.html,
-          config().APP_URL + "/unsubscribe/preview",
+          absoluteAppUrl("/unsubscribe/preview"),
         ),
         text: input.text?.trim() || snapshot.text,
         warnings: snapshot.warnings,
@@ -316,13 +332,6 @@ export async function api(request: Request, parts: string[]) {
         })
         .strict()
         .parse(await readJson(request));
-      const connection = await getConnection(user.id, data.providerId);
-      if (!compatible(connection, data.message.from))
-        throw new AppError(
-          422,
-          "PROVIDER",
-          "Choose a healthy connection matching the From address.",
-        );
       if (
         data.message.attachments.reduce(
           (n, a) => n + Buffer.byteLength(a.content, "base64"),
@@ -379,6 +388,11 @@ export async function api(request: Request, parts: string[]) {
           data.recipient,
           false,
           message,
+          {},
+          {
+            senderIdentityId: data.message.senderIdentityId,
+            from: data.message.from,
+          },
         ),
       );
     }
@@ -398,8 +412,9 @@ export async function api(request: Request, parts: string[]) {
         reputation: result.reputation,
         tracking: {
           enabled: result.tracking.enabled,
-          hostname: result.tracking.domain?.hostname ?? null,
+          appUrl: result.tracking.enabled ? config().APP_URL : null,
         },
+        sender: result.sender,
       });
     }
     if (area === "campaigns") {

@@ -6,8 +6,6 @@ import {
   isDeniedDomain,
 } from "@emailsystem/core/reputation";
 import { likelyAutomated, trackingSettings } from "@emailsystem/core/tracking";
-import { verifiedPublicAddress } from "@emailsystem/core/tracking-verification";
-import { Resolver } from "node:dns/promises";
 const url = new URL("https://example.com/path?private=query");
 test("reputation absence, outage and timeout are unknown; blocked results dominate", async () => {
   assert.equal(
@@ -96,57 +94,8 @@ test("denied domains match exact DNS boundaries and tracking remains opt-in", ()
   assert.throws(() => canonicalDomain("https://example.com/path"));
   assert.deepEqual(trackingSettings.parse({}), {
     defaultEnabled: false,
-    defaultDomainId: null,
     blockUnknown: false,
   });
-});
-test("ownership checks reject private, mixed and absent DNS addresses before HTTPS can connect", async () => {
-  const resolver = (
-    addresses: string[],
-    txt = "emailblast-verification=proof",
-  ) =>
-    ({
-      async resolveTxt() {
-        return [[txt]];
-      },
-      async resolve4() {
-        return addresses;
-      },
-      async resolve6() {
-        return [];
-      },
-    }) as unknown as Pick<Resolver, "resolveTxt" | "resolve4" | "resolve6">;
-  for (const addresses of [
-    [],
-    ["127.0.0.1"],
-    ["10.0.0.1"],
-    ["169.254.169.254"],
-    ["8.8.8.8", "192.168.1.1"],
-  ])
-    assert.equal(
-      await verifiedPublicAddress(
-        "click.example.com",
-        "proof",
-        resolver(addresses),
-      ),
-      false,
-    );
-  assert.equal(
-    await verifiedPublicAddress(
-      "click.example.com",
-      "proof",
-      resolver(["8.8.8.8"], "different-owner"),
-    ),
-    false,
-  );
-  assert.deepEqual(
-    await verifiedPublicAddress(
-      "click.example.com",
-      "proof",
-      resolver(["8.8.8.8"]),
-    ),
-    { address: "8.8.8.8", family: 4 },
-  );
 });
 test("scanner classification is a coarse heuristic; ordinary visits remain unclassified", () => {
   assert(likelyAutomated(new Request(url, { method: "HEAD" })));

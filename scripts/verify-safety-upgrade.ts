@@ -53,7 +53,7 @@ try {
   await client.connect();
   try {
     await client.query(`INSERT INTO "User" (id,email,"passwordHash") VALUES ('upgrade-user','upgrade@example.com','fixture');
-      INSERT INTO "ProviderConnection" (id,"userId",name,type,transport,settings,credentials,"credentialHint","updatedAt") VALUES ('upgrade-provider','upgrade-user','Fixture','mock','api','{}','{}','fixture',now());
+      INSERT INTO "ProviderConnection" (id,"userId",name,type,transport,settings,credentials,"credentialHint","updatedAt") VALUES ('upgrade-provider','upgrade-user','Fixture','mock','api','{"fromEmail":"sender@example.com"}','{}','fixture',now());
       INSERT INTO "Campaign" (id,"userId",name,message,"importId","startKey","updatedAt") VALUES ('upgrade-campaign','upgrade-user','Fixture','{"from":"sender@example.com","cc":["audit@example.com"],"bcc":["archive@example.com"]}','fixture','fixture',now());
       INSERT INTO "Delivery" (id,"userId","campaignId",email,"unsubscribeToken","unsubscribeHash","updatedAt") VALUES ('upgrade-delivery','upgrade-user','upgrade-campaign','recipient@example.net','token','hash',now());
       INSERT INTO "DeliveryAttempt" (id,"userId","deliveryId","providerId","providerRevision","idempotencyKey",state) VALUES ('upgrade-attempt','upgrade-user','upgrade-delivery','upgrade-provider',1,'fixture','UNKNOWN');`);
@@ -77,6 +77,13 @@ try {
       senderDomain: "example.com",
       retained: true,
     });
+    const {
+      rows: [sender],
+    } = await client.query(
+      `SELECT c."senderIdentityId", s.email FROM "Campaign" c JOIN "SenderIdentity" s ON s.id=c."senderIdentityId" WHERE c.id='upgrade-campaign'`,
+    );
+    assert.match(sender.senderIdentityId, /^[0-9a-f-]{36}$/);
+    assert.equal(sender.email, "sender@example.com");
     process.stdout.write(
       "Verified upgrade from 846c288, historical UNKNOWN costs, and zero schema drift.\n",
     );

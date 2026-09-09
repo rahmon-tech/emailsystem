@@ -8,7 +8,7 @@ import { headerText } from "@emailsystem/providers/catalog";
 import type { ProviderMessage } from "@emailsystem/providers";
 import { config } from "./config";
 import { AppError } from "./errors";
-import { json, compatible } from "./providers";
+import { json } from "./providers";
 import { digest, makeSignedToken } from "./security";
 import { transitionCampaign, unclaimedStates } from "./domain";
 import { inspectDestinations } from "./reputation";
@@ -17,11 +17,17 @@ import {
   createTrackedSnapshot,
   trackingSummary,
 } from "./tracking";
+import { resolveSender } from "./senders";
+import { absoluteAppUrl } from "./server-paths";
 export const messageInput = z
   .object({
     name: headerText.min(1),
     importId: z.uuid(),
-    from: z.email().transform((s) => s.toLowerCase()),
+    senderIdentityId: z.uuid().optional(),
+    from: z
+      .email()
+      .transform((s) => s.toLowerCase())
+      .optional(),
     fromName: headerText.default(""),
     replyTo: z.union([z.email(), z.literal("")]).default(""),
     subject: headerText.min(1),
@@ -53,15 +59,16 @@ export const messageInput = z
       .max(5)
       .default([]),
     dailyBudget: dailyBudget.nullable().optional(),
-    tracking: z
-      .object({ enabled: z.boolean(), domainId: z.uuid().optional() })
-      .strict()
-      .optional(),
+    tracking: z.object({ enabled: z.boolean() }).strict().optional(),
     scheduledAt: z.iso.datetime().optional(),
     startKey: z.uuid().optional(),
     tags: z.array(headerText.max(40)).max(10).default([]),
   })
-  .strict();
+  .strict()
+  .refine((value) => value.senderIdentityId || value.from, {
+    message: "Choose a sender identity.",
+    path: ["senderIdentityId"],
+  });
 export async function preflight(userId: string, input: unknown) {
   const data = messageInput.parse(input);
   const problems: string[] = [];
@@ -100,9 +107,12 @@ export async function preflight(userId: string, input: unknown) {
     (await db.suppression.count({ where: { userId, email: { in: copies } } }))
   )
     problems.push("A CC/BCC address is suppressed.");
-  const providers = (
-    await db.providerConnection.findMany({ where: { userId, deletedAt: null } })
-  ).filter((p) => compatible(p, data.from));
+  const senderSelection = await resolveSender(userId, {
+    senderIdentityId: data.senderIdentityId,
+    from: data.from,
+  });
+  const sender = senderSelection.sender;
+  const providers = senderSelection.providers;
   if (
     providers.length &&
     providers.every(
@@ -114,9 +124,9 @@ export async function preflight(userId: string, input: unknown) {
     );
   if (!providers.length)
     problems.push(
-      "Verify at least one provider configured with this From address.",
+      "Verify this sender with at least one healthy broadcast provider.",
     );
-  const safety = await safetyCapacity(userId, data.from);
+  const safety = await safetyCapacity(userId, sender.email);
   const campaignLimit =
     data.dailyBudget === undefined ? safety.campaignDefault : data.dailyBudget;
   const cost = messageCost(data);
@@ -146,9 +156,9 @@ export async function preflight(userId: string, input: unknown) {
   if (!snapshot.text.trim())
     problems.push("The email body is empty after safety checks.");
   const message = {
-    from: data.from,
-    fromName: data.fromName,
-    replyTo: data.replyTo,
+    from: sender.email,
+    fromName: sender.displayName,
+    replyTo: sender.replyTo,
     subject: data.subject,
     cc: data.cc,
     bcc: data.bcc,
@@ -160,7 +170,7 @@ export async function preflight(userId: string, input: unknown) {
     snapshotHash: snapshot.hash,
     tracking: {
       enabled: tracking.enabled,
-      hostname: tracking.domain?.hostname ?? null,
+      appUrl: tracking.enabled ? config().APP_URL : null,
     },
   };
   return {
@@ -190,10 +200,16 @@ export async function preflight(userId: string, input: unknown) {
       campaignDaily: campaignLimit,
     },
     providers: providers.map((p) => ({ id: p.id, name: p.name })),
+    sender: {
+      id: sender.id,
+      email: sender.email,
+      domain: sender.authorizedDomain.domain,
+      eligibleProviderCount: providers.length,
+    },
     message,
     previewHtml: renderSnapshot(
       snapshot.html,
-      config().APP_URL + "/unsubscribe/preview",
+      absoluteAppUrl("/unsubscribe/preview"),
     ),
     importStats: list.stats,
     data,
@@ -215,6 +231,7 @@ export async function createCampaign(userId: string, input: unknown) {
       data: [
         {
           userId,
+          senderIdentityId: result.sender.id,
           name: result.data.name,
           state: "PREPARING",
           message: json(result.message),
@@ -238,7 +255,7 @@ export async function createCampaign(userId: string, input: unknown) {
       userId,
       campaign.id,
       result.message.html,
-      result.tracking.domain,
+      result.tracking.enabled,
     );
     return tx.campaign.update({
       where: { id: campaign.id },
@@ -485,7 +502,7 @@ export function deliveryMessage(
   token: string,
 ): ProviderMessage {
   const m = snapshot as Omit<ProviderMessage, "to">;
-  const url = config().APP_URL + "/unsubscribe/" + token;
+  const url = absoluteAppUrl("/unsubscribe/" + token);
   return {
     ...m,
     to: email,
