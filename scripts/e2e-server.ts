@@ -76,6 +76,8 @@ const proxy = createServer(
         headers: {
           ...req.headers,
           "x-real-ip": req.socket.remoteAddress ?? "127.0.0.1",
+          "x-forwarded-host": req.headers.host,
+          "x-forwarded-proto": "https",
         },
       },
       (response) => {

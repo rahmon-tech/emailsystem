@@ -199,6 +199,7 @@ test("redirects reject forged hosts, paths and tokens; visits never change deliv
     userAgent = "Mozilla/5.0",
     host = canonical.host,
     url = canonical.href + "?url=https://attacker.example",
+    forwardedHost = "",
   ) =>
     new Request(url, {
       method,
@@ -207,6 +208,7 @@ test("redirects reject forged hosts, paths and tokens; visits never change deliv
         "user-agent": userAgent,
         "x-real-ip": "198.51.100.42",
         cookie: "unrelated=secret",
+        ...(forwardedHost ? { "x-forwarded-host": forwardedHost } : {}),
       },
     });
   assert.equal(
@@ -233,10 +235,40 @@ test("redirects reject forged hosts, paths and tokens; visits never change deliv
     410,
   );
   assert.equal((await redirectVisit(request(), "forged")).status, 410);
+  assert.equal(
+    (
+      await redirectVisit(
+        request(
+          "GET",
+          "Mozilla",
+          canonical.host,
+          canonical.href,
+          "other.example",
+        ),
+        link.token,
+      )
+    ).status,
+    410,
+  );
   const results = await Promise.all([
     redirectVisit(request(), link.token),
     redirectVisit(request("HEAD"), link.token),
     redirectVisit(request("GET", "Proofpoint scanner"), link.token),
+    // Next's route handler may expose the already-matched path without basePath.
+    redirectVisit(
+      request(
+        "GET",
+        "Mozilla",
+        canonical.host,
+        new URL(`/r/${link.token}`, canonical).href,
+      ),
+      link.token,
+    ),
+    redirectVisit(new Request(canonical), link.token),
+    redirectVisit(
+      request("GET", "Mozilla", "web:3000", canonical.href, canonical.host),
+      link.token,
+    ),
   ]);
   for (const response of results) {
     assert.equal(response.status, 302);
@@ -252,7 +284,7 @@ test("redirects reject forged hosts, paths and tokens; visits never change deliv
     where: { userId: user.id },
   });
   assert.equal(visits.length, 1);
-  assert.equal(visits[0].rawVisits, 3);
+  assert.equal(visits[0].rawVisits, 6);
   assert.equal(visits[0].likelyAutomated, 2);
   assert.deepEqual(Object.keys(visits[0]).sort(), [
     "day",
@@ -262,7 +294,7 @@ test("redirects reject forged hosts, paths and tokens; visits never change deliv
     "userId",
   ]);
   const summary = await campaignSummary(user.id, campaign.id);
-  assert.equal(summary.tracking.unclassified, 1);
+  assert.equal(summary.tracking.unclassified, 4);
 });
 
 test("denied destinations are tenant-scoped, block preflight, and revoke existing redirects", async () => {

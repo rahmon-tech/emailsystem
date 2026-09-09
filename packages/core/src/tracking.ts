@@ -120,11 +120,23 @@ export async function redirectVisit(request: Request, token: string) {
     return gone();
   const canonical = new URL(config().APP_URL);
   const requestUrl = new URL(request.url);
-  const host = request.headers.get("host")?.toLowerCase();
-  const redirectPath = `${canonical.pathname.replace(/\/$/, "")}/r/${token}`;
+  const forwardedHost = request.headers
+    .get("x-forwarded-host")
+    ?.split(",")[0]
+    ?.trim();
+  // Web Request implementations may omit the hop-by-hop Host header. The URL
+  // host is still validated against APP_URL and remains the safe fallback. A
+  // trusted edge proxy must overwrite X-Forwarded-Host rather than append it.
+  const host = (
+    forwardedHost ??
+    request.headers.get("host") ??
+    requestUrl.host
+  ).toLowerCase();
+  const routePath = `/r/${token}`;
+  const redirectPath = `${canonical.pathname.replace(/\/$/, "")}${routePath}`;
   if (
     host !== canonical.host.toLowerCase() ||
-    requestUrl.pathname !== redirectPath
+    !new Set([redirectPath, routePath]).has(requestUrl.pathname)
   )
     return gone();
   // Never accept a destination from the request, query string or headers.
