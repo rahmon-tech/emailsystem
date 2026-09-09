@@ -73,6 +73,9 @@ jobs:
       - run: pnpm test:e2e
         env:
           NODE_ENV: production
+      - name: Emit screenshots for visual review
+        if: always()
+        run: node --import tsx scripts/emit-visual-review.ts
       - name: Validate production containers
         if: ${{ !cancelled() && steps.web_build.outcome == 'success' }}
         run: |

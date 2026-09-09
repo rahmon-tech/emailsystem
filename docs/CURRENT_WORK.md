@@ -1,27 +1,19 @@
 # Current work
 
-## Completed milestone
+## Active milestone
 
-The **central sending safety governor** is implemented and merged in [PR #3](https://github.com/rahmon-tech/emailsystem/pull/3), merge commit `17ca4e076e4e420021fce57b13a4d6d39c9c6a89`. The platform and provider catalog from PRs #1 and #2 remain intact. The starting main baseline was `846c2887bf72e7b84003b0d49a55eba498f69faa`.
+Premium UI refinement across Providers, Blast, Activity, Login, navigation and all dialogs. Starts from verified main `c37d41b0852f318fa56d0cf9ce54483e93dce013` after the completed sending safety milestone in PR #3. The previous main CI run was [34291501322](https://github.com/rahmon-tech/emailsystem/actions/runs/34291501322), with 175 passing tests.
 
-Verified application source: `d6b548dae04bf8992ec73a67a2b077ab6077a327`, [CI run 34290732223](https://github.com/rahmon-tech/emailsystem/actions/runs/34290732223). Its complete source tree was checked against all 104 local tracked files before merge. Subsequent documentation checkpoints preserve that application; [main branch runs](https://github.com/rahmon-tech/emailsystem/actions?query=branch%3Amain) identify the exact commit and CI result for deployment.
+## Scope
 
-## Implemented
+A compact three-item shell; central restrained theme and accessible status indicators; provider picker and compact connection cards; shared task-sized dialogs with mobile fullscreen forms and safe action footers; progressive recipient/message composition; grouped rich editor controls and email previews; visual pre-flight checks; scannable campaign metrics and a quiet live feed. Provider identity uses distinct symbols from the already installed MUI icon set, with no remote brand assets or additional dependencies.
 
-Independent rolling 24-hour account, sender-domain, provider and campaign budgets; To/CC/BCC recipient-unit costs; atomic Redis reservations before claims; bounded unstarted leases; durable transport-start markers and UNKNOWN accounting; PostgreSQL reconstruction after Redis loss; weighted routing and shared rate/quotas preserved; deferred campaigns with release times; deduplicated complaint/hard-bounce brakes and explicit administrator review; compact Providers settings, Blast capacity reporting and Activity usage/reasons. Controlled tests consume shared capacity without entering campaign statistics.
+Only UI, browser verification and milestone documentation change. Backend/provider/queue/security/migration/deployment behavior remains at the verified baseline. Existing API operations, retry semantics, safety review, cancellation, pagination, SSE and sending guards are retained.
 
-The fourth additive migration backfills historical attempt costs and UNKNOWN usage. CI rehearses an upgrade from the exact verified baseline, in addition to fresh database and drift checks. ARCHITECTURE.md defines windows, defaults, bounds, recovery and review semantics. SECURITY.md describes ownership and coordinated rollout.
+## Verification in progress
 
-## Verification
+Local lint, typecheck, all 120 unit tests and the production build pass. The production HTTPS browser workflow retains all existing behavior assertions and all five widths (390, 430, 768, 1366, 1536), and adds picker, formatting-state, stale pre-flight, mobile navigation and dialog footer checks.
 
-**175 automated tests pass:** 120 unit, 54 real PostgreSQL/Redis integration and one production HTTPS browser workflow. All 154 previous tests remain. Coverage includes exact budget boundaries and copy costs, shared multi-process limits, concurrent reconstruction during claims, 150 recipients paced over a 100-unit budget across days, transport-start expiry, UNKNOWN preservation, unstarted release, authoritative/deduplicated outcomes, suppression, minimum samples, sticky review and tenant isolation.
+CI must still run all 54 real PostgreSQL/Redis integration tests, migration/upgrade/drift checks, the production browser workflow and container readiness gates on the exact commit. Representative screenshots at 390 and 1366 are captured for manual inspection, including populated Blast, Activity, the provider picker and provider form. Full screenshots remain in the browser-verification artifact; bounded JPEG copies of synthetic fixtures are also emitted in CI logs to support text-only artifact clients.
 
-Lint/type checks, four fresh migrations, upgrade from exact baseline `846c288`, zero schema drift, production build, Caddy validation, Docker image build and web/worker readiness pass. Browser checks exercise Providers/Blast/Activity plus the safety dialog at 390, 430, 768, 1366 and 1536 pixels. Overflow and interaction checks are automated, with screenshots captured as CI artifacts. Provider transports are mocked.
-
-The initial safety run exposed a missing Redis cleanup in the provider test harness; that was repaired. A corrupt local build cache was cleared and the clean production build passed. These are resolved verification issues.
-
-## Completion boundary
-
-This milestone is complete. **Stop here; no next product or architecture slice has been started.** Main CI must be checked on the exact commit selected for deployment.
-
-Live provider credentials, verified sending identities, webhook setup, controlled recipients and VPS/domain access remain necessary to prove real provider delivery and an actual deployment. No live provider or unseen VPS is claimed verified.
+Do not merge until exact-SHA CI and manual visual review are complete. Findings and resolution will be recorded in `docs/UX_REVIEW.md`.
