@@ -7,9 +7,9 @@ test("login, provider setup, HTML import, preview, test, campaign controls, reco
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(e.message));
   mkdirSync("test-results/ux-review", { recursive: true });
-  const review = async (name: string, fullPage = true) => {
+  const review = async (name: string, fullPage = true, resetScroll = true) => {
     await page.mouse.move(0, 0);
-    await page.evaluate(() => window.scrollTo(0, 0));
+    if (resetScroll) await page.evaluate(() => window.scrollTo(0, 0));
     await page.screenshot({
       path: `test-results/ux-review/${name}.jpg`,
       type: "jpeg",
@@ -383,9 +383,26 @@ test("login, provider setup, HTML import, preview, test, campaign controls, reco
         await expect(
           page.getByRole("button", { name: "Send campaign", exact: true }),
         ).toBeEnabled();
+        // Pre-flight readiness and iframe painting are separate events. Check the
+        // actual message, then bring the frame into view before capturing it.
+        await expect(
+          page
+            .frameLocator('iframe[title="desktop email preview"]')
+            .locator("body"),
+        ).toContainText("Hello there,");
+        await page
+          .locator('iframe[title="desktop email preview"]')
+          .scrollIntoViewIfNeeded();
+        if (width === 390 || width === 1366)
+          await review(`preview-${width}`, false, false);
       }
       if (width === 390 || width === 1366) {
-        await review(`${route.slice(1)}-${width}`);
+        // A phone has no fixed sidebar; retain the painted preview viewport.
+        await review(
+          `${route.slice(1)}-${width}`,
+          true,
+          route !== "/blast" || width !== 390,
+        );
       }
       if (route === "/providers") {
         if (width === 390 || width === 1366) {

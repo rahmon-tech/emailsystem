@@ -12,7 +12,7 @@ Providers now centers connected accounts and an Add provider picker. Blast uses 
 
 Twelve screenshots were manually inspected at 390 and 1366 pixels across Providers, provider picker/configuration, populated Blast, Activity and Login. The review identified and corrected header wrapping, mobile tab wrapping, toolbar color-control layout, campaign action spacing and text contrast. See [UX_REVIEW.md](UX_REVIEW.md) for findings and review evidence.
 
-The final exact commit is tested again with all behavioral assertions and all five widths (390, 430, 768, 1366, 1536). [PR #4](https://github.com/rahmon-tech/emailsystem/pull/4) records the final source SHA, CI run, screenshot follow-up and merge result; [main runs](https://github.com/rahmon-tech/emailsystem/actions?query=branch%3Amain) identify the verified commit for deployment.
+The corrected UI also passed every gate in [run 34295470133](https://github.com/rahmon-tech/emailsystem/actions/runs/34295470133), source `2039e768d5ccf84ed5a56479040cd0748c30dfda`. Follow-up screenshots confirm the layout fixes. Preview capture now explicitly waits for and inspects the rendered iframe message. The final exact commit is tested again with all behavioral assertions and all five widths (390, 430, 768, 1366, 1536). [PR #4](https://github.com/rahmon-tech/emailsystem/pull/4) records the final source SHA, CI run, screenshot follow-up and merge result; [main runs](https://github.com/rahmon-tech/emailsystem/actions?query=branch%3Amain) identify the verified commit for deployment.
 
 ## Completion boundary
 

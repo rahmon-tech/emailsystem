@@ -30,7 +30,7 @@ The images use synthetic browser-test data and mock transports. They do not demo
 - Test-send, send and cancellation failures are visible in their dialogs. Pre-flight request errors appear beside the pre-flight action and preserve disabled send gating.
 - Review captures reset page scroll and pointer position, preventing misleading fixed-sidebar offsets and hover highlights in full-page images.
 
-The final CI run regenerates the same review set after these corrections. [PR #4](https://github.com/rahmon-tech/emailsystem/pull/4) records the exact resulting commit, final screenshot review and merge verification. Screenshots and traces are in its browser-verification artifact; bounded JPEG copies of synthetic fixtures are also emitted in CI logs for review clients.
+The corrected UI passed all 175 tests and all gates in [run 34295470133](https://github.com/rahmon-tech/emailsystem/actions/runs/34295470133), source `2039e768d5ccf84ed5a56479040cd0748c30dfda`. Follow-up inspection confirmed the layout corrections. A mobile full-page capture showed an unpainted embedded preview, so capture verification now waits for the actual iframe message, brings it into view and adds two viewport-level preview images. This distinguishes iframe rendering from API readiness without changing the application or its preview content. The final CI run regenerates the review set with these checks. [PR #4](https://github.com/rahmon-tech/emailsystem/pull/4) records the exact resulting commit, final screenshot review and merge verification. Screenshots and traces are in its browser-verification artifact; bounded JPEG copies of synthetic fixtures are also emitted in CI logs for review clients.
 
 ## Behavioral and accessibility gates
 
