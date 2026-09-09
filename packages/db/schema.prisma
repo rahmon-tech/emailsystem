@@ -41,6 +41,9 @@ model User {
   safetySettings Json @default("{}")
   safetyPausedReason String?
   safetyReviewedAt DateTime?
+  trackingSettings Json @default("{}")
+  trackingDomains TrackingDomain[]
+  deniedDestinations DeniedDestination[]
   sessions Session[]
   providers ProviderConnection[]
   imports ContactImport[]
@@ -159,6 +162,7 @@ model Campaign {
   updatedAt DateTime @updatedAt
   deliveries Delivery[]
   activity ActivityEvent[]
+  trackingLinks TrackingLink[]
   @@unique([id,userId])
   @@unique([userId,startKey])
   @@index([userId,createdAt,id])
@@ -264,4 +268,59 @@ model AuditEvent {
   resourceId String
   createdAt DateTime @default(now())
   @@index([userId,createdAt])
+}
+
+model TrackingDomain {
+  id String @id @default(uuid())
+  userId String
+  user User @relation(fields:[userId],references:[id],onDelete:Cascade)
+  hostname String @unique
+  proofToken String @unique
+  enabled Boolean @default(false)
+  revision Int @default(0)
+  verifiedAt DateTime?
+  verifiedUntil DateTime?
+  lastCheckedAt DateTime?
+  createdAt DateTime @default(now())
+  links TrackingLink[]
+  @@unique([id,userId])
+  @@index([userId,enabled])
+}
+
+model DeniedDestination {
+  id String @id @default(uuid())
+  userId String
+  user User @relation(fields:[userId],references:[id],onDelete:Cascade)
+  hostname String
+  createdAt DateTime @default(now())
+  @@unique([userId,hostname])
+}
+
+model TrackingLink {
+  id String @id @default(uuid())
+  userId String
+  campaignId String
+  campaign Campaign @relation(fields:[campaignId,userId],references:[id,userId],onDelete:Cascade)
+  domainId String
+  domain TrackingDomain @relation(fields:[domainId,userId],references:[id,userId],onDelete:Cascade)
+  token String @unique
+  destination String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  visits TrackingVisitDay[]
+  @@unique([id,userId])
+  @@index([userId,campaignId])
+  @@index([expiresAt])
+}
+
+model TrackingVisitDay {
+  linkId String
+  userId String
+  link TrackingLink @relation(fields:[linkId,userId],references:[id,userId],onDelete:Cascade)
+  day DateTime @db.Date
+  rawVisits Int @default(0)
+  likelyAutomated Int @default(0)
+  @@id([linkId,day])
+  @@index([userId,day])
+  @@index([day])
 }

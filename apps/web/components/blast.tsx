@@ -23,6 +23,8 @@ import {
   Collapse,
   IconButton,
   Tooltip,
+  FormControlLabel,
+  Switch,
 } from "@mui/material";
 import {
   UploadFileOutlined,
@@ -43,6 +45,7 @@ import {
 } from "@mui/icons-material";
 import CodeMirror from "@uiw/react-codemirror";
 import { html as htmlLanguage } from "@codemirror/lang-html";
+import type { TrackingConfig } from "./tracking-settings";
 import { RichEditor } from "./editor";
 import { api } from "./api-client";
 import { PageTitle, Failure, EmptyState, ResponsiveDialog } from "./shared";
@@ -54,6 +57,8 @@ type ImportRow = {
 };
 type Preview = { html: string; text: string };
 type Flight = {
+  tracking: { enabled: boolean; hostname: string | null };
+  reputation: { hostname: string; state: string }[];
   ready: boolean;
   problems: string[];
   warnings: string[];
@@ -71,6 +76,10 @@ type Flight = {
 type Attachment = { filename: string; content: string; contentType: string };
 export function Blast() {
   const router = useRouter();
+  const [trackingConfig, setTrackingConfig] = useState<TrackingConfig | null>(
+    null,
+  );
+  const [tracking, setTracking] = useState({ enabled: false, domainId: "" });
   const [providers, setProviders] = useState<ProviderRow[]>([]),
     [imports, setImports] = useState<ImportRow[]>([]),
     [loaded, setLoaded] = useState(false),
@@ -121,6 +130,23 @@ export function Blast() {
   };
   useEffect(() => {
     let active = true;
+    void api<TrackingConfig>("tracking")
+      .then((data) => {
+        if (!active) return;
+        setTrackingConfig(data);
+        const domain = data.domains.find(
+          (d) => d.id === data.settings.defaultDomainId && d.usable,
+        );
+        setTracking({
+          enabled: data.settings.defaultEnabled && !!domain,
+          domainId: domain?.id ?? "",
+        });
+        generation.current++;
+        setFlight(null);
+      })
+      .catch(() => {
+        /* Direct sending remains available. */
+      });
     void Promise.all([
       api<ProviderRow[]>("providers"),
       api<ImportRow[]>("imports"),
@@ -171,6 +197,10 @@ export function Blast() {
       : undefined,
     attachments,
     startKey: startKey.current,
+    tracking: {
+      enabled: tracking.enabled,
+      domainId: tracking.domainId || undefined,
+    },
   });
   const run = async (name: string, fn: () => Promise<void>) => {
     setBusy(name);
@@ -452,6 +482,49 @@ export function Blast() {
                       />
                     </Box>
 
+                    <FormControlLabel
+                      control={
+                        <Switch
+                          checked={tracking.enabled}
+                          disabled={
+                            !trackingConfig?.domains.some((d) => d.usable)
+                          }
+                          onChange={(_, enabled) => {
+                            setTracking((s) => ({ ...s, enabled }));
+                            invalid();
+                          }}
+                        />
+                      }
+                      label="Track clicks"
+                    />
+                    {tracking.enabled ? (
+                      <TextField
+                        select
+                        label="Campaign tracking hostname"
+                        value={tracking.domainId}
+                        onChange={(e) => {
+                          setTracking((s) => ({
+                            ...s,
+                            domainId: e.target.value,
+                          }));
+                          invalid();
+                        }}
+                      >
+                        <MenuItem value="">Choose a hostname</MenuItem>
+                        {trackingConfig?.domains
+                          .filter((d) => d.usable)
+                          .map((d) => (
+                            <MenuItem key={d.id} value={d.id}>
+                              {d.hostname}
+                            </MenuItem>
+                          ))}
+                      </TextField>
+                    ) : (
+                      <Typography variant="caption" color="text.secondary">
+                        Safe links stay direct.{" "}
+                        <Link href="/providers">Manage link settings</Link>
+                      </Typography>
+                    )}
                     <TextField
                       label="CC (comma separated)"
                       value={form.cc}
@@ -873,6 +946,12 @@ export function Blast() {
                       ],
                       ["HTML prepared", !!flight.previewHtml],
                       ["Plain text ready", !!flight.text],
+                      [
+                        flight.tracking.enabled
+                          ? `Tracking · ${flight.tracking.hostname}`
+                          : "Tracking off · direct links",
+                        true,
+                      ],
                     ].map(([label, ok]) => (
                       <Stack
                         key={String(label)}

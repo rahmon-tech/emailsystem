@@ -1,6 +1,7 @@
 import { PrismaClient } from "../generated/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 export type { Prisma } from "../generated/client";
+export type { TrackingDomain } from "../generated/client";
 export { CampaignState, DeliveryState } from "../generated/enums";
 const globalDb = globalThis as unknown as { emailDb?: PrismaClient };
 export const db =

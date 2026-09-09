@@ -16,6 +16,20 @@ const email = "browser-test@example.com",
   password = "Isolated-browser-test-password-2026";
 if (!(await db.user.findUnique({ where: { email } })))
   await createUser(email, password);
+const browserOwner = await db.user.findUniqueOrThrow({ where: { email } });
+await db.trackingDomain.upsert({
+  where: { hostname: "click.browser-example.com" },
+  create: {
+    userId: browserOwner.id,
+    hostname: "click.browser-example.com",
+    proofToken: "synthetic-proof-only-2026",
+    enabled: true,
+    verifiedAt: new Date(),
+    verifiedUntil: new Date(Date.now() + 86400000),
+    lastCheckedAt: new Date(),
+  },
+  update: {},
+});
 await db.$disconnect();
 execFileSync(
   "openssl",

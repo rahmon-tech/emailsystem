@@ -33,6 +33,14 @@ import { normalizeEmail, renderSnapshot } from "@emailsystem/email";
 import { messageInput, deliveryMessage } from "./campaigns";
 import { getConnection, compatible } from "./providers";
 import { csvCell } from "./security";
+import {
+  getTracking,
+  saveTrackingSettings,
+  addTrackingDomain,
+  verifyDomain,
+  disableDomain,
+} from "./tracking";
+import { canonicalDomain, inspectDestinations } from "./reputation";
 const uuid = (s: string) => z.uuid().parse(s);
 export async function api(request: Request, parts: string[]) {
   try {
@@ -54,7 +62,7 @@ export async function api(request: Request, parts: string[]) {
         { ok: true },
         {
           headers: {
-            "Set-Cookie": `${sessionCookie}=${result.token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=604800${config().NODE_ENV === "production" ? "; Secure" : ""}`,
+            "Set-Cookie": `${sessionCookie}=${result.token}; HttpOnly; SameSite=Strict; Path=${config().NEXT_PUBLIC_BASE_PATH || "/"}; Max-Age=604800${config().NODE_ENV === "production" ? "; Secure" : ""}`,
             "Cache-Control": "no-store",
           },
         },
@@ -69,7 +77,7 @@ export async function api(request: Request, parts: string[]) {
         { ok: true },
         {
           headers: {
-            "Set-Cookie": `${sessionCookie}=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0${config().NODE_ENV === "production" ? "; Secure" : ""}`,
+            "Set-Cookie": `${sessionCookie}=; HttpOnly; SameSite=Strict; Path=${config().NEXT_PUBLIC_BASE_PATH || "/"}; Max-Age=0${config().NODE_ENV === "production" ? "; Secure" : ""}`,
           },
         },
       );
@@ -92,6 +100,60 @@ export async function api(request: Request, parts: string[]) {
         return response(
           await reviewSafety(user.id, await readJson(request, 2048)),
         );
+    }
+    if (area === "tracking") {
+      if (method === "GET" && !id) return response(await getTracking(user.id));
+      if (method === "PUT" && !id)
+        return response(
+          await saveTrackingSettings(user.id, await readJson(request, 2048)),
+        );
+      if (method === "POST" && !id)
+        return response(
+          await addTrackingDomain(user.id, await readJson(request, 2048)),
+          201,
+        );
+      if (id) uuid(id);
+      if (method === "POST" && action === "verify") {
+        if (!(await consumeLimit(`tracking-verify:${user.id}`, 10, 3600)))
+          throw new AppError(
+            429,
+            "RATE",
+            "Verification limit reached. Try again later.",
+          );
+        return response(await verifyDomain(user.id, id));
+      }
+      if (method === "POST" && action === "disable")
+        return response(await disableDomain(user.id, id));
+    }
+    if (area === "denied-destinations") {
+      if (method === "POST" && !id) {
+        const data = z
+          .object({ hostname: z.string().max(253) })
+          .strict()
+          .parse(await readJson(request, 2048));
+        let hostname: string;
+        try {
+          hostname = canonicalDomain(data.hostname);
+        } catch {
+          throw new AppError(400, "HOSTNAME", "Enter a valid domain.");
+        }
+        return response(
+          await db.deniedDestination.upsert({
+            where: { userId_hostname: { userId: user.id, hostname } },
+            create: { userId: user.id, hostname },
+            update: {},
+          }),
+          201,
+        );
+      }
+      if (method === "DELETE" && id) {
+        const result = await db.deniedDestination.deleteMany({
+          where: { id: uuid(id), userId: user.id },
+        });
+        if (!result.count)
+          throw new AppError(404, "NOT_FOUND", "Denied domain not found.");
+        return response({ removed: true });
+      }
     }
     if (area === "providers") {
       if (method === "GET" && !id) {
@@ -286,6 +348,19 @@ export async function api(request: Request, parts: string[]) {
         data.message.html,
         data.message.preheader,
       );
+      const reputation = await inspectDestinations(user.id, snapshot.html);
+      const policy = (await getTracking(user.id)).settings;
+      if (
+        reputation.problems.length ||
+        (policy.blockUnknown &&
+          reputation.links.some((r) => r.state === "REPUTATION_UNKNOWN"))
+      )
+        throw new AppError(
+          422,
+          "LINK_REPUTATION",
+          reputation.problems.join(" ") ||
+            "Your link policy requires known reputation results.",
+        );
       const message = deliveryMessage(
         {
           ...data.message,
@@ -320,6 +395,11 @@ export async function api(request: Request, parts: string[]) {
         text: result.message.text,
         snapshotHash: result.message.snapshotHash,
         importStats: result.importStats,
+        reputation: result.reputation,
+        tracking: {
+          enabled: result.tracking.enabled,
+          hostname: result.tracking.domain?.hostname ?? null,
+        },
       });
     }
     if (area === "campaigns") {

@@ -1,4 +1,5 @@
 "use client";
+import { TrackingSettings } from "./tracking-settings";
 import { SendingSafety } from "./sending-safety";
 import { useEffect, useState } from "react";
 import {
@@ -198,9 +199,12 @@ export function Providers() {
             sx={{
               alignItems: "center",
               justifyContent: { xs: "space-between", sm: "flex-end" },
+              flexWrap: "wrap",
+              rowGap: 1,
             }}
           >
             <SendingSafety />
+            <TrackingSettings />
             <Button
               variant="contained"
               startIcon={<Add />}

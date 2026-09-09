@@ -3,7 +3,7 @@ export async function api<T>(
   body?: unknown,
   method?: string,
 ): Promise<T> {
-  const res = await fetch("/api/" + path, {
+  const res = await fetch(appPath("/api/" + path), {
     method: method ?? (body ? "POST" : "GET"),
     credentials: "same-origin",
     cache: "no-store",
@@ -20,7 +20,9 @@ export async function api<T>(
   const data = await res.json();
   if (!res.ok) {
     if (res.status === 401 && path !== "auth/login")
-      window.location.replace(new URL("/login", window.location.origin).href);
+      window.location.replace(
+        new URL(appPath("/login"), window.location.origin).href,
+      );
     throw new Error(
       data.fields
         ?.map(
@@ -35,3 +37,4 @@ export async function api<T>(
 }
 export const date = (v: string | null | undefined) =>
   v ? new Date(v).toLocaleString() : "—";
+import { appPath } from "@emailsystem/core/paths";

@@ -15,7 +15,10 @@ export default defineConfig({
   },
   webServer: {
     command: "node --import tsx scripts/e2e-server.ts",
-    url: "https://localhost:3443/health/live",
+    url:
+      "https://localhost:3443" +
+      (process.env.NEXT_PUBLIC_BASE_PATH ?? "") +
+      "/health/live",
     ignoreHTTPSErrors: true,
     reuseExistingServer: false,
     timeout: 120000,

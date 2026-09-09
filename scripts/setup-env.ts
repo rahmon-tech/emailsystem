@@ -8,11 +8,14 @@ if (
   throw new Error(
     "Usage: node --import tsx scripts/setup-env.ts mail.your-domain.com",
   );
+const basePath = process.argv[3] ?? "";
+if (!/^(?:\/[a-zA-Z0-9_-]+)*$/.test(basePath))
+  throw new Error("Use a path such as /emailblast, without a trailing slash.");
 const key = () => randomBytes(32).toString("hex"),
   password = key();
 await writeFile(
   ".env",
-  `NODE_ENV=production\nAPP_URL=https://${domain}\nDOMAIN=${domain}\nPOSTGRES_PASSWORD=${password}\nDATABASE_URL=postgresql://emailsystem:${password}@postgres:5432/emailsystem\nREDIS_URL=redis://redis:6379\nSESSION_SECRET=${key()}\nCREDENTIAL_ENCRYPTION_KEY=${key()}\nALLOW_MOCK_PROVIDER=false\nWORKER_CONCURRENCY=4\nACTIVITY_RETENTION_DAYS=90\nATTEMPT_RETENTION_DAYS=365\nWEBHOOK_RETENTION_DAYS=30\n`,
+  `NODE_ENV=production\nAPP_URL=https://${domain}${basePath}\nNEXT_PUBLIC_BASE_PATH=${basePath}\nDOMAIN=${domain}\nPOSTGRES_PASSWORD=${password}\nDATABASE_URL=postgresql://emailsystem:${password}@postgres:5432/emailsystem\nREDIS_URL=redis://redis:6379\nSESSION_SECRET=${key()}\nCREDENTIAL_ENCRYPTION_KEY=${key()}\nALLOW_MOCK_PROVIDER=false\nWORKER_CONCURRENCY=4\nACTIVITY_RETENTION_DAYS=90\nATTEMPT_RETENTION_DAYS=365\nWEBHOOK_RETENTION_DAYS=30\nCLICK_ANALYTICS_RETENTION_DAYS=90\nTRACKING_LINK_LIFETIME_DAYS=180\nEMAILBLAST_PORT=3087\n`,
   { flag: "wx", mode: 0o600 },
 );
 console.log("Created .env. Keep an encrypted backup of its keys.");
