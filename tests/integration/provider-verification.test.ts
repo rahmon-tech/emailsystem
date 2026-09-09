@@ -77,9 +77,13 @@ for (const def of catalog.filter((d) => d.api)) {
       });
       assert(saved);
       assert(requests > 0);
-      const healthy = ["resend", "sendgrid", "postmark", "mailjet"].includes(
-        def.id,
-      );
+      const healthy = [
+        "resend",
+        "mailgun",
+        "sendgrid",
+        "postmark",
+        "mailjet",
+      ].includes(def.id);
       assert.equal(saved.health, healthy ? "HEALTHY" : "UNVERIFIED");
       assert.equal(saved.enabled, healthy);
       assert.equal(compatible(saved, "sender@example.com"), healthy);

@@ -15,6 +15,9 @@ import { processDelivery } from "@emailsystem/core/engine";
 
 const owners: string[] = [];
 after(async () => {
+  // Campaigns intentionally restrict deletion of their selected sender. Remove
+  // the campaign graph first so tenant teardown cannot race that restriction.
+  await db.campaign.deleteMany({ where: { userId: { in: owners } } });
   await db.user.deleteMany({ where: { id: { in: owners } } });
   await db.$disconnect();
   await redis.quit();
@@ -37,6 +40,9 @@ test("domain-wide authorization supports bulk aliases above fifty and keeps one 
     transport: "api",
     settings: { fromEmail: "primary@example.com", fromName: "Primary" },
     credentials: {},
+    perSecond: 10,
+    perMinute: 100,
+    concurrency: 2,
   });
   assert(provider);
   const domain = (await listSenders(user.id)).domains[0];
