@@ -97,7 +97,15 @@ export function Shell({
     </Box>
   );
   return (
-    <Box sx={{ display: "flex", minHeight: "100vh" }}>
+    <Box
+      sx={{
+        display: "flex",
+        minHeight: "100vh",
+        width: "100%",
+        maxWidth: "100%",
+        overflowX: "hidden",
+      }}
+    >
       <Box
         component="aside"
         sx={{
@@ -115,11 +123,19 @@ export function Shell({
       <Drawer
         open={mobile}
         onClose={() => setMobile(false)}
-        sx={{ "& .MuiDrawer-paper": { width: 250 } }}
+        sx={{ "& .MuiDrawer-paper": { width: 250, maxWidth: "calc(100vw - 24px)" } }}
       >
         {navigation}
       </Drawer>
-      <Box sx={{ flex: 1, minWidth: 0, ml: { md: "208px" } }}>
+      <Box
+        sx={{
+          flex: 1,
+          minWidth: 0,
+          maxWidth: "100%",
+          ml: { md: "208px" },
+          overflowX: "hidden",
+        }}
+      >
         <Box
           component="header"
           sx={{
@@ -131,9 +147,11 @@ export function Shell({
             bgcolor: "background.paper",
             borderBottom: 1,
             borderColor: "divider",
+            minWidth: 0,
+            maxWidth: "100%",
           }}
         >
-          <Stack sx={{ alignItems: "center" }} direction="row" spacing={1}>
+          <Stack sx={{ alignItems: "center", minWidth: 0 }} direction="row" spacing={1}>
             <IconButton
               aria-label="Open navigation"
               aria-expanded={mobile}
@@ -164,7 +182,7 @@ export function Shell({
             color="inherit"
             onClick={(e) => setAnchor(e.currentTarget)}
             endIcon={<ExpandMore />}
-            sx={{ minWidth: 0 }}
+            sx={{ minWidth: 0, flexShrink: 0 }}
           >
             <Avatar
               sx={{
@@ -213,7 +231,14 @@ export function Shell({
         </Box>
         <Box
           component="main"
-          sx={{ p: { xs: 2, sm: 3, lg: 4 }, maxWidth: 1480, mx: "auto" }}
+          sx={{
+            p: { xs: 2, sm: 3, lg: 4 },
+            width: "100%",
+            minWidth: 0,
+            maxWidth: 1480,
+            mx: "auto",
+            overflowX: "hidden",
+          }}
         >
           {children}
         </Box>
