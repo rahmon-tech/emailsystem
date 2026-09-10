@@ -30,6 +30,14 @@ const theme = createTheme({
   },
   shape: { borderRadius: 10 },
   components: {
+    MuiButtonBase: {
+      styleOverrides: {
+        root: {
+          touchAction: "manipulation",
+          WebkitTapHighlightColor: "transparent",
+        },
+      },
+    },
     MuiButton: {
       defaultProps: { disableElevation: true },
       styleOverrides: {
@@ -45,6 +53,19 @@ const theme = createTheme({
       styleOverrides: { root: { width: 42, height: 42, borderRadius: 8 } },
     },
     MuiTextField: { defaultProps: { size: "small", fullWidth: true } },
+    MuiInputBase: {
+      styleOverrides: {
+        root: { minWidth: 0, maxWidth: "100%" },
+        input: ({ theme }) => ({
+          minWidth: 0,
+          [theme.breakpoints.down("sm")]: {
+            // iOS Safari zooms the page when focusing controls below 16px.
+            // Keep mobile form controls at 16px instead of disabling user zoom.
+            fontSize: 16,
+          },
+        }),
+      },
+    },
     MuiOutlinedInput: {
       styleOverrides: {
         root: ({ theme }) => ({
@@ -71,6 +92,8 @@ const theme = createTheme({
           border: `1px solid ${theme.palette.divider}`,
           boxShadow: "0 2px 4px rgb(22 31 49 / 2%)",
           overflow: "hidden",
+          minWidth: 0,
+          maxWidth: "100%",
         }),
       },
     },
@@ -80,6 +103,8 @@ const theme = createTheme({
         root: {
           backgroundImage: "none",
           boxShadow: "none",
+          minWidth: 0,
+          maxWidth: "100%",
           "&:before": { display: "none" },
         },
       },
@@ -87,11 +112,11 @@ const theme = createTheme({
     MuiAccordionSummary: {
       styleOverrides: {
         root: { minHeight: 44, padding: 0 },
-        content: { marginBlock: 10, fontSize: 13, fontWeight: 600 },
+        content: { marginBlock: 10, fontSize: 13, fontWeight: 600, minWidth: 0 },
       },
     },
     MuiAccordionDetails: {
-      styleOverrides: { root: { padding: "8px 0 16px" } },
+      styleOverrides: { root: { padding: "8px 0 16px", minWidth: 0 } },
     },
     MuiToggleButtonGroup: {
       styleOverrides: {
@@ -100,6 +125,7 @@ const theme = createTheme({
           borderRadius: 9,
           backgroundColor: theme.palette.action.hover,
           gap: 2,
+          maxWidth: "100%",
         }),
       },
     },
@@ -125,6 +151,7 @@ const theme = createTheme({
           borderRadius: 14,
           boxShadow: "0 24px 80px rgb(20 28 46 / 16%)",
           backgroundImage: "none",
+          maxWidth: "100%",
         },
         paperFullScreen: { borderRadius: 0 },
       },
@@ -145,6 +172,8 @@ const theme = createTheme({
         root: {
           padding: "24px",
           overscrollBehavior: "contain",
+          minWidth: 0,
+          overflowX: "hidden",
           "&.MuiDialogContent-root": { paddingTop: 24 },
         },
       },
@@ -172,6 +201,7 @@ const theme = createTheme({
           border: `1px solid ${theme.palette.divider}`,
           boxShadow: "0 8px 32px rgb(20 28 46 / 10%)",
           minWidth: 180,
+          maxWidth: "calc(100vw - 24px)",
         }),
       },
     },
@@ -186,7 +216,9 @@ const theme = createTheme({
         },
       },
     },
-    MuiChip: { styleOverrides: { root: { fontWeight: 500, fontSize: 12 } } },
+    MuiChip: {
+      styleOverrides: { root: { fontWeight: 500, fontSize: 12, maxWidth: "100%" } },
+    },
     MuiTabs: {
       styleOverrides: { root: { minHeight: 48 }, indicator: { height: 2 } },
     },
@@ -200,8 +232,8 @@ const theme = createTheme({
     },
     MuiAlert: {
       styleOverrides: {
-        root: { borderRadius: 8, fontSize: 13 },
-        message: { minWidth: 0 },
+        root: { borderRadius: 8, fontSize: 13, minWidth: 0, maxWidth: "100%" },
+        message: { minWidth: 0, overflowWrap: "anywhere" },
       },
     },
     MuiCssBaseline: {
@@ -210,6 +242,53 @@ const theme = createTheme({
           "--editor-border": theme.palette.divider,
           "--editor-link": theme.palette.primary.main,
           "--selection": alpha(theme.palette.primary.main, 0.16),
+          width: "100%",
+          maxWidth: "100%",
+          overflowX: "hidden",
+        },
+        "html, body": {
+          width: "100%",
+          maxWidth: "100%",
+          overflowX: "hidden",
+          overscrollBehaviorX: "none",
+        },
+        body: {
+          minWidth: 0,
+        },
+        "button, a, [role='button']": {
+          touchAction: "manipulation",
+        },
+        ".cm-editor": {
+          width: "100%",
+          minWidth: 0,
+          maxWidth: "100%",
+          overflow: "hidden",
+        },
+        ".cm-scroller": {
+          minWidth: 0,
+          maxWidth: "100%",
+          overflowX: "auto !important",
+          overscrollBehaviorX: "contain",
+          WebkitOverflowScrolling: "touch",
+        },
+        ".cm-content": {
+          maxWidth: "none",
+        },
+        ".ProseMirror": {
+          minWidth: 0,
+          maxWidth: "100%",
+          overflowWrap: "anywhere",
+          wordBreak: "break-word",
+        },
+        ".ProseMirror img, .ProseMirror video, .ProseMirror canvas": {
+          maxWidth: "100%",
+          height: "auto",
+        },
+        ".ProseMirror pre": {
+          maxWidth: "100%",
+          overflowX: "auto",
+          whiteSpace: "pre-wrap",
+          overflowWrap: "anywhere",
         },
         ":focus-visible": {
           outline: `2px solid ${theme.palette.primary.main}`,
