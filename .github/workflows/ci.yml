@@ -86,10 +86,14 @@ jobs:
           docker compose -p emailblast-ci -f compose.yaml -f compose.shared.yaml config --quiet
           docker compose run --rm --no-deps proxy caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
           docker compose build web
+          image_size="$(docker image inspect emailsystem:local --format '{{.Size}}')"
+          echo "Production image size: $image_size bytes"
+          test "$image_size" -lt 1500000000
           docker compose up -d postgres redis
           docker compose run --rm web node node_modules/prisma/build/index.js migrate deploy
           docker compose up -d --wait web worker
           docker compose exec -T web node -e "fetch('http://localhost:3000/emailblast/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+          docker compose exec -T worker node --import tsx scripts/worker-health.ts
           docker compose down
       - name: Collect server diagnostics
         if: always()
