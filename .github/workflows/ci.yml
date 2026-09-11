@@ -92,11 +92,12 @@ jobs:
           docker compose up -d postgres redis
           docker compose run --rm web node node_modules/prisma/build/index.js migrate deploy
           if ! docker compose up -d --wait web worker; then
+            mkdir -p test-results/server-logs
             echo "::group::Production container status"
-            docker compose ps -a || true
+            docker compose ps -a | tee test-results/server-logs/production-containers-status.log || true
             echo "::endgroup::"
             echo "::group::Production web/worker logs"
-            docker compose logs --no-color --tail=200 web worker || true
+            docker compose logs --no-color --tail=200 web worker | tee test-results/server-logs/production-containers.log || true
             echo "::endgroup::"
             docker compose down || true
             exit 1
