@@ -89,6 +89,7 @@ jobs:
           image_size="$(docker image inspect emailsystem:local --format '{{.Size}}')"
           echo "Production image size: $image_size bytes"
           test "$image_size" -lt 1500000000
+          docker run --rm --entrypoint node emailsystem:local --import tsx -e "process.exit(0)"
           docker compose up -d postgres redis
           docker compose run --rm web node node_modules/prisma/build/index.js migrate deploy
           if ! docker compose up -d --wait web worker; then

@@ -36,9 +36,11 @@ ENV NEXT_PUBLIC_BASE_PATH=$NEXT_PUBLIC_BASE_PATH
 
 # Keep only what production actually executes. Do not copy the build workspace,
 # Playwright, TypeScript, ESLint, Turbopack cache, or other development artifacts.
+# Copy Next's traced runtime first, then overlay the production dependency tree so
+# worker-only runtime packages such as tsx are not hidden by standalone node_modules.
+COPY --from=build --chown=node:node /app/apps/web/.next/standalone ./
 COPY --from=prod-deps --chown=node:node /app/node_modules ./node_modules
 COPY --from=prod-deps --chown=node:node /app/package.json ./package.json
-COPY --from=build --chown=node:node /app/apps/web/.next/standalone ./
 COPY --from=build --chown=node:node /app/apps/worker ./apps/worker
 COPY --from=build --chown=node:node /app/packages ./packages
 COPY --from=build --chown=node:node /app/scripts/worker-health.ts ./scripts/worker-health.ts
