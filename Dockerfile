@@ -18,14 +18,14 @@ RUN mkdir -p apps/web/.next/standalone/apps/web/.next \
     && rm -rf apps/web/.next/cache
 
 # Install only production dependencies for the worker, migrations, and health checks.
-# The worker is TypeScript at runtime, so tsx is installed explicitly here instead
-# of keeping every development dependency in the production image.
+# The worker is TypeScript at runtime, so tsx must be promoted from the repository's
+# devDependencies into the production dependency set inside this packaging stage.
 FROM base AS prod-deps
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY apps/web/package.json apps/web/package.json
 COPY apps/worker/package.json apps/worker/package.json
 RUN pnpm install --frozen-lockfile --prod \
-    && pnpm add --prod --ignore-workspace-root-check tsx@4.23.13
+    && pnpm add --prod --save-prod --ignore-workspace-root-check tsx@4.23.13
 
 FROM node:24.19.0-bookworm-slim AS runtime
 RUN apt-get update && apt-get install -y --no-install-recommends openssl ca-certificates && rm -rf /var/lib/apt/lists/*
