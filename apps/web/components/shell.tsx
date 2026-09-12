@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
@@ -26,8 +26,8 @@ import {
 } from "@mui/icons-material";
 import { api } from "./api-client";
 const sections = [
-  { label: "Providers", path: "/providers", icon: HubOutlined },
   { label: "Blast", path: "/blast", icon: SendOutlined },
+  { label: "Providers", path: "/providers", icon: HubOutlined },
   { label: "Activity", path: "/activity", icon: TerminalOutlined },
 ];
 export function Shell({
@@ -41,6 +41,16 @@ export function Shell({
   const pathname = usePathname();
   const [mobile, setMobile] = useState(false),
     [anchor, setAnchor] = useState<HTMLElement | null>(null);
+  useEffect(() => {
+    const refresh = () => {
+      void api("session/refresh").catch(() => {
+        /* The API client redirects only when the session is actually invalid. */
+      });
+    };
+    refresh();
+    const timer = window.setInterval(refresh, 12 * 60 * 60 * 1000);
+    return () => window.clearInterval(timer);
+  }, []);
   const navigation = (
     <Box
       sx={{ p: 2.5, height: "100%", display: "flex", flexDirection: "column" }}
@@ -99,11 +109,11 @@ export function Shell({
   return (
     <Box
       sx={{
-        display: "flex",
-        minHeight: "100vh",
+        minHeight: "100dvh",
         width: "100%",
+        minWidth: 0,
         maxWidth: "100%",
-        overflowX: "hidden",
+        overflowX: "clip",
       }}
     >
       <Box
@@ -123,23 +133,29 @@ export function Shell({
       <Drawer
         open={mobile}
         onClose={() => setMobile(false)}
-        sx={{ "& .MuiDrawer-paper": { width: 250, maxWidth: "calc(100vw - 24px)" } }}
+        sx={{
+          "& .MuiDrawer-paper": {
+            width: 250,
+            maxWidth: "calc(100vw - 24px)",
+          },
+        }}
       >
         {navigation}
       </Drawer>
       <Box
         sx={{
-          flex: 1,
+          width: { xs: "100%", md: "calc(100% - 208px)" },
           minWidth: 0,
-          maxWidth: "100%",
-          ml: { md: "208px" },
-          overflowX: "hidden",
+          ml: { xs: 0, md: "208px" },
+          overflowX: "clip",
         }}
       >
         <Box
           component="header"
           sx={{
             height: 64,
+            width: "100%",
+            minWidth: 0,
             px: { xs: 2, md: 4 },
             display: "flex",
             alignItems: "center",
@@ -147,8 +163,6 @@ export function Shell({
             bgcolor: "background.paper",
             borderBottom: 1,
             borderColor: "divider",
-            minWidth: 0,
-            maxWidth: "100%",
           }}
         >
           <Stack sx={{ alignItems: "center", minWidth: 0 }} direction="row" spacing={1}>
@@ -232,15 +246,33 @@ export function Shell({
         <Box
           component="main"
           sx={{
-            p: { xs: 2, sm: 3, lg: 4 },
             width: "100%",
             minWidth: 0,
-            maxWidth: 1480,
-            mx: "auto",
-            overflowX: "hidden",
+            px: { xs: 2, sm: 3, lg: 4 },
+            py: { xs: 2, sm: 3, lg: 4 },
+            overflowX: "clip",
           }}
         >
-          {children}
+          <Box
+            sx={{
+              width: "100%",
+              minWidth: 0,
+              maxWidth: 1480,
+              mx: "auto",
+              "& > *": { minWidth: 0, maxWidth: "100%" },
+              "& .MuiCard-root": { minWidth: 0, maxWidth: "100%" },
+              "& .MuiFormControl-root": { minWidth: 0, maxWidth: "100%" },
+              "& .MuiInputBase-root": { minWidth: 0, maxWidth: "100%" },
+              "& .MuiSelect-select": {
+                minWidth: "0 !important",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+              },
+            }}
+          >
+            {children}
+          </Box>
         </Box>
       </Box>
     </Box>
