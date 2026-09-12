@@ -5,6 +5,7 @@ import { checkPassword, hashPassword, opaqueToken, digest } from "./security";
 import { consumeLimit } from "./redis";
 import { AppError } from "./errors";
 export const sessionCookie = "emailsystem_session";
+export const sessionMaxAgeSeconds = 30 * 86400;
 const sessionHash = (token: string) =>
   createHmac("sha256", config().SESSION_SECRET).update(token).digest("hex");
 let dummyHash: Promise<string> | undefined;
@@ -28,7 +29,7 @@ export async function login(email: string, password: string, ip: string) {
   if (!valid || !user)
     throw new AppError(401, "INVALID_LOGIN", "Email or password is incorrect.");
   const token = opaqueToken();
-  const expiresAt = new Date(Date.now() + 7 * 86400000);
+  const expiresAt = new Date(Date.now() + sessionMaxAgeSeconds * 1000);
   await db.session.create({
     data: { tokenHash: sessionHash(token), userId: user.id, expiresAt },
   });
