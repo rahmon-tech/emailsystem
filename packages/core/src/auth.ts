@@ -5,6 +5,7 @@ import { checkPassword, hashPassword, opaqueToken, digest } from "./security";
 import { consumeLimit } from "./redis";
 import { AppError } from "./errors";
 export const sessionCookie = "emailsystem_session";
+export const sessionMaxAgeSeconds = 30 * 86400;
 const sessionHash = (token: string) =>
   createHmac("sha256", config().SESSION_SECRET).update(token).digest("hex");
 let dummyHash: Promise<string> | undefined;
@@ -28,7 +29,7 @@ export async function login(email: string, password: string, ip: string) {
   if (!valid || !user)
     throw new AppError(401, "INVALID_LOGIN", "Email or password is incorrect.");
   const token = opaqueToken();
-  const expiresAt = new Date(Date.now() + 7 * 86400000);
+  const expiresAt = new Date(Date.now() + sessionMaxAgeSeconds * 1000);
   await db.session.create({
     data: { tokenHash: sessionHash(token), userId: user.id, expiresAt },
   });
@@ -51,6 +52,18 @@ export async function userFromToken(token: string) {
     include: { user: { select: { id: true, email: true } } },
   });
   return session && session.expiresAt > new Date() ? session.user : null;
+}
+export async function refreshSession(token: string) {
+  if (!/^[\w-]{43}$/.test(token)) return null;
+  const tokenHash = sessionHash(token);
+  const session = await db.session.findUnique({
+    where: { tokenHash },
+    include: { user: { select: { id: true, email: true } } },
+  });
+  if (!session || session.expiresAt <= new Date()) return null;
+  const expiresAt = new Date(Date.now() + sessionMaxAgeSeconds * 1000);
+  await db.session.update({ where: { tokenHash }, data: { expiresAt } });
+  return { user: session.user, expiresAt };
 }
 export async function requireUser(request: Request) {
   const user = await userFromToken(cookieToken(request));

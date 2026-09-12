@@ -39,7 +39,7 @@ export default function Login() {
             setError("");
             try {
               await api("auth/login", { email, password });
-              router.replace("/providers");
+              router.replace("/blast");
               router.refresh();
             } catch (e) {
               setError((e as Error).message);
