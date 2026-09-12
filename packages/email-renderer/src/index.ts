@@ -80,7 +80,9 @@ export function renderSnapshot(html: string, unsubscribeUrl: string) {
     allowedTags: [],
     allowedAttributes: {},
   }).replaceAll('"', "&quot;");
-  const footer = `<div style="font-family:Arial,sans-serif;font-size:12px;line-height:1.5;padding:24px;text-align:center;color:#667085"><a href="${safe}" style="color:#667085">Unsubscribe from these emails</a></div>`;
+  const placeholder = "{{unsubscribe_url}}";
+  if (html.includes(placeholder)) return html.replaceAll(placeholder, safe);
+  const footer = `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;border-collapse:collapse"><tbody><tr><td align="center" style="padding:24px 12px 8px;font-family:Arial,sans-serif;font-size:11px;line-height:16px;color:#98a2b3"><a href="${safe}" style="color:#98a2b3;text-decoration:underline">Unsubscribe</a></td></tr></tbody></table>`;
   return /<\/body>/i.test(html)
     ? html.replace(/<\/body>/i, () => footer + "</body>")
     : html + footer;

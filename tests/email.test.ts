@@ -23,9 +23,23 @@ test("email pipeline does not fetch remote CSS or resources and warns about unsa
   assert(!result.html.includes("javascript"));
   assert(result.warnings.length > 0);
 });
-test("preview and per-recipient sending render the same stored snapshot with unsubscribe link", () => {
+test("preview and per-recipient sending add an isolated unsubscribe fallback below stored HTML", () => {
   const snapshot = normalizeEmail("<p>Hello</p>");
   const html = renderSnapshot(snapshot.html, "https://example.com/u/token");
   assert(html.includes("https://example.com/u/token"));
   assert(html.includes("Hello"));
+  assert(html.includes('role="presentation"'));
+  assert(html.includes(">Unsubscribe</a>"));
+  assert(html.indexOf("Hello") < html.indexOf(">Unsubscribe</a>"));
+});
+test("template unsubscribe placeholder controls placement without adding a second footer", () => {
+  const snapshot = normalizeEmail(
+    '<table><tr><td>Message</td></tr><tr><td><a href="{{unsubscribe_url}}">Manage email preferences</a></td></tr></table>',
+  );
+  const url = "https://example.com/u/token";
+  const html = renderSnapshot(snapshot.html, url);
+  assert(html.includes(`href="${url}"`));
+  assert(html.includes("Manage email preferences"));
+  assert.equal(html.split(url).length - 1, 1);
+  assert(!html.includes(">Unsubscribe</a>"));
 });
