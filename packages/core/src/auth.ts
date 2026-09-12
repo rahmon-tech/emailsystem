@@ -53,6 +53,18 @@ export async function userFromToken(token: string) {
   });
   return session && session.expiresAt > new Date() ? session.user : null;
 }
+export async function refreshSession(token: string) {
+  if (!/^[\w-]{43}$/.test(token)) return null;
+  const tokenHash = sessionHash(token);
+  const session = await db.session.findUnique({
+    where: { tokenHash },
+    include: { user: { select: { id: true, email: true } } },
+  });
+  if (!session || session.expiresAt <= new Date()) return null;
+  const expiresAt = new Date(Date.now() + sessionMaxAgeSeconds * 1000);
+  await db.session.update({ where: { tokenHash }, data: { expiresAt } });
+  return { user: session.user, expiresAt };
+}
 export async function requireUser(request: Request) {
   const user = await userFromToken(cookieToken(request));
   if (!user) throw new AppError(401, "UNAUTHENTICATED", "Please sign in.");
