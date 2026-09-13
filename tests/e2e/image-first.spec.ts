@@ -124,6 +124,7 @@ test("image-first test email filters unsupported transports before any test deli
     await page.getByLabel("Email address").fill(email);
     await page.getByLabel("Password").fill(password);
     await page.getByRole("button", { name: "Sign in", exact: true }).click();
+    await expect(page).toHaveURL(/\/blast$/);
     await page.goto(appPath("/blast/image"));
 
     await page.getByLabel("Subject").fill("CID test-message verification");
