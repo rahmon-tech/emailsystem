@@ -600,21 +600,32 @@ export async function createExperimentProfile(userId: string, raw: unknown) {
         maxDurationSeconds: input.maxDurationSeconds,
         startAt: input.startAt,
         endAt: input.endAt,
-        providerScopes: {
-          create: providerIds.map((providerId) => ({ userId, providerId })),
-        },
-        senderScopes: {
-          create: senderIdentityIds.map((senderIdentityId) => ({
-            userId,
-            senderIdentityId,
-          })),
-        },
-        recipients: {
-          create: recipients.map((email) => ({ userId, email })),
-        },
       },
-      select: profileSummarySelect,
+      select: { id: true },
     });
+    await Promise.all([
+      tx.experimentProviderScope.createMany({
+        data: providerIds.map((providerId) => ({
+          userId,
+          profileId: profile.id,
+          providerId,
+        })),
+      }),
+      tx.experimentSenderScope.createMany({
+        data: senderIdentityIds.map((senderIdentityId) => ({
+          userId,
+          profileId: profile.id,
+          senderIdentityId,
+        })),
+      }),
+      tx.experimentRecipient.createMany({
+        data: recipients.map((email) => ({
+          userId,
+          profileId: profile.id,
+          email,
+        })),
+      }),
+    ]);
     await tx.auditEvent.create({
       data: {
         userId,
@@ -622,7 +633,10 @@ export async function createExperimentProfile(userId: string, raw: unknown) {
         resourceId: profile.id,
       },
     });
-    return profile;
+    return tx.experimentProfile.findUniqueOrThrow({
+      where: { id: profile.id },
+      select: profileSummarySelect,
+    });
   });
 }
 
