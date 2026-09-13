@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Alert,
   Box,
@@ -100,7 +100,7 @@ export function ImageBlast() {
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
   const [confirm, setConfirm] = useState(false);
-  const startKey = useRef(crypto.randomUUID());
+  const [startKey] = useState(() => crypto.randomUUID());
 
   const invalidate = () => {
     setFlight(null);
@@ -158,7 +158,7 @@ export function ImageBlast() {
       })),
     ],
     tracking: { enabled: false },
-    startKey: startKey.current,
+    startKey,
   });
 
   const run = async (label: string, action: () => Promise<void>) => {
