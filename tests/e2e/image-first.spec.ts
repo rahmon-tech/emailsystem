@@ -34,6 +34,7 @@ test("image-first composer uploads, previews and fails closed on an unsupported 
     await page.getByLabel("Email address").fill(email);
     await page.getByLabel("Password").fill(password);
     await page.getByRole("button", { name: "Sign in", exact: true }).click();
+    await expect(page).toHaveURL(/\/blast$/);
     await page.goto(appPath("/blast/image"));
 
     await expect(
