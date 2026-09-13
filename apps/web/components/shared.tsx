@@ -49,14 +49,29 @@ export function Status({
             "COOLDOWN",
             "RATE_LIMITED",
             "RECONNECTING",
+            "SMTP_ACCEPTED_UNCONFIRMED",
           ].includes(state)
         ? "warning.main"
-        : ["SENDING", "PROCESSING", "QUEUED", "PROVIDER_ACCEPTED"].includes(
-              state,
-            )
+        : [
+              "SENDING",
+              "PROCESSING",
+              "QUEUED",
+              "PROVIDER_ACCEPTED",
+              "PROVIDER_ACCEPTED_AWAITING_CONFIRMATION",
+              "SMTP_ACCEPTED_AWAITING_CONFIRMATION",
+            ].includes(state)
           ? "primary.main"
           : "text.secondary";
-  const name = value.toLowerCase().replaceAll("_", " ");
+  const displayNames: Record<string, string> = {
+    PROVIDER_ACCEPTED_AWAITING_CONFIRMATION:
+      "Accepted · awaiting delivery confirmation",
+    SMTP_ACCEPTED_AWAITING_CONFIRMATION:
+      "SMTP accepted · awaiting confirmation",
+    SMTP_ACCEPTED_UNCONFIRMED: "SMTP accepted · delivery unconfirmed",
+  };
+  const rawName = value.toLowerCase().replaceAll("_", " ");
+  const name =
+    displayNames[state] ?? rawName.charAt(0).toUpperCase() + rawName.slice(1);
   return (
     <Stack
       component="span"
@@ -68,7 +83,7 @@ export function Status({
         color,
         fontSize: 12,
         fontWeight: 550,
-        whiteSpace: "nowrap",
+        whiteSpace: "normal",
       }}
     >
       {busy ? (
@@ -89,7 +104,7 @@ export function Status({
           }}
         />
       )}
-      {busy ? "Checking…" : name.charAt(0).toUpperCase() + name.slice(1)}
+      {busy ? "Checking…" : name}
     </Stack>
   );
 }
