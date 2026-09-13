@@ -30,7 +30,34 @@ test("preview and per-recipient sending add an isolated unsubscribe fallback bel
   assert(html.includes("Hello"));
   assert(html.includes('role="presentation"'));
   assert(html.includes(">Unsubscribe</a>"));
+  assert(html.includes("width:100%!important"));
   assert(html.indexOf("Hello") < html.indexOf(">Unsubscribe</a>"));
+});
+test("fallback unsubscribe stays below flex and grid body layouts instead of becoming a side column", () => {
+  const flex = renderSnapshot(
+    normalizeEmail(
+      '<html><body style="display:flex;background:#000"><div style="width:100%">Full-width design</div></body></html>',
+    ).html,
+    "https://example.com/u/flex",
+  );
+  const flexBody = flex.match(/<body\b[^>]*>/i)?.[0] ?? "";
+  assert.match(flexBody, /flex-direction:column!important/i);
+  assert.match(flexBody, /width:100%!important/i);
+  assert(flex.indexOf("Full-width design") < flex.indexOf(">Unsubscribe</a>"));
+  assert.match(flex, /clear:both!important/);
+  assert.match(flex, /align-self:stretch!important/);
+
+  const grid = renderSnapshot(
+    normalizeEmail(
+      '<html><body style="display:grid;grid-template-columns:1fr auto"><div>Grid design</div></body></html>',
+    ).html,
+    "https://example.com/u/grid",
+  );
+  const gridBody = grid.match(/<body\b[^>]*>/i)?.[0] ?? "";
+  assert.match(gridBody, /grid-template-columns:minmax\(0,1fr\)!important/i);
+  assert.match(gridBody, /grid-auto-flow:row!important/i);
+  assert.match(grid, /grid-column:1\/-1!important/);
+  assert(grid.indexOf("Grid design") < grid.indexOf(">Unsubscribe</a>"));
 });
 test("template unsubscribe placeholder controls placement without adding a second footer", () => {
   const snapshot = normalizeEmail(
