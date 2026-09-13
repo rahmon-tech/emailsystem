@@ -28,26 +28,22 @@ The canonical delivery-control-plane requirements remain in `docs/DELIVERY_CONTR
 
 Branch: `feat/image-first-test-message`
 
-The active slice is **Image-first test-message support**. Reuse the existing `POST /test-message` API and `testProvider` owner. Do not create another test-send endpoint or bypass the existing sender, suppression, reputation, safety-budget, provider-result, or audit behavior.
+The active slice is **Image-first test-message support**. It reuses the existing `POST /test-message` API and `testProvider` owner; it does not create another test-send endpoint or bypass existing sender, suppression, reputation, safety-budget, provider-result, or audit behavior.
 
-Repository reconciliation for this slice established:
+The current implementation candidate includes:
 
-1. `/test-message` already accepts the normalized campaign message shape, including inline and ordinary attachment metadata;
-2. standard Blast already uses this endpoint and filters its provider picker to the selected sender's authorized provider IDs;
-3. Image-first currently has no test-message UI;
-4. the current server path ultimately rejects unsupported inline CID transports inside the provider adapter, but only after `testProvider` has entered its safety reservation/test-delivery flow;
-5. the shared `supportsInlineAttachmentTransport` capability helper is already authoritative for campaign pre-flight and is available to both core and web code.
+1. an inline-CID transport-capability guard inside the existing `testProvider` owner before sender selection, safety reservation, or provider test-delivery creation;
+2. fail-closed rejection for unsupported inline-CID transports using the same shared `supportsInlineAttachmentTransport` capability matrix already authoritative for campaign pre-flight/dispatch;
+3. an Image-first test-message dialog that uses the selected sender's authorized provider IDs, filters to enabled CID-capable transports, and submits the existing normalized message snapshot to `POST /test-message`;
+4. PostgreSQL integration proof that an unsupported transport creates no provider test-delivery, while the same mixed inline/ordinary attachment snapshot is accepted through an injected CID-capable provider without external network delivery;
+5. browser proof for the Image-first test-send flow and unsupported-provider filtering, using repository-controlled users/providers only;
+6. no schema, migration, campaign-dispatch, provider-routing, or live-delivery change.
 
-Implement narrowly in this order:
+The first full candidate workflow exposed an E2E-only authentication synchronization defect in the new second browser test: it navigated to `/blast/image` before the post-login `/blast` transition completed. The test now waits for the authenticated `/blast` handoff exactly as the sibling Image-first browser flow already does. That correction does not change product behavior.
 
-1. add red integration proof that an inline-CID test message is rejected on an unsupported transport **before** a provider test-delivery/safety reservation is created;
-2. prove the same test message is accepted through a safe mock connection configured with a CID-capable transport, without external delivery;
-3. add red browser proof for Image-first test-send UI and CID-capable provider filtering;
-4. add the server-side fail-closed capability guard inside the existing `testProvider` owner;
-5. add the Image-first test-message dialog using the existing `/test-message` API, selected sender authorization, and the shared inline-capability matrix;
-6. run the full repository Quality workflow and keep all existing campaign/pre-flight/dispatch behavior unchanged.
+This slice is **not yet a verified/merged baseline**. Closure requires the full repository Quality workflow to pass on the exact final documentation-reconciled PR head, then an exact-parent merge into the still-expected verified `main`, followed by full Quality verification on the exact merged `main` SHA.
 
-No schema or migration change is expected. Do not add a live delivery test; use only the existing mock provider in automated proof.
+No live recipient or external provider may be used for automated proof.
 
 ## Remaining Image-first parity after this slice
 
