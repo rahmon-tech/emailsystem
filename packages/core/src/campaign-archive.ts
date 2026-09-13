@@ -18,17 +18,23 @@ export async function archivedCampaignIds(userId: string) {
 
 export async function listVisibleCampaigns(userId: string, cursor?: string) {
   const archived = await archivedCampaignIds(userId);
-  const hidden = archived.length ? { id: { notIn: archived } } : {};
   if (
     cursor &&
     !(await db.campaign.findFirst({
-      where: { id: cursor, userId, ...hidden },
+      where: {
+        id: cursor,
+        userId,
+        ...(archived.length ? { NOT: { id: { in: archived } } } : {}),
+      },
       select: { id: true },
     }))
   )
     throw new AppError(400, "CURSOR", "Invalid page cursor.");
   const rows = await db.campaign.findMany({
-    where: { userId, ...hidden },
+    where: {
+      userId,
+      ...(archived.length ? { id: { notIn: archived } } : {}),
+    },
     select: {
       id: true,
       name: true,
