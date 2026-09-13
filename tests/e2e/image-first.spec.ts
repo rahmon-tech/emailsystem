@@ -56,6 +56,9 @@ test("image-first composer manages inline image lifecycle, copy recipients, ordi
     await page
       .getByLabel("BCC (comma separated)")
       .fill("blind@example.org\nblind-two@example.org");
+    await expect(
+      page.getByText(/These addresses receive a copy of every individual email/i),
+    ).toBeVisible();
     await page.getByLabel("Primary email image").setInputFiles({
       name: "hero.png",
       mimeType: "image/png",
