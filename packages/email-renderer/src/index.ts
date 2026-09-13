@@ -81,11 +81,7 @@ export function renderSnapshot(html: string, unsubscribeUrl: string) {
     allowedAttributes: {},
   }).replaceAll('"', "&quot;");
   const placeholder = "{{unsubscribe_url}}";
-  if (html.includes(placeholder)) return html.replaceAll(placeholder, safe);
-  const footer = `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;border-collapse:collapse"><tbody><tr><td align="center" style="padding:24px 12px 8px;font-family:Arial,sans-serif;font-size:11px;line-height:16px;color:#98a2b3"><a href="${safe}" style="color:#98a2b3;text-decoration:underline">Unsubscribe</a></td></tr></tbody></table>`;
-  return /<\/body>/i.test(html)
-    ? html.replace(/<\/body>/i, () => footer + "</body>")
-    : html + footer;
+  return html.includes(placeholder) ? html.replaceAll(placeholder, safe) : html;
 }
 export const previewCsp =
   "default-src 'none'; style-src 'unsafe-inline'; img-src https: http: data: cid:; font-src https:; form-action 'none'; base-uri 'none'; script-src 'none'; connect-src 'none'";

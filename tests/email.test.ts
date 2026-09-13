@@ -23,16 +23,24 @@ test("email pipeline does not fetch remote CSS or resources and warns about unsa
   assert(!result.html.includes("javascript"));
   assert(result.warnings.length > 0);
 });
-test("preview and per-recipient sending add an isolated unsubscribe fallback below stored HTML", () => {
+test("sending does not inject unsubscribe markup when the imported HTML has no placeholder", () => {
   const snapshot = normalizeEmail("<p>Hello</p>");
   const html = renderSnapshot(snapshot.html, "https://example.com/u/token");
-  assert(html.includes("https://example.com/u/token"));
-  assert(html.includes("Hello"));
-  assert(html.includes('role="presentation"'));
-  assert(html.includes(">Unsubscribe</a>"));
-  assert(html.indexOf("Hello") < html.indexOf(">Unsubscribe</a>"));
+  assert.equal(html, snapshot.html);
+  assert(!html.includes("https://example.com/u/token"));
+  assert(!html.includes(">Unsubscribe</a>"));
 });
-test("template unsubscribe placeholder controls placement without adding a second footer", () => {
+test("templates with flex or grid body layouts remain structurally untouched", () => {
+  for (const raw of [
+    '<html><body style="display:flex;background:#000"><div style="width:100%">Full-width design</div></body></html>',
+    '<html><body style="display:grid;grid-template-columns:1fr auto"><div>Grid design</div></body></html>',
+  ]) {
+    const snapshot = normalizeEmail(raw);
+    const html = renderSnapshot(snapshot.html, "https://example.com/u/token");
+    assert.equal(html, snapshot.html);
+  }
+});
+test("template unsubscribe placeholder controls placement without adding any markup", () => {
   const snapshot = normalizeEmail(
     '<table><tr><td>Message</td></tr><tr><td><a href="{{unsubscribe_url}}">Manage email preferences</a></td></tr></table>',
   );
