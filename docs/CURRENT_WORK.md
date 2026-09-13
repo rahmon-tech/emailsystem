@@ -2,9 +2,11 @@
 
 ## Verified baseline
 
-Remote `main` is still `16e8910040416d45ed0da49a2beda667f523a858` (`feat(email): preserve inline CID attachments across providers`). Push Quality #110 completed successfully for that exact SHA, including dependency install, Prisma generation, fresh PostgreSQL migrations, schema-drift verification, upgrade rehearsal, lint, secret scanning, TypeScript, unit tests, PostgreSQL/Redis integration tests, production build, browser E2E, visual-review artifacts, production-container validation, diagnostics, and cleanup.
+Remote `main` is verified at `efd66c3198a116e6bd51f789dfd8c5ae2efc7313` (`feat(image): add image-first CID campaign mode`). Push Quality #120 completed successfully for that exact merged SHA, including dependency install, Prisma generation, fresh PostgreSQL migrations, schema-drift verification, upgrade rehearsal, lint, secret scanning, TypeScript, unit tests, PostgreSQL/Redis integration tests, production build, Playwright browser E2E, visual-review artifacts, production-container validation, diagnostics, artifact upload, and cleanup.
 
-The repository is an existing TypeScript/pnpm application with Next.js + MUI web UI, PostgreSQL/Prisma persistence, Redis-backed safety/rate coordination, a worker process, provider adapters, an email renderer, and Docker deployment assets. Preserve this architecture; do not introduce a second campaign or delivery path.
+PR #29 merged the final green feature head `2b21ff289b2532794b450cf5f043f039d50d182e`, which had already passed full Quality #119. The merge used the exact-head guard after remote `main` was re-read at the expected parent `16e8910040416d45ed0da49a2beda667f523a858`.
+
+The repository remains an existing TypeScript/pnpm application with Next.js + MUI web UI, PostgreSQL/Prisma persistence, Redis-backed safety/rate coordination, a worker process, provider adapters, an email renderer, and Docker deployment assets. Preserve this architecture; do not introduce a second campaign or delivery path.
 
 ## Completed product foundation
 
@@ -20,13 +22,9 @@ The verified system currently includes:
 - inline-vs-attachment provider message semantics and Content-ID support across SMTP, SES raw MIME, Resend, SendGrid, Postmark, Mailjet, and Mailgun, with fail-closed behavior for unsupported API transports;
 - portable inline Content-ID validation capped at 127 characters and compatibility coverage for supported provider wire formats/MIME.
 
-The inline-CID foundation was verified both on PR #28 head `39fae831afbcd3ba3e0ec2e309165ef78ca4706c` (Quality #109) and on merged `main` `16e8910040416d45ed0da49a2beda667f523a858` (Quality #110).
+## Completed Image-first campaign milestone
 
-## Image-first campaign milestone
-
-Branch: `feat/image-first-campaign-mode`
-
-The Image-first implementation is complete on the feature branch and remains inside the existing Blast/campaign/delivery architecture. It now includes:
+The Image-first campaign slice is now merged and verified on `main`. It remains inside the existing Blast/campaign/delivery architecture and includes:
 
 - an authenticated `/blast/image` composer path without removing or redesigning the existing rich/source Blast workflow;
 - a controlled primary image upload that generates responsive email-safe HTML referencing the image through a CID inline attachment;
@@ -40,17 +38,29 @@ The Image-first implementation is complete on the feature branch and remains ins
 - responsive mobile visual-review coverage for the Image-first composer;
 - no schema or migration change.
 
-Implementation head `f37d2f340fdb5ea28ca5fb75c2b11cfc4b84d1d1` passed full Quality #118, including migrations/schema checks, lint, secret scanning, TypeScript, unit tests, PostgreSQL/Redis integration tests, production build, Playwright E2E, visual-review artifacts, production-container validation, diagnostics, and cleanup.
+Verification chain:
 
-This documentation reconciliation is the final feature-branch checkpoint. Do not mark PR #29 ready or merge until the exact resulting branch SHA also passes the complete repository Quality workflow. Before merge, re-read remote `main` and require its exact SHA to remain the expected parent. Merge using an exact-head guard, then require a fresh full Quality run on the exact merged `main` SHA before calling the milestone complete.
+- implementation head `f37d2f340fdb5ea28ca5fb75c2b11cfc4b84d1d1` — Quality #118 green;
+- final reconciled PR head `2b21ff289b2532794b450cf5f043f039d50d182e` — Quality #119 green;
+- merged `main` `efd66c3198a116e6bd51f789dfd8c5ae2efc7313` — Quality #120 green.
 
-## Next dependencies after Image-first
+## Next dependency
 
-After PR #29 is merged and the exact merged `main` SHA is fully green, continue in dependency order rather than redesigning completed foundations:
+The next distinct product milestone is **Image-first parity and asset lifecycle**. Begin it from verified repository truth and keep it incremental. Candidate scope, subject to reconciliation against the current implementation before coding:
 
-1. Image-first parity and asset lifecycle: image replace/remove flows, ordinary attachments alongside the inline image, test-message support, CC/BCC, scheduling, tags/tracking parity, earlier provider-capability visibility, accessibility/alt-text polish, and rendering/fidelity edge cases;
-2. reusable message/template workflow if repository truth still lacks a persisted template/library abstraction;
-3. remaining campaign/Activity operational gaps found by current tests and UX review, especially progress/control/export fidelity under real worker states;
-4. final security, concurrency, performance, provider-resilience, deployment-readiness, and VPS reconciliation before production installation.
+1. image replace/remove lifecycle and cleanup behavior;
+2. ordinary file attachments alongside the primary inline image without conflating attachment and inline semantics;
+3. test-message support through the existing test-send path;
+4. CC/BCC parity where the standard composer already supports it;
+5. scheduling parity;
+6. tags/tracking parity using existing campaign owners rather than parallel state;
+7. earlier sender/provider capability visibility before pre-flight, while retaining server-side fail-closed enforcement;
+8. accessibility/alt-text UX and rendering/fidelity edge cases across supported transports.
+
+After that, continue in dependency order:
+
+- reusable message/template workflow if repository truth still lacks a persisted template/library abstraction;
+- remaining campaign/Activity operational gaps found by current tests and UX review, especially progress/control/export fidelity under real worker states;
+- final security, concurrency, performance, provider-resilience, deployment-readiness, and VPS reconciliation before production installation.
 
 Do not claim VPS deployment until the live target is actually reconciled and verified. Do not add live delivery tests without an explicitly authorized recipient/action.
