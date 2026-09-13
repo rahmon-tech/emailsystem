@@ -198,3 +198,158 @@ test("configured warm-up profile changes only the domain soft-start gap", async 
   assert(balancedNext - balancedNow >= 1900);
   assert(highNext - highNow < 1000);
 });
+
+test("account pacing ceiling coordinates independent sender domains", async () => {
+  const user = crypto.randomUUID();
+  users.push(user);
+  const one = {
+    ...candidate(
+      "p1",
+      rateGroup(user, "resend", "sender@one.example", "us-east-1"),
+    ),
+    perSecond: 1000,
+    perMinute: 600,
+  };
+  const two = {
+    ...candidate(
+      "p2",
+      rateGroup(user, "mailgun", "sender@two.example", "eu-west-1"),
+    ),
+    perSecond: 1000,
+    perMinute: 600,
+  };
+  const policy = {
+    accountPerMinute: 60,
+    domainPerMinute: null,
+    campaignId: "campaign-a",
+    campaignPerMinute: null,
+  };
+
+  const token = crypto.randomUUID();
+  assert.equal(
+    await acquireProvider(user, [one], token, [one], true, "high_capacity", policy),
+    "p1",
+  );
+  await releaseProvider(user, one, token);
+  assert.equal(
+    await acquireProvider(
+      user,
+      [two],
+      crypto.randomUUID(),
+      [two],
+      true,
+      "high_capacity",
+      policy,
+    ),
+    null,
+  );
+});
+
+test("configured domain ceiling can be lower than provider-derived capacity", async () => {
+  const user = crypto.randomUUID();
+  users.push(user);
+  const one = {
+    ...candidate(
+      "p1",
+      rateGroup(user, "resend", "sender@example.com", "us-east-1"),
+    ),
+    perSecond: 1000,
+    perMinute: 600,
+  };
+  const pacingGroup = one.group.split(".")[1];
+  const token = crypto.randomUUID();
+  assert.equal(
+    await acquireProvider(
+      user,
+      [one],
+      token,
+      [one],
+      true,
+      "high_capacity",
+      {
+        accountPerMinute: null,
+        domainPerMinute: 60,
+        campaignId: "campaign-a",
+        campaignPerMinute: null,
+      },
+    ),
+    "p1",
+  );
+  await releaseProvider(user, one, token);
+  const next = Number(
+    await redis.get(`dispatch:${user}:p:${pacingGroup}:next`),
+  );
+  const [seconds, micros] = await redis.time();
+  const now = Number(seconds) * 1000 + Math.floor(Number(micros) / 1000);
+  assert(next - now >= 900);
+});
+
+test("campaign pacing ceiling is isolated by campaign", async () => {
+  const user = crypto.randomUUID();
+  users.push(user);
+  const one = {
+    ...candidate(
+      "p1",
+      rateGroup(user, "resend", "sender@one.example", "us-east-1"),
+    ),
+    perSecond: 1000,
+    perMinute: 600,
+  };
+  const two = {
+    ...candidate(
+      "p2",
+      rateGroup(user, "mailgun", "sender@two.example", "eu-west-1"),
+    ),
+    perSecond: 1000,
+    perMinute: 600,
+  };
+  const firstToken = crypto.randomUUID();
+  assert.equal(
+    await acquireProvider(user, [one], firstToken, [one], true, "high_capacity", {
+      accountPerMinute: null,
+      domainPerMinute: null,
+      campaignId: "campaign-a",
+      campaignPerMinute: 60,
+    }),
+    "p1",
+  );
+  await releaseProvider(user, one, firstToken);
+
+  assert.equal(
+    await acquireProvider(
+      user,
+      [two],
+      crypto.randomUUID(),
+      [two],
+      true,
+      "high_capacity",
+      {
+        accountPerMinute: null,
+        domainPerMinute: null,
+        campaignId: "campaign-a",
+        campaignPerMinute: 60,
+      },
+    ),
+    null,
+  );
+
+  const otherToken = crypto.randomUUID();
+  assert.equal(
+    await acquireProvider(
+      user,
+      [two],
+      otherToken,
+      [two],
+      true,
+      "high_capacity",
+      {
+        accountPerMinute: null,
+        domainPerMinute: null,
+        campaignId: "campaign-b",
+        campaignPerMinute: 60,
+      },
+    ),
+    "p2",
+  );
+  await releaseProvider(user, two, otherToken);
+});
