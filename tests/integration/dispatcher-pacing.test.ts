@@ -46,7 +46,7 @@ test("provider rotation cannot burst the same sender domain", async () => {
   assert.notEqual(providers[0].group, providers[1].group);
 
   const firstToken = crypto.randomUUID();
-  const first = await acquireProvider(user, providers, firstToken, providers);
+  const first = await acquireProvider(user, providers, firstToken, providers, true);
   assert(first);
   await releaseProvider(
     user,
@@ -59,6 +59,7 @@ test("provider rotation cannot burst the same sender domain", async () => {
     providers,
     crypto.randomUUID(),
     providers,
+    true,
   );
   assert.equal(immediate, null);
 });
@@ -76,10 +77,10 @@ test("independent sender domains keep independent pacing clocks", async () => {
   );
 
   const firstToken = crypto.randomUUID();
-  assert.equal(await acquireProvider(user, [one], firstToken, [one]), "p1");
+  assert.equal(await acquireProvider(user, [one], firstToken, [one], true), "p1");
   await releaseProvider(user, one, firstToken);
 
   const secondToken = crypto.randomUUID();
-  assert.equal(await acquireProvider(user, [two], secondToken, [two]), "p2");
+  assert.equal(await acquireProvider(user, [two], secondToken, [two], true), "p2");
   await releaseProvider(user, two, secondToken);
 });
