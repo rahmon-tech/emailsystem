@@ -222,6 +222,8 @@ export async function processDelivery(
           candidates,
           attemptId,
           ratePeers,
+          process.env.NODE_ENV !== "test",
+          settings.warmupProfile,
         );
         if (!chosen) return false;
         provider = eligible.find((p) => p.id === chosen)!;
