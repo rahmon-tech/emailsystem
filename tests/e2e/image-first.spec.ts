@@ -40,7 +40,7 @@ test("image-first composer uploads, previews and fails closed on an unsupported 
       page.getByRole("heading", { name: "Image-first blast", exact: true }),
     ).toBeVisible();
     await expect(
-      page.getByRole("button", { name: "Standard composer", exact: true }),
+      page.getByRole("link", { name: "Standard composer", exact: true }),
     ).toBeVisible();
 
     await page.getByLabel("Recipient import").click();
@@ -63,9 +63,7 @@ test("image-first composer uploads, previews and fails closed on an unsupported 
     await expect(page.locator('iframe[title="Image-first email preview"]')).toBeVisible();
 
     await page.getByRole("button", { name: "Run pre-flight", exact: true }).click();
-    await expect(
-      page.getByText(/supports inline CID images/i),
-    ).toBeVisible();
+    await expect(page.getByText(/supports inline CID images/i)).toBeVisible();
     await expect(
       page.getByRole("button", { name: "Send campaign", exact: true }),
     ).toBeDisabled();
