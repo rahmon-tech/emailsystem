@@ -37,7 +37,7 @@ test("experiment evidence export is tenant-safe, reproducible and does not expos
   const recipient = "controlled@example.net";
   const profile = await db.experimentProfile.create({
     data: {
-      userId: owner.id,
+      user: { connect: { id: owner.id } },
       name: "Evidence baseline",
       authorizationRef: "AUTH-EVIDENCE-01",
       variables: {
@@ -49,8 +49,10 @@ test("experiment evidence export is tenant-safe, reproducible and does not expos
       maxRecipients: 1,
       maxAttempts: 2,
       maxDurationSeconds: 600,
-      recipients: { create: [{ userId: owner.id, email: recipient }] },
     },
+  });
+  await db.experimentRecipient.create({
+    data: { userId: owner.id, profileId: profile.id, email: recipient },
   });
   const run = await db.experimentRun.create({
     data: {
