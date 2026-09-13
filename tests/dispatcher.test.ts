@@ -1,19 +1,27 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { rateGroup } from "@emailsystem/core/dispatcher";
+import {
+  rateGroup,
+  senderDomainRateGroup,
+} from "@emailsystem/core/dispatcher";
 
-test("rate group is provider-independent for the same sender domain", () => {
+test("provider quota groups stay provider-specific while domain pacing stays shared", () => {
   const user = "user-1";
   const a = rateGroup(user, "resend", "Sender@Example.com", "us-east-1");
   const b = rateGroup(user, "mailgun", "other@example.com", "eu-west-1");
-  const c = rateGroup(user, "sendgrid", "third@other.example", "");
+  const domainA = senderDomainRateGroup(user, "Sender@Example.com");
+  const domainB = senderDomainRateGroup(user, "other@example.com");
+  const domainC = senderDomainRateGroup(user, "third@other.example");
 
-  assert.equal(a, b);
-  assert.notEqual(a, c);
+  assert.notEqual(a, b);
+  assert.equal(domainA, domainB);
+  assert.notEqual(domainA, domainC);
+  assert(a.endsWith(`.${domainA}`));
+  assert(b.endsWith(`.${domainB}`));
 });
 
-test("rate group remains tenant-scoped", () => {
-  const a = rateGroup("user-a", "resend", "sender@example.com");
-  const b = rateGroup("user-b", "resend", "sender@example.com");
+test("sender-domain pacing remains tenant-scoped", () => {
+  const a = senderDomainRateGroup("user-a", "sender@example.com");
+  const b = senderDomainRateGroup("user-b", "sender@example.com");
   assert.notEqual(a, b);
 });
