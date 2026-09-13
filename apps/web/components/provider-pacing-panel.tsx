@@ -74,7 +74,9 @@ export function ProviderPacingPanel() {
             }}
           >
             <Box sx={{ minWidth: 0, flex: 1 }}>
-              <Typography sx={{ fontSize: 13, fontWeight: 650 }}>{row.name}</Typography>
+              <Typography sx={{ fontSize: 13, fontWeight: 650 }}>
+                {row.name} pacing
+              </Typography>
               <Typography variant="caption" color="text.secondary">
                 Configured {row.configuredPerMinute.toLocaleString()}/min · effective {row.effectivePerMinute.toLocaleString()}/min
               </Typography>
@@ -82,7 +84,11 @@ export function ProviderPacingPanel() {
             <Box sx={{ textAlign: { xs: "left", sm: "right" } }}>
               <Chip size="small" label={pressureLabel(row)} />
               {row.nextAllowedAt && (
-                <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.5 }}>
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  sx={{ display: "block", mt: 0.5 }}
+                >
                   Next provider slot {new Date(row.nextAllowedAt).toLocaleTimeString()}
                 </Typography>
               )}
