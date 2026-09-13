@@ -43,6 +43,7 @@ after(async () => {
 });
 
 const image = Buffer.from("image-bytes").toString("base64");
+const brief = Buffer.from("ordinary-attachment").toString("base64");
 const input = () => ({
   name: "Image-first integration",
   importId,
@@ -59,17 +60,23 @@ const input = () => ({
       disposition: "inline" as const,
       contentId: "hero-image",
     },
+    {
+      filename: "brief.txt",
+      content: brief,
+      contentType: "text/plain",
+      disposition: "attachment" as const,
+    },
   ],
 });
 
-test("preflight fails closed when the sender has no CID-capable transport", async () => {
+test("preflight fails closed when a mixed inline/ordinary snapshot has no CID-capable transport", async () => {
   const result = await preflight(userId, input());
   assert.equal(result.ready, false);
   assert.equal(result.providers.length, 0);
   assert.match(result.problems.join(" "), /supports inline CID images/i);
 });
 
-test("preflight admits the same verified sender when its transport is CID-capable", async () => {
+test("preflight admits the same mixed snapshot when its transport is CID-capable", async () => {
   await db.providerConnection.update({
     where: { id: providerId },
     data: { transport: "smtp" },
@@ -77,4 +84,15 @@ test("preflight admits the same verified sender when its transport is CID-capabl
   const result = await preflight(userId, input());
   assert.equal(result.ready, true);
   assert.deepEqual(result.providers.map((provider) => provider.id), [providerId]);
+  assert.deepEqual(
+    result.message.attachments.map((attachment) => [
+      attachment.filename,
+      attachment.disposition,
+      attachment.contentId ?? null,
+    ]),
+    [
+      ["hero.png", "inline", "hero-image"],
+      ["brief.txt", "attachment", null],
+    ],
+  );
 });
