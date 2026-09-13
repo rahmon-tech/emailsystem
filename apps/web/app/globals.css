@@ -120,4 +120,7 @@ iframe {
   main [aria-label="Pre-flight"] .MuiButton-loading > * {
     visibility: visible !important;
   }
+  main [aria-label="Pre-flight"] .MuiButton-loading.Mui-disabled {
+    color: #646c7b !important;
+  }
 }
