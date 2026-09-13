@@ -39,6 +39,8 @@ before(async () => {
     {
       ...resend,
       name: "Image CID injected provider",
+      perSecond: 10,
+      perMinute: 60,
       settings: {
         ...resend.settings,
         fromEmail: capableFrom,
