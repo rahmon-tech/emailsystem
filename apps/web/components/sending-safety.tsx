@@ -240,6 +240,25 @@ export function SendingSafety() {
                   Larger campaigns queue across days. Adding providers never
                   raises your account or domain budget.
                 </Typography>
+                <TextField
+                  select
+                  label="Sender-domain warm-up"
+                  value={value.warmupProfile}
+                  onChange={(e) =>
+                    setValue({
+                      ...value,
+                      warmupProfile: e.target
+                        .value as SafetySettings["warmupProfile"],
+                    })
+                  }
+                  helperText="Controls how cautiously a high-rate sender domain ramps after inactivity. It never raises configured provider limits."
+                >
+                  <MenuItem value="conservative">Conservative</MenuItem>
+                  <MenuItem value="balanced">Balanced</MenuItem>
+                  <MenuItem value="high_capacity">
+                    High capacity · within configured limits
+                  </MenuItem>
+                </TextField>
                 <Accordion disableGutters>
                   <AccordionSummary expandIcon={<ExpandMore />}>
                     Automatic safety pauses
