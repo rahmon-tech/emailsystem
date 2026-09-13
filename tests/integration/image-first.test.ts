@@ -32,7 +32,7 @@ before(async () => {
   });
   providerId = provider!.id;
 
-  const { id: _id, ...resend } = connection("resend");
+  const resend = connection("resend");
   const capable = await saveProvider(
     userId,
     {
