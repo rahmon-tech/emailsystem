@@ -20,6 +20,8 @@ type Pacing = {
   observedWindowSeconds: number;
 };
 
+type Result = { campaignId: string; pacing: Pacing };
+
 function duration(seconds: number | null) {
   if (seconds === null) return "—";
   if (seconds <= 0) return "Done";
@@ -47,21 +49,18 @@ function detail(pacing: Pacing) {
 export function ActivityPacing() {
   const params = useSearchParams();
   const campaignId = params.get("campaignId") ?? "";
-  const [pacing, setPacing] = useState<Pacing | null>(null);
+  const [result, setResult] = useState<Result | null>(null);
 
   useEffect(() => {
     let live = true;
-    if (!campaignId) {
-      setPacing(null);
-      return;
-    }
+    if (!campaignId) return;
     const refresh = () =>
       void api<Pacing>(`campaigns/${campaignId}/pacing`)
-        .then((value) => {
-          if (live) setPacing(value);
+        .then((pacing) => {
+          if (live) setResult({ campaignId, pacing });
         })
         .catch(() => {
-          if (live) setPacing(null);
+          if (live) setResult(null);
         });
     refresh();
     const timer = setInterval(refresh, 5000);
@@ -71,8 +70,8 @@ export function ActivityPacing() {
     };
   }, [campaignId]);
 
-  if (!campaignId || !pacing) return null;
-
+  if (!campaignId || result?.campaignId !== campaignId) return null;
+  const pacing = result.pacing;
   const pace =
     pacing.messagesPerMinute === null
       ? "—"
