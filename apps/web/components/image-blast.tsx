@@ -53,7 +53,7 @@ type Flight = {
   count: number;
   providers: { id: string; name: string }[];
   previewHtml: string;
-  message: { text: string };
+  text: string;
   sender: { email: string; eligibleProviderCount: number };
 };
 
@@ -539,7 +539,7 @@ export function ImageBlast() {
                     setFlight(result);
                     setPreview({
                       html: result.previewHtml,
-                      text: result.message.text,
+                      text: result.text,
                     });
                   })
                 }
