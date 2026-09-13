@@ -1,9 +1,7 @@
 import { requireUser, assertSameOrigin } from "@emailsystem/core/auth";
 import { errorResponse, readJson, response } from "@emailsystem/core/http";
-import {
-  createExperimentProfile,
-  listExperimentProfiles,
-} from "@emailsystem/core/experiments";
+import { listExperimentProfiles } from "@emailsystem/core/experiments";
+import { createExperimentProfileAtomic } from "@emailsystem/core/experiment-profile-create";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -22,7 +20,10 @@ export async function POST(request: Request) {
     assertSameOrigin(request);
     const user = await requireUser(request);
     return response(
-      await createExperimentProfile(user.id, await readJson(request, 512_000)),
+      await createExperimentProfileAtomic(
+        user.id,
+        await readJson(request, 512_000),
+      ),
       201,
     );
   } catch (error) {
