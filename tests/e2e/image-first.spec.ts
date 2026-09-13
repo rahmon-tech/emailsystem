@@ -106,7 +106,7 @@ test("image-first composer manages inline image lifecycle, ordinary attachments 
   }
 });
 
-test("image-first test email reuses the existing test-message path with a CID-capable provider", async ({
+test("image-first test email filters unsupported transports before any test delivery", async ({
   page,
 }) => {
   const email = `image-test-${crypto.randomUUID()}@example.com`;
@@ -118,10 +118,6 @@ test("image-first test email reuses the existing test-message path with a CID-ca
       transport: "api",
       credentials: {},
       settings: { fromEmail: "test-sender@example.com" },
-    });
-    await db.providerConnection.update({
-      where: { id: provider!.id },
-      data: { transport: "smtp" },
     });
 
     await page.goto(appPath("/login"));
@@ -141,17 +137,31 @@ test("image-first test email reuses the existing test-message path with a CID-ca
     await page
       .getByRole("button", { name: "Send a test email", exact: true })
       .click();
-    await expect(page.getByRole("dialog", { name: "Test this image-first message" })).toBeVisible();
-    await page.getByLabel("Provider").click();
+    await expect(
+      page.getByRole("dialog", { name: "Test this image-first message" }),
+    ).toBeVisible();
+    await expect(
+      page.getByText(/no healthy provider transport that supports inline CID images/i),
+    ).toBeVisible();
+    await expect(page.getByLabel("Provider")).toBeDisabled();
+    await page.getByLabel("Test recipient").fill("controlled@example.net");
+    await expect(
+      page.getByRole("button", { name: "Send test", exact: true }),
+    ).toBeDisabled();
     await expect(
       page.getByRole("option", { name: "Image test mock", exact: true }),
-    ).toBeVisible();
-    await page.getByRole("option", { name: "Image test mock", exact: true }).click();
-    await page.getByLabel("Test recipient").fill("controlled@example.net");
-    await page.getByRole("button", { name: "Send test", exact: true }).click();
-
-    await expect(page.getByText(/Provider accepted this test/i)).toBeVisible();
+    ).toHaveCount(0);
+    assertProvider(provider);
+    expect(
+      await db.providerTestDelivery.count({ where: { providerId: provider.id } }),
+    ).toBe(0);
   } finally {
     await db.user.deleteMany({ where: { id: user.id } });
   }
 });
+
+function assertProvider<T extends { id: string } | null>(
+  provider: T,
+): asserts provider is Exclude<T, null> {
+  expect(provider).not.toBeNull();
+}
