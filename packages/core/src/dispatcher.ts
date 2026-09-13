@@ -10,14 +10,26 @@ export interface Candidate {
   cost: number;
 }
 // Redis server time and atomic counters coordinate every process; leases bound crash recovery.
+// Provider, provider-rate-group, and sender-domain pacing are enforced atomically.
 const acquireLua = `
 local now=redis.call('TIME'); local ms=now[1]*1000+math.floor(now[2]/1000)
 local candidates=cjson.decode(ARGV[1]);local token=ARGV[2]; local selected=nil; local score=nil
 for _,c in ipairs(candidates) do
- local base=KEYS[1]..c.id;local group=KEYS[1]..'g:'..c.group
+ local base=KEYS[1]..c.id;local group=KEYS[1]..'g:'..c.group;local pacing=KEYS[1]..'p:'..c.pacingGroup
  redis.call('ZREMRANGEBYSCORE',base..':active','-inf',ms);redis.call('ZREMRANGEBYSCORE',group..':active','-inf',ms)
+ if c.smooth==1 then redis.call('ZREMRANGEBYSCORE',pacing..':active','-inf',ms) end
  local sec=':'..math.floor(ms/1000);local minute=':'..math.floor(ms/60000)
- if redis.call('ZCARD',base..':active')<c.concurrency and redis.call('ZCARD',group..':active')<c.groupConcurrency
+ local providerNext=tonumber(redis.call('GET',base..':next') or '0')
+ local groupNext=tonumber(redis.call('GET',group..':next') or '0')
+ local pacingNext=tonumber(redis.call('GET',pacing..':next') or '0')
+ local pacingAllowed=(c.smooth==0) or (
+   ms>=providerNext and ms>=groupNext and ms>=pacingNext
+   and redis.call('ZCARD',pacing..':active')<1
+   and tonumber(redis.call('GET',pacing..':s'..sec) or '0')+c.cost<=c.pacingSecond
+   and tonumber(redis.call('GET',pacing..':m'..minute) or '0')+c.cost<=c.pacingMinute
+ )
+ if pacingAllowed
+ and redis.call('ZCARD',base..':active')<c.concurrency and redis.call('ZCARD',group..':active')<c.groupConcurrency
  and tonumber(redis.call('GET',base..':s'..sec) or '0')+c.cost<=c.perSecond
  and tonumber(redis.call('GET',base..':m'..minute) or '0')+c.cost<=c.perMinute
  and tonumber(redis.call('GET',group..':s'..sec) or '0')+c.cost<=c.groupSecond
@@ -27,7 +39,18 @@ for _,c in ipairs(candidates) do
  end
 end
 if not selected then return '' end
-local c=selected;local base=KEYS[1]..c.id;local group=KEYS[1]..'g:'..c.group
+local c=selected;local base=KEYS[1]..c.id;local group=KEYS[1]..'g:'..c.group;local pacing=KEYS[1]..'p:'..c.pacingGroup
+if c.smooth==1 then
+ local providerGap=math.max(math.ceil(1000*c.cost/c.perSecond),math.ceil(60000*c.cost/c.perMinute))
+ local groupGap=math.max(math.ceil(1000*c.cost/c.groupSecond),math.ceil(60000*c.cost/c.groupMinute))
+ local pacingGap=math.max(math.ceil(1000*c.cost/c.pacingSecond),math.ceil(60000*c.cost/c.pacingMinute))
+ redis.call('SET',base..':next',ms+providerGap,'PX',math.max(180000,providerGap+120000))
+ redis.call('SET',group..':next',ms+groupGap,'PX',math.max(180000,groupGap+120000))
+ redis.call('SET',pacing..':next',ms+pacingGap,'PX',math.max(180000,pacingGap+120000))
+ local psk=pacing..':s:'..math.floor(ms/1000);local pmk=pacing..':m:'..math.floor(ms/60000)
+ redis.call('INCRBY',psk,c.cost);redis.call('PEXPIRE',psk,2000);redis.call('INCRBY',pmk,c.cost);redis.call('PEXPIRE',pmk,120000)
+ redis.call('ZADD',pacing..':active',ms+120000,token);redis.call('PEXPIRE',pacing..':active',180000)
+end
 for _,b in ipairs({base,group}) do
  local sk=b..':s:'..math.floor(ms/1000);local mk=b..':m:'..math.floor(ms/60000)
  redis.call('INCRBY',sk,c.cost);redis.call('PEXPIRE',sk,2000);redis.call('INCRBY',mk,c.cost);redis.call('PEXPIRE',mk,120000)
@@ -35,27 +58,46 @@ for _,b in ipairs({base,group}) do
 end
 redis.call('HSET',KEYS[2],c.id,score+1/c.weight);redis.call('EXPIRE',KEYS[2],3600)
 return c.id`;
+export function senderDomainRateGroup(userId: string, from: string) {
+  const domain = (from.split("@")[1] ?? "").trim().toLowerCase();
+  return digest(`${userId}:sender-domain:${domain}`);
+}
 export function rateGroup(
   userId: string,
   type: string,
   from: string,
   region = "",
 ) {
-  return digest(`${userId}:${type}:${from.split("@")[1]}:${region}`);
+  const domain = (from.split("@")[1] ?? "").trim().toLowerCase();
+  // The first digest preserves provider-specific quota/rate grouping. The second
+  // is a provider-independent sender-domain pacing key carried alongside it.
+  return `${digest(`${userId}:${type}:${domain}:${region}`)}.${senderDomainRateGroup(userId, from)}`;
+}
+function pacingGroupFromRateGroup(group: string) {
+  return group.split(".")[1] ?? group;
 }
 export async function acquireProvider(
   userId: string,
   candidates: Candidate[],
   token: string,
   ratePeers: Candidate[] = candidates,
+  smoothPacing = process.env.NODE_ENV !== "test",
 ) {
   const enriched = candidates.map((c) => {
+    const pacingGroup = pacingGroupFromRateGroup(c.group);
     const peers = ratePeers.filter((p) => p.group === c.group);
+    const pacingPeers = ratePeers.filter(
+      (p) => pacingGroupFromRateGroup(p.group) === pacingGroup,
+    );
     return {
       ...c,
+      pacingGroup,
+      smooth: smoothPacing ? 1 : 0,
       groupSecond: Math.min(...peers.map((p) => p.perSecond)),
       groupMinute: Math.min(...peers.map((p) => p.perMinute)),
       groupConcurrency: Math.min(...peers.map((p) => p.concurrency)),
+      pacingSecond: Math.min(...pacingPeers.map((p) => p.perSecond)),
+      pacingMinute: Math.min(...pacingPeers.map((p) => p.perMinute)),
     };
   });
   const prefix = `dispatch:${userId}:`;
@@ -79,5 +121,9 @@ export async function releaseProvider(
     .multi()
     .zrem(prefix + candidate.id + ":active", token)
     .zrem(prefix + "g:" + candidate.group + ":active", token)
+    .zrem(
+      prefix + "p:" + pacingGroupFromRateGroup(candidate.group) + ":active",
+      token,
+    )
     .exec();
 }
