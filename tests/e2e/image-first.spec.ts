@@ -55,7 +55,7 @@ test("image-first composer manages inline image lifecycle, copy recipients, ordi
       .fill("COPY@example.org; copy-two@example.org");
     await page
       .getByLabel("BCC (comma separated)", { exact: true })
-      .fill("blind@example.org\nblind-two@example.org");
+      .fill("blind@example.org; blind-two@example.org");
     await expect(
       page.getByText(/These addresses receive a copy of every individual email/i),
     ).toBeVisible();
