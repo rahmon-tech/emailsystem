@@ -8,6 +8,7 @@ import {
   Box,
   Button,
   Card,
+  Chip,
   DialogActions,
   DialogContent,
   MenuItem,
@@ -16,6 +17,7 @@ import {
   Typography,
 } from "@mui/material";
 import {
+  AttachFileOutlined,
   FactCheckOutlined,
   ImageOutlined,
   SendOutlined,
@@ -31,10 +33,14 @@ type ImportRow = {
   stats: Record<string, number>;
 };
 
-type InlineImage = {
+type FileAttachment = {
   filename: string;
   content: string;
   contentType: string;
+  bytes: number;
+};
+
+type InlineImage = FileAttachment & {
   contentId: string;
 };
 
@@ -52,6 +58,8 @@ type Flight = {
 };
 
 const imageTypes = new Set(["image/png", "image/jpeg", "image/gif", "image/webp"]);
+const maxAttachmentBytes = 5_000_000;
+const maxAttachmentCount = 5;
 
 function escapeAttribute(value: string) {
   return value
@@ -69,7 +77,7 @@ function fileBase64(file: File) {
   return new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(String(reader.result).split(",")[1] ?? "");
-    reader.onerror = () => reject(new Error("Could not read the selected image."));
+    reader.onerror = () => reject(new Error("Could not read the selected file."));
     reader.readAsDataURL(file);
   });
 }
@@ -85,6 +93,7 @@ export function ImageBlast() {
   const [preheader, setPreheader] = useState("");
   const [alt, setAlt] = useState("");
   const [image, setImage] = useState<InlineImage | null>(null);
+  const [attachments, setAttachments] = useState<FileAttachment[]>([]);
   const [preview, setPreview] = useState<Preview | null>(null);
   const [flight, setFlight] = useState<Flight | null>(null);
   const [busy, setBusy] = useState("");
@@ -128,14 +137,25 @@ export function ImageBlast() {
     preheader,
     html,
     text,
-    attachments: image
-      ? [
-          {
-            ...image,
-            disposition: "inline" as const,
-          },
-        ]
-      : [],
+    attachments: [
+      ...(image
+        ? [
+            {
+              filename: image.filename,
+              content: image.content,
+              contentType: image.contentType,
+              contentId: image.contentId,
+              disposition: "inline" as const,
+            },
+          ]
+        : []),
+      ...attachments.map((attachment) => ({
+        filename: attachment.filename,
+        content: attachment.content,
+        contentType: attachment.contentType,
+        disposition: "attachment" as const,
+      })),
+    ],
     tracking: { enabled: false },
     startKey: startKey.current,
   });
@@ -165,12 +185,18 @@ export function ImageBlast() {
     });
   };
 
+  const attachmentBytes = attachments.reduce((sum, item) => sum + item.bytes, 0);
+
   const selectImage = async (file: File) => {
     await run("image", async () => {
       if (!imageTypes.has(file.type))
         throw new Error("Use a PNG, JPEG, GIF, or WebP image.");
-      if (file.size > 5_000_000)
+      if (file.size > maxAttachmentBytes)
         throw new Error("Choose an image no larger than 5 MB.");
+      if (attachments.length + 1 > maxAttachmentCount)
+        throw new Error("The primary image and attachments may total at most 5 files.");
+      if (attachmentBytes + file.size > maxAttachmentBytes)
+        throw new Error("The primary image and attachments must total at most 5 MB.");
       const content = await fileBase64(file);
       if (!content) throw new Error("The selected image is empty.");
       setImage({
@@ -178,9 +204,30 @@ export function ImageBlast() {
         content,
         contentType: file.type,
         contentId: `image-${crypto.randomUUID()}`,
+        bytes: file.size,
       });
       if (!alt.trim())
         setAlt(file.name.replace(/\.[^.]+$/, "").replace(/[-_]+/g, " "));
+      invalidate();
+    });
+  };
+
+  const selectAttachments = async (files: File[]) => {
+    await run("attachments", async () => {
+      if (files.length + (image ? 1 : 0) > maxAttachmentCount)
+        throw new Error("The primary image and attachments may total at most 5 files.");
+      const totalBytes = files.reduce((sum, file) => sum + file.size, 0) + (image?.bytes ?? 0);
+      if (totalBytes > maxAttachmentBytes)
+        throw new Error("The primary image and attachments must total at most 5 MB.");
+      const data = await Promise.all(
+        files.map(async (file): Promise<FileAttachment> => ({
+          filename: file.name,
+          content: await fileBase64(file),
+          contentType: file.type || "application/octet-stream",
+          bytes: file.size,
+        })),
+      );
+      setAttachments(data);
       invalidate();
     });
   };
@@ -328,26 +375,38 @@ export function ImageBlast() {
                   color="text.secondary"
                   sx={{ mt: 0.5, mb: 1.5 }}
                 >
-                  PNG, JPEG, GIF or WebP · maximum 5 MB · embedded with Content-ID
+                  PNG, JPEG, GIF or WebP · primary image and attachments share the 5-file / 5 MB campaign limit
                 </Typography>
-                <Button component="label" variant="outlined">
-                  {busy === "image"
-                    ? "Reading image…"
-                    : image
-                      ? "Replace image"
-                      : "Choose image"}
-                  <input
-                    hidden
-                    type="file"
-                    accept="image/png,image/jpeg,image/gif,image/webp"
-                    aria-label="Primary email image"
-                    onChange={(event) => {
-                      const file = event.target.files?.[0];
-                      if (file) void selectImage(file);
-                      event.target.value = "";
-                    }}
-                  />
-                </Button>
+                <Stack direction="row" spacing={1} justifyContent="center" flexWrap="wrap">
+                  <Button component="label" variant="outlined">
+                    {busy === "image"
+                      ? "Reading image…"
+                      : image
+                        ? "Replace image"
+                        : "Choose image"}
+                    <input
+                      hidden
+                      type="file"
+                      accept="image/png,image/jpeg,image/gif,image/webp"
+                      aria-label="Primary email image"
+                      onChange={(event) => {
+                        const file = event.target.files?.[0];
+                        if (file) void selectImage(file);
+                        event.target.value = "";
+                      }}
+                    />
+                  </Button>
+                  {image && (
+                    <Button
+                      onClick={() => {
+                        setImage(null);
+                        invalidate();
+                      }}
+                    >
+                      Remove image
+                    </Button>
+                  )}
+                </Stack>
               </Box>
               <TextField
                 label="Alt text"
@@ -359,6 +418,39 @@ export function ImageBlast() {
                 helperText="Also becomes the plain-text fallback when images are unavailable."
                 required
               />
+              <Box>
+                <Button component="label" startIcon={<AttachFileOutlined />}>
+                  {busy === "attachments" ? "Reading attachments…" : "Add attachments"}
+                  <input
+                    hidden
+                    type="file"
+                    multiple
+                    aria-label="Attachments"
+                    onChange={(event) => {
+                      const files = Array.from(event.target.files ?? []);
+                      if (files.length) void selectAttachments(files);
+                      event.target.value = "";
+                    }}
+                  />
+                </Button>
+                <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.5 }}>
+                  Ordinary attachments remain separate from the primary inline image.
+                </Typography>
+                {!!attachments.length && (
+                  <Stack direction="row" gap={1} flexWrap="wrap" sx={{ mt: 1.25 }}>
+                    {attachments.map((attachment, index) => (
+                      <Chip
+                        key={`${attachment.filename}-${index}`}
+                        label={attachment.filename}
+                        onDelete={() => {
+                          setAttachments((current) => current.filter((_, itemIndex) => itemIndex !== index));
+                          invalidate();
+                        }}
+                      />
+                    ))}
+                  </Stack>
+                )}
+              </Box>
             </Stack>
           </Card>
         </Stack>
@@ -475,7 +567,7 @@ export function ImageBlast() {
         title="Start this image-first campaign?"
       >
         <DialogContent>
-          {flight?.count.toLocaleString()} messages will enter the existing background delivery queue. The inline image remains part of the immutable campaign snapshot.
+          {flight?.count.toLocaleString()} messages will enter the existing background delivery queue. The inline image and any ordinary attachments remain part of the immutable campaign snapshot.
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setConfirm(false)}>Keep editing</Button>
