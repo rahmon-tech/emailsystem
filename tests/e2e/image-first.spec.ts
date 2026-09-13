@@ -105,3 +105,53 @@ test("image-first composer manages inline image lifecycle, ordinary attachments 
     await db.user.deleteMany({ where: { id: user.id } });
   }
 });
+
+test("image-first test email reuses the existing test-message path with a CID-capable provider", async ({
+  page,
+}) => {
+  const email = `image-test-${crypto.randomUUID()}@example.com`;
+  const user = await createUser(email, password);
+  try {
+    const provider = await saveProvider(user.id, {
+      name: "Image test mock",
+      type: "mock",
+      transport: "api",
+      credentials: {},
+      settings: { fromEmail: "test-sender@example.com" },
+    });
+    await db.providerConnection.update({
+      where: { id: provider!.id },
+      data: { transport: "smtp" },
+    });
+
+    await page.goto(appPath("/login"));
+    await page.getByLabel("Email address").fill(email);
+    await page.getByLabel("Password").fill(password);
+    await page.getByRole("button", { name: "Sign in", exact: true }).click();
+    await page.goto(appPath("/blast/image"));
+
+    await page.getByLabel("Subject").fill("CID test-message verification");
+    await page.getByLabel("Primary email image").setInputFiles({
+      name: "test-hero.png",
+      mimeType: "image/png",
+      buffer: png,
+    });
+    await page.getByLabel("Alt text").fill("Controlled CID test visual");
+
+    await page
+      .getByRole("button", { name: "Send a test email", exact: true })
+      .click();
+    await expect(page.getByRole("dialog", { name: "Test this image-first message" })).toBeVisible();
+    await page.getByLabel("Provider").click();
+    await expect(
+      page.getByRole("option", { name: "Image test mock", exact: true }),
+    ).toBeVisible();
+    await page.getByRole("option", { name: "Image test mock", exact: true }).click();
+    await page.getByLabel("Test recipient").fill("controlled@example.net");
+    await page.getByRole("button", { name: "Send test", exact: true }).click();
+
+    await expect(page.getByText(/Provider accepted this test/i)).toBeVisible();
+  } finally {
+    await db.user.deleteMany({ where: { id: user.id } });
+  }
+});
