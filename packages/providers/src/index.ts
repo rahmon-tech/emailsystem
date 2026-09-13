@@ -41,6 +41,33 @@ const addr = (email: string, name = "") =>
   name
     ? `"${name.replaceAll("\\", "\\\\").replaceAll('"', '\\"')}" <${email}>`
     : email;
+const inlineApiProviders = new Set([
+  "resend",
+  "sendgrid",
+  "postmark",
+  "mailjet",
+  "mailgun",
+]);
+export function supportsInlineAttachments(c: Connection) {
+  return c.transport === "smtp" || c.type === "ses" || inlineApiProviders.has(c.type);
+}
+function validateInlineAttachments(c: Connection, m: ProviderMessage) {
+  const inline = m.attachments.filter((a) => a.disposition === "inline");
+  if (!inline.length) return;
+  if (!supportsInlineAttachments(c))
+    throw new Error("Inline CID attachments are unavailable for this provider transport.");
+  const seen = new Set<string>();
+  for (const attachment of inline) {
+    if (
+      !attachment.contentId ||
+      !/^[A-Za-z0-9][A-Za-z0-9._@-]{0,127}$/.test(attachment.contentId)
+    )
+      throw new Error("Inline attachments require a safe Content-ID of at most 128 characters.");
+    if (seen.has(attachment.contentId))
+      throw new Error("Inline attachment Content-IDs must be unique within a message.");
+    seen.add(attachment.contentId);
+  }
+}
 export function normalizeError(
   status: number | undefined,
   detail = "",
@@ -146,12 +173,15 @@ export function buildRequest(
     throw new Error(
       "Non-delivery test mode is unavailable for this connection",
     );
+  validateInlineAttachments(c, m);
   const url = endpoints(c).sendUrl;
   if (!url) throw new Error("Provider uses SDK or SMTP");
   const headers = { ...auth(c), "Content-Type": "application/json" };
   const from = addr(m.from, m.fromName);
   const list = (emails: string[]) => emails.map((email) => ({ email }));
   const caps = (emails: string[]) => emails.map((Email) => ({ Email }));
+  const regular = m.attachments.filter((a) => a.disposition !== "inline");
+  const inline = m.attachments.filter((a) => a.disposition === "inline");
   let body: unknown;
   switch (c.type) {
     case "resend":
@@ -169,6 +199,7 @@ export function buildRequest(
           filename: a.filename,
           content: a.content,
           content_type: a.contentType,
+          ...(a.disposition === "inline" ? { content_id: a.contentId } : {}),
         })),
         tags: [{ name: "attempt", value: ctx.attemptId }],
       };
@@ -198,7 +229,8 @@ export function buildRequest(
                 content: a.content,
                 filename: a.filename,
                 type: a.contentType,
-                disposition: "attachment",
+                disposition: a.disposition ?? "attachment",
+                ...(a.disposition === "inline" ? { content_id: a.contentId } : {}),
               })),
             }
           : {}),
@@ -219,7 +251,7 @@ export function buildRequest(
           "X-Mailin-custom": `es_attempt:${ctx.attemptId}`,
           ...(ctx.testMode ? { "X-Sib-Sandbox": "drop" } : {}),
         },
-        attachment: m.attachments.map((a) => ({
+        attachment: regular.map((a) => ({
           name: a.filename,
           content: a.content,
         })),
@@ -245,6 +277,7 @@ export function buildRequest(
           Name: a.filename,
           Content: a.content,
           ContentType: a.contentType,
+          ...(a.disposition === "inline" ? { ContentID: `cid:${a.contentId}` } : {}),
         })),
       };
       break;
@@ -263,10 +296,16 @@ export function buildRequest(
             TextPart: m.text,
             Headers: m.headers,
             CustomID: ctx.attemptId,
-            Attachments: m.attachments.map((a) => ({
+            Attachments: regular.map((a) => ({
               Filename: a.filename,
               Base64Content: a.content,
               ContentType: a.contentType,
+            })),
+            InlinedAttachments: inline.map((a) => ({
+              Filename: a.filename,
+              Base64Content: a.content,
+              ContentType: a.contentType,
+              ContentID: a.contentId,
             })),
           },
         ],
@@ -286,7 +325,7 @@ export function buildRequest(
           ...(m.replyTo ? { "Reply-To": m.replyTo } : {}),
           "X-EmailSystem-Attempt": ctx.attemptId,
         }).map(([header, value]) => ({ header, value })),
-        attachments: m.attachments.map((a) => ({
+        attachments: regular.map((a) => ({
           filename: a.filename,
           fileblob: a.content,
           mimetype: a.contentType,
@@ -305,7 +344,7 @@ export function buildRequest(
             { ContentType: "PlainText", Content: m.text },
           ],
           Headers: { ...m.headers, "X-EmailSystem-Attempt": ctx.attemptId },
-          Attachments: m.attachments.map((a) => ({
+          Attachments: regular.map((a) => ({
             Name: a.filename,
             BinaryContent: a.content,
             ContentType: a.contentType,
@@ -332,11 +371,11 @@ export function buildRequest(
         for (const [k, v] of Object.entries(values)) form.append(k, v);
         for (const a of m.attachments)
           form.append(
-            "attachment",
+            a.disposition === "inline" ? "inline" : "attachment",
             new Blob([Buffer.from(a.content, "base64")], {
               type: a.contentType,
             }),
-            a.filename,
+            a.disposition === "inline" ? a.contentId! : a.filename,
           );
         return { url, method: "POST", headers: auth(c), body: form };
       }
@@ -420,8 +459,6 @@ async function withSmtp<T>(
     transport: ReturnType<typeof nodemailer.createTransport>,
   ) => Promise<T>,
 ): Promise<T> {
-  // SMTP inactivity timers alone allow a slow peer to outlive the 120s lease.
-  // Bound the whole operation, including DNS, and tear down the actual socket.
   let socket: Socket | undefined;
   let transport: ReturnType<typeof nodemailer.createTransport> | undefined;
   const controller = new AbortController();
@@ -483,6 +520,7 @@ export function buildSmtpOptions(
   };
 }
 function mailOptions(m: ProviderMessage, ctx: SendContext, c: Connection) {
+  validateInlineAttachments(c, m);
   return {
     from: { address: m.from, name: m.fromName },
     to: m.to,
@@ -514,6 +552,9 @@ function mailOptions(m: ProviderMessage, ctx: SendContext, c: Connection) {
       filename: a.filename,
       content: Buffer.from(a.content, "base64"),
       contentType: a.contentType,
+      ...(a.disposition === "inline"
+        ? { cid: a.contentId, contentDisposition: "inline" as const }
+        : { contentDisposition: "attachment" as const }),
     })),
     disableFileAccess: true,
     disableUrlAccess: true,
@@ -681,7 +722,6 @@ const result = (
 const probe = (c: Connection): ProviderMessage => ({
   from: c.settings.fromEmail,
   fromName: c.settings.fromName,
-  // Used only with provider-native non-delivery validation.
   to: c.settings.fromEmail,
   cc: [],
   bcc: [],
