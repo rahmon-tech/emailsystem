@@ -1,11 +1,16 @@
 import { z } from "zod";
 export const dailyBudget = z.number().int().min(1).max(10000000);
+export const warmupProfile = z
+  .enum(["conservative", "balanced", "high_capacity"])
+  .default("balanced");
+export type WarmupProfile = z.infer<typeof warmupProfile>;
 export const safetySettings = z
   .object({
     accountDaily: dailyBudget.default(10000),
     domainDaily: dailyBudget.default(5000),
     providerDaily: dailyBudget.default(5000),
     campaignDaily: dailyBudget.nullable().default(5000),
+    warmupProfile,
     complaintRate: z.number().min(0.01).max(1).default(0.1),
     hardBounceRate: z.number().min(0.1).max(10).default(2),
     minimumSample: z.number().int().min(100).max(100000).default(100),
