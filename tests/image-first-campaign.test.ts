@@ -45,13 +45,26 @@ test("campaign input rejects unsafe, overlong, missing and duplicate inline CIDs
   assert.throws(() =>
     messageInput.parse({ ...base, attachments: [inline("a".repeat(128))] }),
   );
-  const missing = inline() as ReturnType<typeof inline> & { contentId?: string };
-  delete missing.contentId;
-  assert.throws(() => messageInput.parse({ ...base, attachments: [missing] }));
   assert.throws(() =>
     messageInput.parse({
       ...base,
-      attachments: [inline("same-cid"), { ...inline("same-cid"), filename: "second.png" }],
+      attachments: [
+        {
+          filename: "hero.png",
+          content,
+          contentType: "image/png",
+          disposition: "inline",
+        },
+      ],
+    }),
+  );
+  assert.throws(() =>
+    messageInput.parse({
+      ...base,
+      attachments: [
+        inline("same-cid"),
+        { ...inline("same-cid"), filename: "second.png" },
+      ],
     }),
   );
 });
@@ -75,11 +88,32 @@ test("ordinary attachments cannot smuggle a Content-ID", () => {
 
 test("inline transport capability is explicit and fail-closed", () => {
   for (const type of ["resend", "sendgrid", "postmark", "mailjet", "mailgun"])
-    assert.equal(supportsInlineAttachmentTransport({ type, transport: "api" }), true);
-  assert.equal(supportsInlineAttachmentTransport({ type: "ses", transport: "api" }), true);
-  assert.equal(supportsInlineAttachmentTransport({ type: "brevo", transport: "api" }), false);
-  assert.equal(supportsInlineAttachmentTransport({ type: "smtp2go", transport: "api" }), false);
-  assert.equal(supportsInlineAttachmentTransport({ type: "elastic", transport: "api" }), false);
-  assert.equal(supportsInlineAttachmentTransport({ type: "smtp", transport: "smtp" }), true);
-  assert.equal(supportsInlineAttachmentTransport({ type: "brevo", transport: "smtp" }), true);
+    assert.equal(
+      supportsInlineAttachmentTransport({ type, transport: "api" }),
+      true,
+    );
+  assert.equal(
+    supportsInlineAttachmentTransport({ type: "ses", transport: "api" }),
+    true,
+  );
+  assert.equal(
+    supportsInlineAttachmentTransport({ type: "brevo", transport: "api" }),
+    false,
+  );
+  assert.equal(
+    supportsInlineAttachmentTransport({ type: "smtp2go", transport: "api" }),
+    false,
+  );
+  assert.equal(
+    supportsInlineAttachmentTransport({ type: "elastic", transport: "api" }),
+    false,
+  );
+  assert.equal(
+    supportsInlineAttachmentTransport({ type: "smtp", transport: "smtp" }),
+    true,
+  );
+  assert.equal(
+    supportsInlineAttachmentTransport({ type: "brevo", transport: "smtp" }),
+    true,
+  );
 });
