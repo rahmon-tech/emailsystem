@@ -6,6 +6,7 @@ import {
   providerAdaptiveKey,
   releaseProvider,
   rateGroup,
+  senderDomainWarmKeys,
   type Candidate,
 } from "@emailsystem/core/dispatcher";
 
@@ -104,6 +105,34 @@ test("adaptive provider slowdown stretches the provider pacing gap", async () =>
   await releaseProvider(user, one, token);
 
   const next = Number(await redis.get(`dispatch:${user}:${one.id}:next`));
+  const [seconds, micros] = await redis.time();
+  const redisNow = Number(seconds) * 1000 + Math.floor(Number(micros) / 1000);
+  assert(next - redisNow >= 250);
+});
+
+test("high-rate sender domains soft-start after idle and persist warm progress", async () => {
+  const user = crypto.randomUUID();
+  users.push(user);
+  const one = {
+    ...candidate(
+      "p1",
+      rateGroup(user, "resend", "sender@example.com", "us-east-1"),
+    ),
+    perSecond: 1000,
+    perMinute: 600,
+  };
+  const pacingGroup = one.group.split(".")[1];
+  const warm = senderDomainWarmKeys(user, pacingGroup);
+
+  const token = crypto.randomUUID();
+  assert.equal(await acquireProvider(user, [one], token, [one], true), "p1");
+  await releaseProvider(user, one, token);
+
+  assert.equal(Number(await redis.get(warm.count)), 1);
+  assert(Number(await redis.get(warm.last)) > 0);
+  const next = Number(
+    await redis.get(`dispatch:${user}:p:${pacingGroup}:next`),
+  );
   const [seconds, micros] = await redis.time();
   const redisNow = Number(seconds) * 1000 + Math.floor(Number(micros) / 1000);
   assert(next - redisNow >= 250);
