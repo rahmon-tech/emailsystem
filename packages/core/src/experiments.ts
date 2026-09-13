@@ -1,4 +1,5 @@
 import { db } from "@emailsystem/db";
+import type { Prisma } from "@emailsystem/db";
 import { z } from "zod";
 import { AppError } from "./errors";
 
@@ -101,6 +102,423 @@ const runSummarySelect = {
 
 function unique(values: string[]) {
   return [...new Set(values)];
+}
+
+async function lockExperimentControl(
+  tx: Prisma.TransactionClient,
+  userId: string,
+  runId: string,
+) {
+  await tx.$queryRaw`SELECT id FROM "User" WHERE id=${userId} FOR UPDATE`;
+  await tx.$queryRaw`SELECT id FROM "ExperimentRun" WHERE id=${runId} AND "userId"=${userId} FOR UPDATE`;
+}
+
+function activeWindowProblem(
+  run: { startsAt: Date | null; expiresAt: Date | null },
+  now: Date,
+) {
+  if (run.startsAt && now < run.startsAt)
+    return "This experiment is not inside its approved start window yet.";
+  if (!run.expiresAt)
+    return "This experiment run has not been started with a bounded expiry.";
+  if (now >= run.expiresAt)
+    return "This experiment run is outside its approved time window.";
+  return null;
+}
+
+export async function validateExperimentCampaignScope(
+  tx: Prisma.TransactionClient,
+  input: {
+    userId: string;
+    runId: string;
+    senderIdentityId: string;
+    importId: string;
+    eligibleProviderIds: string[];
+    copyRecipients?: string[];
+    now?: Date;
+  },
+) {
+  const now = input.now ?? new Date();
+  await lockExperimentControl(tx, input.userId, input.runId);
+  const [user, run] = await Promise.all([
+    tx.user.findUnique({
+      where: { id: input.userId },
+      select: { experimentKillSwitchAt: true },
+    }),
+    tx.experimentRun.findFirst({
+      where: { id: input.runId, userId: input.userId },
+      select: {
+        id: true,
+        profileId: true,
+        state: true,
+        maxRecipients: true,
+        maxAttempts: true,
+        recipientsUsed: true,
+        attemptsUsed: true,
+        startsAt: true,
+        expiresAt: true,
+        campaign: { select: { id: true } },
+        profile: {
+          select: {
+            providerScopes: { select: { providerId: true } },
+            senderScopes: { select: { senderIdentityId: true } },
+            recipients: { select: { email: true } },
+          },
+        },
+      },
+    }),
+  ]);
+  if (!run)
+    throw new AppError(404, "EXPERIMENT_RUN", "Experiment run not found.");
+  if (user?.experimentKillSwitchAt)
+    throw new AppError(
+      409,
+      "EXPERIMENT_KILL_SWITCH",
+      "Experiment transport is disabled by the account kill switch.",
+    );
+  if (run.state !== "RUNNING")
+    throw new AppError(
+      409,
+      "EXPERIMENT_STATE",
+      "The experiment run must be running before a campaign can use it.",
+    );
+  const windowProblem = activeWindowProblem(run, now);
+  if (windowProblem)
+    throw new AppError(409, "EXPERIMENT_WINDOW", windowProblem);
+  if (run.campaign)
+    throw new AppError(
+      409,
+      "EXPERIMENT_RUN_BOUND",
+      "This experiment run is already bound to a campaign.",
+    );
+  if (
+    !run.profile.senderScopes.some(
+      (scope) => scope.senderIdentityId === input.senderIdentityId,
+    )
+  )
+    throw new AppError(
+      422,
+      "EXPERIMENT_SENDER_SCOPE",
+      "The selected sender is outside the approved experiment scope.",
+    );
+  const eligible = new Set(input.eligibleProviderIds);
+  const providerIds = run.profile.providerScopes
+    .map((scope) => scope.providerId)
+    .filter((providerId) => eligible.has(providerId));
+  if (!providerIds.length)
+    throw new AppError(
+      422,
+      "EXPERIMENT_PROVIDER_SCOPE",
+      "No healthy eligible provider is inside the approved experiment scope.",
+    );
+  const importCount = await tx.importRecipient.count({
+    where: { importId: input.importId, userId: input.userId },
+  });
+  if (importCount > run.maxRecipients)
+    throw new AppError(
+      422,
+      "EXPERIMENT_RECIPIENT_LIMIT",
+      "The campaign recipient count exceeds the experiment recipient ceiling.",
+    );
+  const allowedRecipients = run.profile.recipients.map((item) => item.email);
+  const outsideAllowlist = await tx.importRecipient.count({
+    where: {
+      importId: input.importId,
+      userId: input.userId,
+      email: { notIn: allowedRecipients },
+    },
+  });
+  const copiesOutside = (input.copyRecipients ?? []).some(
+    (email) => !allowedRecipients.includes(email),
+  );
+  if (outsideAllowlist || copiesOutside)
+    throw new AppError(
+      422,
+      "EXPERIMENT_RECIPIENT_SCOPE",
+      "Every campaign recipient and copy address must be on the controlled experiment allowlist.",
+    );
+  if (
+    run.recipientsUsed > run.maxRecipients ||
+    run.attemptsUsed > run.maxAttempts
+  )
+    throw new AppError(
+      409,
+      "EXPERIMENT_LIMIT_STATE",
+      "Experiment usage counters exceed their approved ceiling and require review.",
+    );
+  return {
+    runId: run.id,
+    providerIds,
+    maxRecipients: run.maxRecipients,
+    maxAttempts: run.maxAttempts,
+  };
+}
+
+export async function experimentDispatchScope(
+  tx: Prisma.TransactionClient,
+  input: {
+    userId: string;
+    runId: string | null;
+    senderIdentityId: string;
+    now?: Date;
+  },
+): Promise<
+  | { allowed: true; providerIds: string[] | null }
+  | { allowed: false; reason: string }
+> {
+  if (!input.runId) return { allowed: true, providerIds: null };
+  const now = input.now ?? new Date();
+  const [user, run] = await Promise.all([
+    tx.user.findUnique({
+      where: { id: input.userId },
+      select: { experimentKillSwitchAt: true },
+    }),
+    tx.experimentRun.findFirst({
+      where: { id: input.runId, userId: input.userId },
+      select: {
+        id: true,
+        state: true,
+        attemptsUsed: true,
+        maxAttempts: true,
+        startsAt: true,
+        expiresAt: true,
+        profile: {
+          select: {
+            providerScopes: { select: { providerId: true } },
+            senderScopes: { select: { senderIdentityId: true } },
+          },
+        },
+      },
+    }),
+  ]);
+  if (!run) return { allowed: false, reason: "Experiment run is unavailable." };
+  if (user?.experimentKillSwitchAt)
+    return {
+      allowed: false,
+      reason: "Experiment transport is disabled by the account kill switch.",
+    };
+  if (run.state !== "RUNNING")
+    return { allowed: false, reason: "Experiment run is not active." };
+  const windowProblem = activeWindowProblem(run, now);
+  if (windowProblem) {
+    if (run.expiresAt && now >= run.expiresAt)
+      await tx.experimentRun.updateMany({
+        where: { id: run.id, userId: input.userId, state: "RUNNING" },
+        data: {
+          state: "EXPIRED",
+          stoppedAt: now,
+          stopReason: "Experiment run expired.",
+        },
+      });
+    return { allowed: false, reason: windowProblem };
+  }
+  if (run.attemptsUsed >= run.maxAttempts) {
+    await tx.experimentRun.updateMany({
+      where: { id: run.id, userId: input.userId, state: "RUNNING" },
+      data: {
+        state: "COMPLETED",
+        stoppedAt: now,
+        stopReason: "Experiment attempt ceiling reached.",
+      },
+    });
+    return {
+      allowed: false,
+      reason: "Experiment attempt ceiling reached; no further transport starts are allowed.",
+    };
+  }
+  if (
+    !run.profile.senderScopes.some(
+      (scope) => scope.senderIdentityId === input.senderIdentityId,
+    )
+  )
+    return {
+      allowed: false,
+      reason: "Campaign sender is outside the approved experiment scope.",
+    };
+  return {
+    allowed: true,
+    providerIds: run.profile.providerScopes.map((scope) => scope.providerId),
+  };
+}
+
+export async function reserveExperimentTransport(
+  tx: Prisma.TransactionClient,
+  input: {
+    userId: string;
+    runId: string | null;
+    campaignId: string;
+    senderIdentityId: string;
+    providerId: string;
+    recipient: string;
+    attemptId: string;
+    now?: Date;
+  },
+): Promise<
+  | { allowed: true; experimentRunId: string | null }
+  | { allowed: false; reason: string }
+> {
+  if (!input.runId) return { allowed: true, experimentRunId: null };
+  const now = input.now ?? new Date();
+  await lockExperimentControl(tx, input.userId, input.runId);
+  const [user, run] = await Promise.all([
+    tx.user.findUnique({
+      where: { id: input.userId },
+      select: { experimentKillSwitchAt: true },
+    }),
+    tx.experimentRun.findFirst({
+      where: { id: input.runId, userId: input.userId },
+      select: {
+        id: true,
+        profileId: true,
+        state: true,
+        maxRecipients: true,
+        maxAttempts: true,
+        recipientsUsed: true,
+        attemptsUsed: true,
+        startsAt: true,
+        expiresAt: true,
+        campaign: { select: { id: true } },
+        profile: {
+          select: {
+            providerScopes: { select: { providerId: true } },
+            senderScopes: { select: { senderIdentityId: true } },
+          },
+        },
+      },
+    }),
+  ]);
+  if (!run) return { allowed: false, reason: "Experiment run is unavailable." };
+  if (user?.experimentKillSwitchAt) {
+    await tx.experimentRun.updateMany({
+      where: { id: run.id, userId: input.userId, state: "RUNNING" },
+      data: {
+        state: "STOPPED",
+        stoppedAt: now,
+        killSwitchAt: user.experimentKillSwitchAt,
+        stopReason: "Stopped by account experiment kill switch.",
+      },
+    });
+    return {
+      allowed: false,
+      reason: "Experiment transport is disabled by the account kill switch.",
+    };
+  }
+  if (run.state !== "RUNNING")
+    return { allowed: false, reason: "Experiment run is not active." };
+  const windowProblem = activeWindowProblem(run, now);
+  if (windowProblem) {
+    if (run.expiresAt && now >= run.expiresAt)
+      await tx.experimentRun.update({
+        where: { id: run.id },
+        data: {
+          state: "EXPIRED",
+          stoppedAt: now,
+          stopReason: "Experiment run expired.",
+        },
+      });
+    return { allowed: false, reason: windowProblem };
+  }
+  if (run.campaign?.id !== input.campaignId)
+    return {
+      allowed: false,
+      reason: "Experiment run is not bound to this campaign.",
+    };
+  if (
+    !run.profile.senderScopes.some(
+      (scope) => scope.senderIdentityId === input.senderIdentityId,
+    )
+  )
+    return {
+      allowed: false,
+      reason: "Campaign sender is outside the approved experiment scope.",
+    };
+  if (
+    !run.profile.providerScopes.some(
+      (scope) => scope.providerId === input.providerId,
+    )
+  )
+    return {
+      allowed: false,
+      reason: "Selected provider is outside the approved experiment scope.",
+    };
+  if (
+    !(await tx.experimentRecipient.count({
+      where: {
+        userId: input.userId,
+        profileId: run.profileId,
+        email: input.recipient,
+      },
+    }))
+  )
+    return {
+      allowed: false,
+      reason: "Recipient is outside the controlled experiment allowlist.",
+    };
+  if (run.attemptsUsed >= run.maxAttempts) {
+    await tx.experimentRun.update({
+      where: { id: run.id },
+      data: {
+        state: "COMPLETED",
+        stoppedAt: now,
+        stopReason: "Experiment attempt ceiling reached.",
+      },
+    });
+    return {
+      allowed: false,
+      reason: "Experiment attempt ceiling reached; no further transport starts are allowed.",
+    };
+  }
+  const usedRecipient = await tx.experimentRunRecipientUse.findUnique({
+    where: {
+      runId_email: { runId: run.id, email: input.recipient },
+    },
+  });
+  if (!usedRecipient && run.recipientsUsed >= run.maxRecipients) {
+    await tx.experimentRun.update({
+      where: { id: run.id },
+      data: {
+        state: "STOPPED",
+        stoppedAt: now,
+        stopReason: "Experiment recipient ceiling would be exceeded.",
+      },
+    });
+    return {
+      allowed: false,
+      reason: "Experiment recipient ceiling reached; this recipient cannot start transport.",
+    };
+  }
+  if (!usedRecipient)
+    await tx.experimentRunRecipientUse.create({
+      data: {
+        userId: input.userId,
+        runId: run.id,
+        email: input.recipient,
+        firstUsedAt: now,
+      },
+    });
+  const nextAttempts = run.attemptsUsed + 1;
+  await tx.experimentRun.update({
+    where: { id: run.id },
+    data: {
+      attemptsUsed: { increment: 1 },
+      ...(!usedRecipient ? { recipientsUsed: { increment: 1 } } : {}),
+      ...(nextAttempts >= run.maxAttempts
+        ? {
+            state: "COMPLETED" as const,
+            stoppedAt: now,
+            stopReason: "Experiment attempt ceiling reached.",
+          }
+        : {}),
+    },
+  });
+  await tx.auditEvent.create({
+    data: {
+      userId: input.userId,
+      action: "experiment.transport.started",
+      resourceId: input.attemptId,
+    },
+  });
+  return { allowed: true, experimentRunId: run.id };
 }
 
 export async function listExperimentProfiles(userId: string) {
