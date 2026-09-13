@@ -11,7 +11,7 @@ const png = Buffer.from(
   "base64",
 );
 
-test("image-first composer manages inline image lifecycle, ordinary attachments and fail-closed preflight", async ({
+test("image-first composer manages inline image lifecycle, copy recipients, ordinary attachments and fail-closed preflight", async ({
   page,
 }) => {
   const email = `image-browser-${crypto.randomUUID()}@example.com`;
@@ -50,6 +50,12 @@ test("image-first composer manages inline image lifecycle, ordinary attachments 
       .click();
     await page.getByLabel("Campaign name").fill("Image browser campaign");
     await page.getByLabel("Subject").fill("Image browser verification");
+    await page
+      .getByLabel("CC (comma separated)")
+      .fill("COPY@example.org; copy-two@example.org");
+    await page
+      .getByLabel("BCC (comma separated)")
+      .fill("blind@example.org\nblind-two@example.org");
     await page.getByLabel("Primary email image").setInputFiles({
       name: "hero.png",
       mimeType: "image/png",
@@ -87,7 +93,16 @@ test("image-first composer manages inline image lifecycle, ordinary attachments 
     await page.getByRole("button", { name: "Prepare preview", exact: true }).click();
     await expect(page.locator('iframe[title="Image-first email preview"]')).toBeVisible();
 
+    const preflightRequest = page.waitForRequest(
+      (request) =>
+        request.method() === "POST" && request.url().includes("/api/preflight"),
+    );
     await page.getByRole("button", { name: "Run pre-flight", exact: true }).click();
+    const request = await preflightRequest;
+    expect(request.postDataJSON()).toMatchObject({
+      cc: ["COPY@example.org", "copy-two@example.org"],
+      bcc: ["blind@example.org", "blind-two@example.org"],
+    });
     await expect(page.getByText(/supports inline CID images/i)).toBeVisible();
     await expect(
       page.getByRole("button", { name: "Send campaign", exact: true }),
