@@ -1,18 +1,19 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { db } from "@emailsystem/db";
-import { sessionCookie, userFromToken } from "@emailsystem/core/auth";
+import { sessionCookie, userFromTokens } from "@emailsystem/core/auth";
 import { absoluteAppUrl } from "@emailsystem/core/server-paths";
 import { Blast } from "../../../components/blast";
 export const metadata = { title: "Blast" };
 export const dynamic = "force-dynamic";
 export default async function Page() {
-  const user = await userFromToken(
-    (await cookies()).get(sessionCookie)?.value ?? "",
+  const store = await cookies();
+  const resolved = await userFromTokens(
+    store.getAll(sessionCookie).map((cookie) => cookie.value),
   );
-  if (!user) redirect(absoluteAppUrl("/login"));
+  if (!resolved) redirect(absoluteAppUrl("/login"));
   const providers = await db.providerConnection.count({
-    where: { userId: user.id, deletedAt: null },
+    where: { userId: resolved.user.id, deletedAt: null },
   });
   if (!providers) redirect(absoluteAppUrl("/providers"));
   return <Blast />;
