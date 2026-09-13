@@ -33,8 +33,17 @@ after(async () => {
 test("provider rotation cannot burst the same sender domain", async () => {
   const user = crypto.randomUUID();
   users.push(user);
-  const group = rateGroup(user, "resend", "sender@example.com", "us-east-1");
-  const providers = [candidate("p1", group), candidate("p2", group)];
+  const providers = [
+    candidate(
+      "p1",
+      rateGroup(user, "resend", "sender@example.com", "us-east-1"),
+    ),
+    candidate(
+      "p2",
+      rateGroup(user, "mailgun", "other@example.com", "eu-west-1"),
+    ),
+  ];
+  assert.notEqual(providers[0].group, providers[1].group);
 
   const firstToken = crypto.randomUUID();
   const first = await acquireProvider(user, providers, firstToken, providers);
