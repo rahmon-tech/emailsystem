@@ -15,6 +15,7 @@ import {
   supportsTestMode,
   definition,
 } from "@emailsystem/providers";
+import { supportsInlineAttachmentTransport } from "@emailsystem/providers/capabilities";
 import type {
   Connection,
   ConnectionInput,
@@ -335,6 +336,17 @@ export async function testProvider(
 ) {
   const row = await getConnection(userId, id),
     c = unlocked(row);
+  if (
+    message?.attachments.some(
+      (attachment) => attachment.disposition === "inline",
+    ) &&
+    !supportsInlineAttachmentTransport(c)
+  )
+    throw new AppError(
+      422,
+      "INLINE_TRANSPORT",
+      "This provider transport does not support inline CID images.",
+    );
   const selected = await senderForProviderTest(
     userId,
     id,
