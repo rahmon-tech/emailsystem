@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { redis } from "@emailsystem/core/redis";
 import {
   acquireProvider,
+  providerAdaptiveKey,
   releaseProvider,
   rateGroup,
   type Candidate,
@@ -83,4 +84,27 @@ test("independent sender domains keep independent pacing clocks", async () => {
   const secondToken = crypto.randomUUID();
   assert.equal(await acquireProvider(user, [two], secondToken, [two], true), "p2");
   await releaseProvider(user, two, secondToken);
+});
+
+test("adaptive provider slowdown stretches the provider pacing gap", async () => {
+  const user = crypto.randomUUID();
+  users.push(user);
+  const one = {
+    ...candidate(
+      "p1",
+      rateGroup(user, "resend", "sender@example.com", "us-east-1"),
+    ),
+    perSecond: 1000,
+    perMinute: 600,
+  };
+  await redis.set(providerAdaptiveKey(user, one.id), "4", "EX", 60);
+
+  const token = crypto.randomUUID();
+  assert.equal(await acquireProvider(user, [one], token, [one], true), "p1");
+  await releaseProvider(user, one, token);
+
+  const next = Number(await redis.get(`dispatch:${user}:${one.id}:next`));
+  const [seconds, micros] = await redis.time();
+  const redisNow = Number(seconds) * 1000 + Math.floor(Number(micros) / 1000);
+  assert(next - redisNow >= 250);
 });

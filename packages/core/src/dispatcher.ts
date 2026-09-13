@@ -41,8 +41,8 @@ end
 if not selected then return '' end
 local c=selected;local base=KEYS[1]..c.id;local group=KEYS[1]..'g:'..c.group;local pacing=KEYS[1]..'p:'..c.pacingGroup
 if c.smooth==1 then
- local providerGap=math.max(math.ceil(1000*c.cost/c.perSecond),math.ceil(60000*c.cost/c.perMinute))
- local groupGap=math.max(math.ceil(1000*c.cost/c.groupSecond),math.ceil(60000*c.cost/c.groupMinute))
+ local providerGap=math.ceil(math.max(math.ceil(1000*c.cost/c.perSecond),math.ceil(60000*c.cost/c.perMinute))*c.slowdown)
+ local groupGap=math.ceil(math.max(math.ceil(1000*c.cost/c.groupSecond),math.ceil(60000*c.cost/c.groupMinute))*c.groupSlowdown)
  local pacingGap=math.max(math.ceil(1000*c.cost/c.pacingSecond),math.ceil(60000*c.cost/c.pacingMinute))
  redis.call('SET',base..':next',ms+providerGap,'PX',math.max(180000,providerGap+120000))
  redis.call('SET',group..':next',ms+groupGap,'PX',math.max(180000,groupGap+120000))
@@ -76,6 +76,21 @@ export function rateGroup(
 function pacingGroupFromRateGroup(group: string) {
   return group.split(".")[1] ?? group;
 }
+export function providerAdaptiveKey(userId: string, providerId: string) {
+  return `dispatch:${userId}:adaptive:${providerId}`;
+}
+function clampSlowdown(value: string | null) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? Math.min(4, Math.max(1, parsed)) : 1;
+}
+async function providerSlowdowns(userId: string, providerIds: string[]) {
+  const ids = [...new Set(providerIds)];
+  if (!ids.length) return new Map<string, number>();
+  const values = await redis.mget(
+    ...ids.map((id) => providerAdaptiveKey(userId, id)),
+  );
+  return new Map(ids.map((id, index) => [id, clampSlowdown(values[index])]));
+}
 export async function acquireProvider(
   userId: string,
   candidates: Candidate[],
@@ -83,21 +98,33 @@ export async function acquireProvider(
   ratePeers: Candidate[] = candidates,
   smoothPacing = process.env.NODE_ENV !== "test",
 ) {
+  const slowdowns = smoothPacing
+    ? await providerSlowdowns(userId, [
+        ...candidates.map((candidate) => candidate.id),
+        ...ratePeers.map((candidate) => candidate.id),
+      ])
+    : new Map<string, number>();
   const enriched = candidates.map((c) => {
     const pacingGroup = pacingGroupFromRateGroup(c.group);
     const peers = ratePeers.filter((p) => p.group === c.group);
+    const providerPeers = peers.length ? peers : [c];
     const pacingPeers = ratePeers.filter(
       (p) => pacingGroupFromRateGroup(p.group) === pacingGroup,
     );
+    const domainPeers = pacingPeers.length ? pacingPeers : [c];
     return {
       ...c,
       pacingGroup,
       smooth: smoothPacing ? 1 : 0,
-      groupSecond: Math.min(...peers.map((p) => p.perSecond)),
-      groupMinute: Math.min(...peers.map((p) => p.perMinute)),
-      groupConcurrency: Math.min(...peers.map((p) => p.concurrency)),
-      pacingSecond: Math.min(...pacingPeers.map((p) => p.perSecond)),
-      pacingMinute: Math.min(...pacingPeers.map((p) => p.perMinute)),
+      slowdown: slowdowns.get(c.id) ?? 1,
+      groupSlowdown: Math.max(
+        ...providerPeers.map((peer) => slowdowns.get(peer.id) ?? 1),
+      ),
+      groupSecond: Math.min(...providerPeers.map((p) => p.perSecond)),
+      groupMinute: Math.min(...providerPeers.map((p) => p.perMinute)),
+      groupConcurrency: Math.min(...providerPeers.map((p) => p.concurrency)),
+      pacingSecond: Math.min(...domainPeers.map((p) => p.perSecond)),
+      pacingMinute: Math.min(...domainPeers.map((p) => p.perMinute)),
     };
   });
   const prefix = `dispatch:${userId}:`;

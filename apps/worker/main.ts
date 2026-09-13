@@ -15,6 +15,7 @@ import { reconcileEvents, ingestEvent } from "@emailsystem/core/events";
 import { unclaimedStates } from "@emailsystem/core/domain";
 import { log } from "@emailsystem/core/errors";
 import { retainTracking } from "@emailsystem/core/tracking";
+import { refreshProviderAdaptation } from "@emailsystem/core/provider-adaptation";
 const cfg = config();
 const connection = new Redis(cfg.REDIS_URL, { maxRetriesPerRequest: null });
 const queue = new Queue("email-deliveries", { connection });
@@ -97,6 +98,7 @@ async function pump() {
       await reconcileEvents();
       await finishCampaigns();
       await redis.set("worker:heartbeat", Date.now(), "EX", 30);
+      if (iteration % 5 === 0) await refreshProviderAdaptation();
       if (cfg.ALLOW_MOCK_PROVIDER === "true") {
         const mock = await db.deliveryAttempt.findMany({
           where: {
