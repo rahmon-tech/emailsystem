@@ -40,7 +40,12 @@ const createProfileInput = z
     maxDurationSeconds: z.number().int().min(60).max(86_400),
     startAt: z.coerce.date().optional(),
     endAt: z.coerce.date().optional(),
-    variables: experimentVariables.default({}),
+    variables: experimentVariables.default({
+      pacingProfile: "smooth",
+      transportEncoding: "provider-default",
+      charset: "utf-8",
+      contentMode: "html",
+    }),
   })
   .strict();
 
