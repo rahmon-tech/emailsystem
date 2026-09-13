@@ -30,6 +30,8 @@ type TestMessage = {
   senderIdentityId: string;
   subject: string;
   preheader: string;
+  cc: string[];
+  bcc: string[];
   html: string;
   text: string;
   attachments: {
