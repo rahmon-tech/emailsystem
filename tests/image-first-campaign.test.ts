@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { messageInput } from "../packages/core/src/campaigns";
-import { supportsInlineAttachmentTransport } from "../packages/providers/src/index";
+import { supportsInlineAttachmentTransport } from "../packages/providers/src/capabilities";
 
 const base = {
   name: "Image campaign",
