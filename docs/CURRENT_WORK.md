@@ -2,7 +2,7 @@
 
 ## Verified baseline
 
-Remote `main` is currently `7a8abeef3fa2a27d99e15c085bdf80f02278c220` (`feat(image): add image-first lifecycle and attachments`). PR #30 merged from exact verified head `e9c3480755222557de090a03af810485a322ac96`. Full merged-main Quality #127 passed for `7a8abeef3fa2a27d99e15c085bdf80f02278c220`, including fresh migrations, schema-drift and upgrade rehearsal, lint, secret scan, typecheck, unit tests, PostgreSQL/Redis integration tests, production build, Playwright E2E, visual-review screenshots, production-container validation, diagnostics, artifact upload, and cleanup.
+Remote `main` is currently `1a99b2274fc250eb8acc5ad9244acb0cda0f0ad1` (`feat(image): add CID-safe test-message support`). PR #31 merged from exact verified head `bbb2fafccd7a87951af5fd763b81291822ec0ae3`. Full merged-main Quality #136 passed for `1a99b2274fc250eb8acc5ad9244acb0cda0f0ad1`, including fresh migrations, schema-drift and upgrade rehearsal, lint, secret scan, typecheck, unit tests, PostgreSQL/Redis integration tests, production build, Playwright E2E, visual-review screenshots, production-container validation, diagnostics, artifact upload, and cleanup.
 
 The repository remains an existing TypeScript/pnpm application with Next.js + MUI web UI, PostgreSQL/Prisma persistence, Redis-backed safety/rate coordination, a worker process, provider adapters, an email renderer, and Docker deployment assets. Preserve this architecture; do not introduce a second campaign, delivery engine, experiment sender, provider-routing path, or test-send path.
 
@@ -20,40 +20,35 @@ The verified system currently includes:
 - inline-vs-attachment provider message semantics and Content-ID support across SMTP, SES raw MIME, Resend, SendGrid, Postmark, Mailjet, and Mailgun, with fail-closed behavior for unsupported API transports;
 - portable inline Content-ID validation capped at 127 characters and compatibility coverage for supported provider wire formats/MIME;
 - the authenticated `/blast/image` Image-first composer using the existing Blast/campaign/delivery architecture;
-- verified Image-first primary-image replace/remove lifecycle plus ordinary attachments sharing the authoritative five-file / 5 MB campaign attachment ceiling.
+- verified Image-first primary-image replace/remove lifecycle plus ordinary attachments sharing the authoritative five-file / 5 MB campaign attachment ceiling;
+- verified Image-first test-message support through the existing `POST /test-message` API and `testProvider` owner, including sender-authorized CID-capable provider filtering, server-side fail-closed transport enforcement before safety/test-delivery reservation, PostgreSQL proof, and browser proof without live external delivery.
 
 The canonical delivery-control-plane requirements remain in `docs/DELIVERY_CONTROL_PLANE.md`. They are not superseded by Image-first work. The current known control-plane gap is the distinction between experiment variables being **modeled** and those values being **authoritatively applied** to effective dispatcher/MIME behavior with reproducible evidence; that remains a later dedicated implementation slice.
 
 ## Current milestone
 
-Branch: `feat/image-first-test-message`
+The next distinct Image-first parity slice is **CC/BCC parity**.
 
-The active slice is **Image-first test-message support**. It reuses the existing `POST /test-message` API and `testProvider` owner; it does not create another test-send endpoint or bypass existing sender, suppression, reputation, safety-budget, provider-result, or audit behavior.
+Repository reconciliation establishes that standard Blast already accepts CC/BCC text fields, splits comma/semicolon/newline-separated addresses into arrays, and submits them through the existing campaign message snapshot. The authoritative core contract already lowercases and validates those arrays, limits each to five addresses, rejects duplicates across CC/BCC, rejects addresses already present in the recipient list, and rejects suppressed copy recipients.
 
-The current implementation candidate includes:
+Implement narrowly in this order:
 
-1. an inline-CID transport-capability guard inside the existing `testProvider` owner before sender selection, safety reservation, or provider test-delivery creation;
-2. fail-closed rejection for unsupported inline-CID transports using the same shared `supportsInlineAttachmentTransport` capability matrix already authoritative for campaign pre-flight/dispatch;
-3. an Image-first test-message dialog that uses the selected sender's authorized provider IDs, filters to enabled CID-capable transports, and submits the existing normalized message snapshot to `POST /test-message`;
-4. PostgreSQL integration proof that an unsupported transport creates no provider test-delivery, while the same mixed inline/ordinary attachment snapshot is accepted through an injected CID-capable provider without external network delivery;
-5. browser proof for the Image-first test-send flow and unsupported-provider filtering, using repository-controlled users/providers only;
-6. no schema, migration, campaign-dispatch, provider-routing, or live-delivery change.
+1. add browser proof that Image-first exposes CC and BCC fields and includes them in the same message payload used by preview/pre-flight/send/test-message;
+2. add integration proof that Image-first-shaped campaign input preserves normalized CC/BCC arrays through pre-flight and exercises the existing duplicate/list/suppression protections rather than duplicating validation in the UI;
+3. add the Image-first CC/BCC fields with the same split semantics as standard Blast;
+4. keep inline-image capability checks, attachment lifecycle, test-message behavior, routing, worker behavior, and persistence unchanged;
+5. run the full repository Quality workflow, reconcile this document to the exact candidate, merge only from a verified head and unchanged verified parent, then verify the exact merged `main` SHA.
 
-The first full candidate workflow exposed an E2E-only authentication synchronization defect in the new second browser test: it navigated to `/blast/image` before the post-login `/blast` transition completed. The test now waits for the authenticated `/blast` handoff exactly as the sibling Image-first browser flow already does. That correction does not change product behavior.
-
-This slice is **not yet a verified/merged baseline**. Closure requires the full repository Quality workflow to pass on the exact final documentation-reconciled PR head, then an exact-parent merge into the still-expected verified `main`, followed by full Quality verification on the exact merged `main` SHA.
-
-No live recipient or external provider may be used for automated proof.
+No schema or migration change is expected. No live recipient or external provider may be used for automated proof.
 
 ## Remaining Image-first parity after this slice
 
-After test-message support is verified and merged, continue narrowly in this order:
+After CC/BCC parity is verified and merged, continue narrowly in this order:
 
-1. CC/BCC parity where the standard composer already supports it;
-2. scheduling parity;
-3. tags/tracking parity using existing campaign owners rather than parallel state;
-4. earlier sender/provider inline-capability visibility before pre-flight while retaining server-side fail-closed enforcement;
-5. accessibility/alt-text UX and rendering/fidelity edge cases across supported transports.
+1. scheduling parity;
+2. tags/tracking parity using existing campaign owners rather than parallel state;
+3. earlier sender/provider inline-capability visibility before pre-flight while retaining server-side fail-closed enforcement;
+4. accessibility/alt-text UX and rendering/fidelity edge cases across supported transports.
 
 ## Delivery-control-plane follow-on
 
