@@ -47,7 +47,7 @@ type Flight = {
   count: number;
   providers: { id: string; name: string }[];
   previewHtml: string;
-  text: string;
+  message: { text: string };
   sender: { email: string; eligibleProviderCount: number };
 };
 
@@ -215,7 +215,10 @@ export function ImageBlast() {
       <Box
         sx={{
           display: "grid",
-          gridTemplateColumns: { xs: "1fr", lg: "minmax(0,1fr) minmax(360px,.8fr)" },
+          gridTemplateColumns: {
+            xs: "1fr",
+            lg: "minmax(0,1fr) minmax(360px,.8fr)",
+          },
           gap: 2.5,
           alignItems: "start",
         }}
@@ -226,7 +229,7 @@ export function ImageBlast() {
               <Typography variant="h6">1 · Recipients</Typography>
               {selectedImport && (
                 <Alert severity="success">
-                  {selectedImport.stats.sendable?.toLocaleString?.() ?? 0} recipients ready from {selectedImport.filename}.
+                  {(selectedImport.stats.sendable ?? 0).toLocaleString()} recipients ready from {selectedImport.filename}.
                 </Alert>
               )}
               <TextField
@@ -320,11 +323,19 @@ export function ImageBlast() {
                 <Typography sx={{ fontWeight: 650, mt: 1 }}>
                   {image ? image.filename : "Choose the primary email image"}
                 </Typography>
-                <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, mb: 1.5 }}>
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  sx={{ mt: 0.5, mb: 1.5 }}
+                >
                   PNG, JPEG, GIF or WebP · maximum 5 MB · embedded with Content-ID
                 </Typography>
                 <Button component="label" variant="outlined">
-                  {busy === "image" ? "Reading image…" : image ? "Replace image" : "Choose image"}
+                  {busy === "image"
+                    ? "Reading image…"
+                    : image
+                      ? "Replace image"
+                      : "Choose image"}
                   <input
                     hidden
                     type="file"
@@ -361,7 +372,12 @@ export function ImageBlast() {
                   component="img"
                   src={imageDataUrl}
                   alt={alt}
-                  sx={{ width: "100%", height: "auto", display: "block", borderRadius: 1 }}
+                  sx={{
+                    width: "100%",
+                    height: "auto",
+                    display: "block",
+                    borderRadius: 1,
+                  }}
                 />
               )}
               {preview && (
@@ -404,10 +420,14 @@ export function ImageBlast() {
                 </Alert>
               )}
               {flight?.problems.map((problem) => (
-                <Alert severity="error" key={problem}>{problem}</Alert>
+                <Alert severity="error" key={problem}>
+                  {problem}
+                </Alert>
               ))}
               {flight?.warnings.map((warning) => (
-                <Alert severity="info" key={warning}>{warning}</Alert>
+                <Alert severity="info" key={warning}>
+                  {warning}
+                </Alert>
               ))}
               <Button
                 variant={flight?.ready ? "outlined" : "contained"}
@@ -425,7 +445,10 @@ export function ImageBlast() {
                   void run("preflight", async () => {
                     const result = await api<Flight>("preflight", payload());
                     setFlight(result);
-                    setPreview({ html: result.previewHtml, text: result.text });
+                    setPreview({
+                      html: result.previewHtml,
+                      text: result.message.text,
+                    });
                   })
                 }
               >
