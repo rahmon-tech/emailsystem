@@ -446,6 +446,7 @@ model ExperimentRun {
   campaign Campaign?
   attempts DeliveryAttempt[]
   recipientUses ExperimentRunRecipientUse[]
+  evidence ExperimentEvidence[]
   @@unique([id,userId])
   @@index([userId,createdAt])
   @@index([userId,state,expiresAt])
@@ -459,6 +460,25 @@ model ExperimentRunRecipientUse {
   firstUsedAt DateTime @default(now())
   @@id([runId,email])
   @@index([userId,email])
+}
+
+model ExperimentEvidence {
+  id String @id @default(uuid())
+  userId String
+  runId String
+  run ExperimentRun @relation(fields:[runId,userId],references:[id,userId],onDelete:Cascade)
+  sequence Int
+  kind String
+  attemptId String?
+  providerId String?
+  campaignId String?
+  payload Json
+  previousHash String
+  hash String
+  createdAt DateTime @default(now())
+  @@unique([runId,sequence])
+  @@index([userId,runId,sequence])
+  @@index([attemptId])
 }
 
 model DeniedDestination {
