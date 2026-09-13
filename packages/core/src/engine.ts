@@ -23,6 +23,10 @@ import {
   eligibleProvidersForSenderId,
   providerStillAuthorized,
 } from "./senders";
+import {
+  experimentDispatchScope,
+  reserveExperimentTransport,
+} from "./experiments";
 export async function processDelivery(
   id: string,
   sendMessage: typeof send = send,
@@ -122,13 +126,31 @@ export async function processDelivery(
           });
           return false;
         }
+        const experimentScope = await experimentDispatchScope(tx, {
+          userId: initial.userId,
+          runId: c.experimentRunId,
+          senderIdentityId,
+          now: new Date(now()),
+        });
+        if (!experimentScope.allowed) {
+          await tx.campaign.updateMany({
+            where: { id: c.id, state: { in: ["QUEUED", "SENDING"] } },
+            data: { state: "PAUSED", safeError: experimentScope.reason },
+          });
+          return false;
+        }
+        const scopedProviderIds = experimentScope.providerIds
+          ? new Set(experimentScope.providerIds)
+          : null;
         const authorized = await eligibleProvidersForSenderId(
           tx,
           initial.userId,
           senderIdentityId,
         );
         const eligible = authorized.filter(
-          (p) => p.quotaRemaining === null || p.quotaRemaining >= cost,
+          (p) =>
+            (p.quotaRemaining === null || p.quotaRemaining >= cost) &&
+            (!scopedProviderIds || scopedProviderIds.has(p.id)),
         );
         if (!eligible.length) {
           await waitForSafety(
@@ -137,7 +159,9 @@ export async function processDelivery(
             [],
             now() + 60000,
             now(),
-            "No healthy eligible provider · review connections, cooldowns and provider quota",
+            c.experimentRunId
+              ? "No healthy eligible provider remains inside the approved experiment scope"
+              : "No healthy eligible provider · review connections, cooldowns and provider quota",
           );
           return false;
         }
@@ -393,9 +417,33 @@ export async function processDelivery(
         if (currentUsage.some((b) => b.limit !== null && b.used > b.limit))
           return false;
         if (!(await governor.commit(attemptId))) return false;
+        const experimentReservation = await reserveExperimentTransport(tx, {
+          userId: initial.userId,
+          runId: c.experimentRunId,
+          campaignId: c.id,
+          senderIdentityId,
+          providerId: p.id,
+          recipient: initial.email,
+          attemptId,
+          now: new Date(now()),
+        });
+        if (!experimentReservation.allowed) {
+          await tx.campaign.updateMany({
+            where: { id: c.id, state: { in: ["QUEUED", "SENDING"] } },
+            data: {
+              state: "PAUSED",
+              safeError: experimentReservation.reason,
+            },
+          });
+          return false;
+        }
         await tx.deliveryAttempt.update({
           where: { id: attemptId },
-          data: { state: "PROCESSING", transmissionStartedAt: new Date(now()) },
+          data: {
+            state: "PROCESSING",
+            transmissionStartedAt: new Date(now()),
+            experimentRunId: experimentReservation.experimentRunId,
+          },
         });
         return true;
       },
@@ -757,6 +805,7 @@ export async function finishCampaigns() {
           },
         },
       });
+      const completedAt = new Date();
       await tx.campaign.update({
         where: { id: c.id },
         data: {
@@ -766,8 +815,21 @@ export async function finishCampaigns() {
               : errors
                 ? "COMPLETED_WITH_ERRORS"
                 : "COMPLETED",
-          completedAt: new Date(),
+          completedAt,
         },
       });
+      if (current.experimentRunId)
+        await tx.experimentRun.updateMany({
+          where: {
+            id: current.experimentRunId,
+            userId: current.userId,
+            state: "RUNNING",
+          },
+          data: {
+            state: "COMPLETED",
+            stoppedAt: completedAt,
+            stopReason: "Bound campaign finished.",
+          },
+        });
     });
 }
