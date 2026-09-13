@@ -84,18 +84,24 @@ export async function GET(request: Request, { params }: Context) {
     return response({
       items: rows.slice(0, 50).map(({ attempts, ...delivery }) => {
         const provider = attempts[0]?.provider;
+        const deliveryEvents = provider
+          ? definition(provider.type as Parameters<typeof definition>[0])
+              .webhook === "none"
+            ? "unavailable"
+            : "supported"
+          : "unavailable";
+        const presentationState =
+          delivery.state === "PROVIDER_ACCEPTED"
+            ? provider?.transport === "smtp"
+              ? deliveryEvents === "supported"
+                ? "SMTP_ACCEPTED_AWAITING_CONFIRMATION"
+                : "SMTP_ACCEPTED_UNCONFIRMED"
+              : "PROVIDER_ACCEPTED_AWAITING_CONFIRMATION"
+            : delivery.state;
         return {
           ...delivery,
-          provider: provider
-            ? {
-                ...provider,
-                deliveryEvents:
-                  definition(provider.type as Parameters<typeof definition>[0])
-                    .webhook === "none"
-                    ? "unavailable"
-                    : "supported",
-              }
-            : null,
+          state: presentationState,
+          provider: provider ? { ...provider, deliveryEvents } : null,
         };
       }),
       nextCursor: rows.length > 50 ? rows[49].id : null,
