@@ -168,6 +168,29 @@ export function SendingSafety() {
       }}
     />
   );
+  const pacingField = (
+    key: "accountPerMinute" | "domainPerMinute" | "campaignPerMinute",
+    label: string,
+  ) => (
+    <TextField
+      key={key}
+      label={label}
+      type="number"
+      fullWidth
+      value={value?.[key] ?? ""}
+      onChange={(e) =>
+        setValue(
+          (v) =>
+            v && {
+              ...v,
+              [key]: e.target.value === "" ? null : Number(e.target.value),
+            },
+        )
+      }
+      slotProps={{ htmlInput: { min: 1, max: 1000000, step: 1 } }}
+      helperText="Blank means no additional ceiling at this scope."
+    />
+  );
   return (
     <>
       <Button
@@ -259,6 +282,23 @@ export function SendingSafety() {
                     High capacity · within configured limits
                   </MenuItem>
                 </TextField>
+                <Accordion disableGutters>
+                  <AccordionSummary expandIcon={<ExpandMore />}>
+                    Throughput ceilings
+                  </AccordionSummary>
+                  <AccordionDetails>
+                    <Stack spacing={2.5}>
+                      {pacingField("accountPerMinute", "Account / minute")}
+                      {pacingField("domainPerMinute", "Sender-domain / minute")}
+                      {pacingField("campaignPerMinute", "Campaign / minute")}
+                      <Typography variant="caption" color="text.secondary">
+                        These optional ceilings are shared across providers. The
+                        dispatcher always uses the strictest applicable account,
+                        sender-domain, campaign, and provider limit.
+                      </Typography>
+                    </Stack>
+                  </AccordionDetails>
+                </Accordion>
                 <Accordion disableGutters>
                   <AccordionSummary expandIcon={<ExpandMore />}>
                     Automatic safety pauses

@@ -1,5 +1,6 @@
 import { z } from "zod";
 export const dailyBudget = z.number().int().min(1).max(10000000);
+export const pacingPerMinute = z.number().int().min(1).max(1000000).nullable();
 export const warmupProfile = z
   .enum(["conservative", "balanced", "high_capacity"])
   .default("balanced");
@@ -10,6 +11,9 @@ export const safetySettings = z
     domainDaily: dailyBudget.default(5000),
     providerDaily: dailyBudget.default(5000),
     campaignDaily: dailyBudget.nullable().default(5000),
+    accountPerMinute: pacingPerMinute.default(null),
+    domainPerMinute: pacingPerMinute.default(null),
+    campaignPerMinute: pacingPerMinute.default(null),
     warmupProfile,
     complaintRate: z.number().min(0.01).max(1).default(0.1),
     hardBounceRate: z.number().min(0.1).max(10).default(2),

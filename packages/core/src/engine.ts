@@ -224,6 +224,12 @@ export async function processDelivery(
           ratePeers,
           process.env.NODE_ENV !== "test",
           settings.warmupProfile,
+          {
+            accountPerMinute: settings.accountPerMinute,
+            domainPerMinute: settings.domainPerMinute,
+            campaignId: c.id,
+            campaignPerMinute: settings.campaignPerMinute,
+          },
         );
         if (!chosen) return false;
         provider = eligible.find((p) => p.id === chosen)!;
