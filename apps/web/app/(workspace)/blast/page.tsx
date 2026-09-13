@@ -4,6 +4,7 @@ import { db } from "@emailsystem/db";
 import { sessionCookie, userFromToken } from "@emailsystem/core/auth";
 import { absoluteAppUrl } from "@emailsystem/core/server-paths";
 import { Blast } from "../../../components/blast";
+import { SavedImports } from "../../../components/saved-imports";
 export const metadata = { title: "Blast" };
 export const dynamic = "force-dynamic";
 export default async function Page() {
@@ -15,5 +16,10 @@ export default async function Page() {
     where: { userId: user.id, deletedAt: null },
   });
   if (!providers) redirect(absoluteAppUrl("/providers"));
-  return <Blast />;
+  return (
+    <>
+      <SavedImports />
+      <Blast />
+    </>
+  );
 }
