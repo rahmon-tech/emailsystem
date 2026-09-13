@@ -11,7 +11,7 @@ const png = Buffer.from(
   "base64",
 );
 
-test("image-first composer uploads, previews and fails closed on an unsupported transport", async ({
+test("image-first composer manages inline image lifecycle, ordinary attachments and fail-closed preflight", async ({
   page,
 }) => {
   const email = `image-browser-${crypto.randomUUID()}@example.com`;
@@ -57,8 +57,32 @@ test("image-first composer uploads, previews and fails closed on an unsupported 
     });
     await page.getByLabel("Alt text").fill("Primary campaign visual");
 
+    await page.getByLabel("Attachments").setInputFiles({
+      name: "brief.txt",
+      mimeType: "text/plain",
+      buffer: Buffer.from("ordinary attachment proof"),
+    });
+    await expect(page.getByText("brief.txt", { exact: true })).toBeVisible();
     await expect(page.getByText("hero.png", { exact: true })).toBeVisible();
     await expect(page.locator('img[alt="Primary campaign visual"]')).toBeVisible();
+
+    await page.getByRole("button", { name: "Remove image", exact: true }).click();
+    await expect(page.getByText("hero.png", { exact: true })).toHaveCount(0);
+    await expect(page.getByText("brief.txt", { exact: true })).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Prepare preview", exact: true }),
+    ).toBeDisabled();
+
+    await page.getByLabel("Primary email image").setInputFiles({
+      name: "hero-replacement.png",
+      mimeType: "image/png",
+      buffer: png,
+    });
+    await page.getByLabel("Alt text").fill("Replacement campaign visual");
+    await expect(
+      page.getByText("hero-replacement.png", { exact: true }),
+    ).toBeVisible();
+    await expect(page.getByText("brief.txt", { exact: true })).toBeVisible();
 
     await page.getByRole("button", { name: "Prepare preview", exact: true }).click();
     await expect(page.locator('iframe[title="Image-first email preview"]')).toBeVisible();
