@@ -100,6 +100,7 @@ export function ImageBlast() {
   const [preheader, setPreheader] = useState("");
   const [cc, setCc] = useState("");
   const [bcc, setBcc] = useState("");
+  const [scheduledAt, setScheduledAt] = useState("");
   const [alt, setAlt] = useState("");
   const [image, setImage] = useState<InlineImage | null>(null);
   const [attachments, setAttachments] = useState<FileAttachment[]>([]);
@@ -146,6 +147,7 @@ export function ImageBlast() {
     preheader,
     cc: splitEmails(cc),
     bcc: splitEmails(bcc),
+    scheduledAt: scheduledAt ? new Date(scheduledAt).toISOString() : undefined,
     html,
     text,
     attachments: [
@@ -389,6 +391,16 @@ export function ImageBlast() {
                   These addresses receive a copy of every individual email in this campaign and count toward your sending limits.
                 </Typography>
               </Stack>
+              <TextField
+                label="Schedule (your local time)"
+                type="datetime-local"
+                slotProps={{ inputLabel: { shrink: true } }}
+                value={scheduledAt}
+                onChange={(event) => {
+                  setScheduledAt(event.target.value);
+                  invalidate();
+                }}
+              />
               <Box
                 sx={{
                   border: "1px dashed",
@@ -599,7 +611,7 @@ export function ImageBlast() {
                 disabled={!!busy || !flight?.ready}
                 onClick={() => setConfirm(true)}
               >
-                Send campaign
+                {scheduledAt ? "Schedule campaign" : "Send campaign"}
               </Button>
               <ImageTestMessage
                 senderCatalog={senders}
@@ -622,7 +634,11 @@ export function ImageBlast() {
         open={confirm}
         onClose={() => setConfirm(false)}
         busy={busy === "send"}
-        title="Start this image-first campaign?"
+        title={
+          scheduledAt
+            ? "Schedule this image-first campaign?"
+            : "Start this image-first campaign?"
+        }
       >
         <DialogContent>
           {flight?.count.toLocaleString()} messages will enter the existing background delivery queue. The inline image and any ordinary attachments remain part of the immutable campaign snapshot.
