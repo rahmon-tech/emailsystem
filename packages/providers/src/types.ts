@@ -16,6 +16,8 @@ export interface Attachment {
   filename: string;
   content: string;
   contentType: string;
+  disposition?: "attachment" | "inline";
+  contentId?: string;
 }
 export interface ProviderMessage {
   from: string;
