@@ -212,32 +212,40 @@ An email cannot universally use a photo as a body without MIME structure: attach
 
 ### Verified/merged foundation
 
-- weighted/fair multi-provider dispatcher;
-- provider-specific rate/quota grouping;
-- provider-independent sender-domain smooth pacing;
-- adaptive slowdown/cooldown from recent provider pressure;
+- weighted/fair multi-provider dispatcher with provider-specific rate/quota/concurrency grouping;
+- provider-independent sender-domain smooth pacing plus explicit account/domain/campaign ceilings;
+- domain soft-start/warm-up profiles that cannot exceed configured ceilings;
+- provider cooldowns and retry scheduling from temporary/rate-limit outcomes, including provider retry hints;
 - truthful recipient/provider-acceptance versus delivery presentation;
 - observed campaign pacing/ETA telemetry based on real transport starts;
-- existing safety budgets, complaint/bounce brakes, suppression handling, sender authorization, provider policy-block state.
+- safety budgets, suppression handling, sender authorization, complaint/hard-bounce brakes, and fail-closed provider policy-block state;
+- first-class authorized experiment profiles/runs with `authorizationRef`, versioned profile metadata, provider/sender scopes, controlled-recipient allowlists, bounded start/end windows, hard recipient/attempt/duration ceilings, and account kill switch;
+- experiment transport reservations that re-check run state, time window, provider/sender scope, recipient allowlist and hard ceilings immediately before transport starts;
+- tamper-evident chained SHA-256 experiment evidence with transport-start/outcome records, run-scoped recipient hashes, integrity verification and tenant-safe JSON export;
+- standards-compliant inline-vs-attachment provider message semantics and CID compatibility across supported SMTP/API transports, with unsupported inline transports failing closed;
+- merged Image-first CID composition path using the existing Blast/campaign/delivery architecture.
 
-### In-flight
+### Partially implemented / requires proof before claiming complete
 
-- bounded high-rate sender-domain soft start after inactivity.
+- experiment variables already model smooth/bounded-burst pacing, optional pacing interval, concurrency, transfer encoding/UTF-8 charset and content mode, but those approved values still need authoritative binding into the effective dispatcher/MIME behavior rather than merely being stored as profile metadata;
+- transport-start evidence records configured pacing/provider state, but should also record the **effective applied experiment values** and any derived pacing gap so a judge/operator can reproduce the exact run;
+- provider adaptive slowdown state is consumed by the dispatcher and temporary/rate-limit cooldown is enforced, but the complete pressure→slowdown→gradual-recovery loop and restart durability still need focused end-to-end proof before being treated as finished;
+- failover behavior exists through eligible-provider selection, while dedicated tests should explicitly prove that temporary provider unavailability may fail over and a true policy block pauses instead of routing around enforcement.
 
 ### Remaining major milestones
 
-- configurable warm-up profiles and explicit domain/campaign/account pacing policy;
-- richer `Retry-After` / cooldown scheduling and next-allowed visibility;
-- provider health/effective-rate telemetry;
-- first-class experiment run/profile model and scope enforcement;
-- immutable/tamper-evident experiment evidence and audit trail;
-- experiment kill switch and hard time/volume ceilings;
-- configurable controlled-recipient allowlists;
-- MIME/encoding compatibility experiment profiles;
-- image-first/CID/attachment content mode;
-- privacy/retention controls for evidence and message snapshots;
-- final Activity/UX for experiment configuration, live evidence, and export;
-- end-to-end CI/security/tenant/race coverage for every new mutation path.
+- bind approved experiment pacing/concurrency/encoding/content variables into the existing dispatcher/provider-rendering owners while keeping production/domain/account ceilings authoritative;
+- add focused reproducibility/evidence tests for those effective experiment values and explicit temporary-failover-vs-policy-stop behavior;
+- richer provider health/effective-rate/`nextAllowedAt` telemetry in Activity;
+- privacy/retention controls for experiment evidence and message snapshots;
+- final Activity/UX for experiment configuration, live evidence, stop/review state and export;
+- continue Image-first parity/asset lifecycle: ordinary attachments, remove/replace lifecycle, test-send, CC/BCC, scheduling, tags/tracking, capability visibility and rendering/accessibility edge cases;
+- end-to-end CI/security/tenant/race coverage for every new mutation path;
+- final production hardening and VPS reconciliation only after repository Quality is green.
+
+## Non-negotiable experiment boundary
+
+Experiments may vary behavior only **inside** the authorized envelope; they may never expand it. Recipient allowlists, authorization metadata, provider/sender scopes, configured account/domain/provider ceilings, suppression rules, complaint/bounce brakes, policy-block state, hard time/volume limits, and the kill switch remain authoritative regardless of experiment profile. Experimental behavior must never silently route around a provider enforcement decision.
 
 ## Engineering rule
 
