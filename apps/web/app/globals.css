@@ -10,6 +10,21 @@ body {
   overflow-x: hidden;
   overflow-wrap: anywhere;
 }
+header,
+main,
+main > div {
+  box-sizing: border-box;
+  min-width: 0;
+  max-width: 100%;
+}
+main .MuiStack-root,
+main .MuiCard-root,
+main .MuiAccordion-root,
+main .MuiFormControl-root,
+main .MuiInputBase-root {
+  min-width: 0;
+  max-width: 100%;
+}
 a {
   color: inherit;
 }
@@ -35,13 +50,21 @@ a {
   text-decoration: underline;
 }
 .cm-editor {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
   font-size: 13px;
   border: 1px solid var(--editor-border);
   border-radius: 8px;
   overflow: hidden;
 }
 .cm-scroller {
+  min-width: 0;
+  max-width: 100%;
   overflow: auto !important;
+}
+.cm-content {
+  min-width: 0;
 }
 button,
 input,
@@ -58,5 +81,43 @@ iframe {
 @media (max-width: 599px) {
   .tiptap {
     padding: 16px;
+  }
+
+  /* Safari can otherwise treat width:100% plus MUI spacing as content-box
+     during responsive hydration. Keep the mobile workspace inside the viewport
+     even before every component style has finished hydrating. */
+  main {
+    width: auto !important;
+    max-width: 100% !important;
+    margin-inline: 0 !important;
+    padding-left: 16px !important;
+    padding-right: 16px !important;
+    overflow-x: hidden;
+  }
+  main > div {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+  }
+
+  /* Pre-flight is an action cluster, not three giant form controls. Keep its
+     buttons compact, centered and readable on narrow iPhone widths. */
+  main [aria-label="Pre-flight"] > .MuiStack-root > .MuiButton-root {
+    align-self: center;
+    width: auto;
+    min-width: 168px;
+    max-width: 100%;
+    min-height: 44px;
+    padding-inline: 16px;
+    justify-content: center;
+    white-space: nowrap;
+  }
+  main [aria-label="Pre-flight"] .MuiButton-loadingIndicator {
+    display: none !important;
+  }
+  main [aria-label="Pre-flight"] .MuiButton-loading > * {
+    visibility: visible !important;
   }
 }
