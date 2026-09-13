@@ -51,10 +51,10 @@ test("image-first composer manages inline image lifecycle, copy recipients, ordi
     await page.getByLabel("Campaign name").fill("Image browser campaign");
     await page.getByLabel("Subject").fill("Image browser verification");
     await page
-      .getByLabel("CC (comma separated)")
+      .getByLabel("CC (comma separated)", { exact: true })
       .fill("COPY@example.org; copy-two@example.org");
     await page
-      .getByLabel("BCC (comma separated)")
+      .getByLabel("BCC (comma separated)", { exact: true })
       .fill("blind@example.org\nblind-two@example.org");
     await expect(
       page.getByText(/These addresses receive a copy of every individual email/i),
