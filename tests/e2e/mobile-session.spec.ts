@@ -12,8 +12,11 @@ test("iPhone Blast stays centered and session survives hard reload", async ({
   page,
   context,
 }) => {
-  let user = await db.user.findUnique({ where: { email } });
-  if (!user) user = await createUser(email, password);
+  const existing = await db.user.findUnique({
+    where: { email },
+    select: { id: true, email: true },
+  });
+  const user = existing ?? (await createUser(email, password));
   if (!(await db.providerConnection.count({ where: { userId: user.id } }))) {
     const { id: _id, ...input } = connection("mock");
     await saveProvider(user.id, { ...input, name: "Mobile layout mock" });
