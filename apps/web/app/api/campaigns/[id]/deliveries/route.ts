@@ -2,7 +2,10 @@ import { z } from "zod";
 import { db } from "@emailsystem/db";
 import { definition } from "@emailsystem/providers";
 import { campaignSummary } from "@emailsystem/core/campaigns";
-import { recipientDeliveryPresentationState } from "@emailsystem/core/delivery-presentation";
+import {
+  recipientDeliveryPresentationState,
+  type DeliveryEventSupport,
+} from "@emailsystem/core/delivery-presentation";
 import { requireUser } from "@emailsystem/core/auth";
 import { AppError } from "@emailsystem/core/errors";
 import { errorResponse, response } from "@emailsystem/core/http";
@@ -85,7 +88,7 @@ export async function GET(request: Request, { params }: Context) {
     return response({
       items: rows.slice(0, 50).map(({ attempts, ...delivery }) => {
         const provider = attempts[0]?.provider;
-        const deliveryEvents = provider
+        const deliveryEvents: DeliveryEventSupport = provider
           ? definition(provider.type as Parameters<typeof definition>[0])
               .webhook === "none"
             ? "unavailable"
