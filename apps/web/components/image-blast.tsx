@@ -377,7 +377,11 @@ export function ImageBlast() {
                 >
                   PNG, JPEG, GIF or WebP · primary image and attachments share the 5-file / 5 MB campaign limit
                 </Typography>
-                <Stack direction="row" spacing={1} justifyContent="center" flexWrap="wrap">
+                <Stack
+                  direction="row"
+                  spacing={1}
+                  sx={{ justifyContent: "center", flexWrap: "wrap" }}
+                >
                   <Button component="label" variant="outlined">
                     {busy === "image"
                       ? "Reading image…"
@@ -437,7 +441,10 @@ export function ImageBlast() {
                   Ordinary attachments remain separate from the primary inline image.
                 </Typography>
                 {!!attachments.length && (
-                  <Stack direction="row" gap={1} flexWrap="wrap" sx={{ mt: 1.25 }}>
+                  <Stack
+                    direction="row"
+                    sx={{ gap: 1, flexWrap: "wrap", mt: 1.25 }}
+                  >
                     {attachments.map((attachment, index) => (
                       <Chip
                         key={`${attachment.filename}-${index}`}
