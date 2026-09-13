@@ -1,5 +1,10 @@
 import { redis } from "./redis";
 import { digest } from "./security";
+import {
+  DOMAIN_SOFT_START_IDLE_MS,
+  DOMAIN_SOFT_START_TTL_SECONDS,
+  domainSoftStartSlowdown,
+} from "./domain-soft-start";
 export interface Candidate {
   id: string;
   weight: number;
@@ -43,13 +48,18 @@ local c=selected;local base=KEYS[1]..c.id;local group=KEYS[1]..'g:'..c.group;loc
 if c.smooth==1 then
  local providerGap=math.ceil(math.max(math.ceil(1000*c.cost/c.perSecond),math.ceil(60000*c.cost/c.perMinute))*c.slowdown)
  local groupGap=math.ceil(math.max(math.ceil(1000*c.cost/c.groupSecond),math.ceil(60000*c.cost/c.groupMinute))*c.groupSlowdown)
- local pacingGap=math.max(math.ceil(1000*c.cost/c.pacingSecond),math.ceil(60000*c.cost/c.pacingMinute))
+ local pacingGap=math.ceil(math.max(math.ceil(1000*c.cost/c.pacingSecond),math.ceil(60000*c.cost/c.pacingMinute))*c.pacingSlowdown)
  redis.call('SET',base..':next',ms+providerGap,'PX',math.max(180000,providerGap+120000))
  redis.call('SET',group..':next',ms+groupGap,'PX',math.max(180000,groupGap+120000))
  redis.call('SET',pacing..':next',ms+pacingGap,'PX',math.max(180000,pacingGap+120000))
  local psk=pacing..':s:'..math.floor(ms/1000);local pmk=pacing..':m:'..math.floor(ms/60000)
  redis.call('INCRBY',psk,c.cost);redis.call('PEXPIRE',psk,2000);redis.call('INCRBY',pmk,c.cost);redis.call('PEXPIRE',pmk,120000)
  redis.call('ZADD',pacing..':active',ms+120000,token);redis.call('PEXPIRE',pacing..':active',180000)
+ local warmLastKey=pacing..':warm:last';local warmCountKey=pacing..':warm:count'
+ local warmLast=tonumber(redis.call('GET',warmLastKey) or '0')
+ if warmLast==0 or ms-warmLast>${DOMAIN_SOFT_START_IDLE_MS} then redis.call('SET',warmCountKey,0) end
+ redis.call('INCR',warmCountKey);redis.call('EXPIRE',warmCountKey,${DOMAIN_SOFT_START_TTL_SECONDS})
+ redis.call('SET',warmLastKey,ms,'EX',${DOMAIN_SOFT_START_TTL_SECONDS})
 end
 for _,b in ipairs({base,group}) do
  local sk=b..':s:'..math.floor(ms/1000);local mk=b..':m:'..math.floor(ms/60000)
@@ -79,6 +89,10 @@ function pacingGroupFromRateGroup(group: string) {
 export function providerAdaptiveKey(userId: string, providerId: string) {
   return `dispatch:${userId}:adaptive:${providerId}`;
 }
+export function senderDomainWarmKeys(userId: string, pacingGroup: string) {
+  const base = `dispatch:${userId}:p:${pacingGroup}:warm`;
+  return { count: base + ":count", last: base + ":last" };
+}
 function clampSlowdown(value: string | null) {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? Math.min(4, Math.max(1, parsed)) : 1;
@@ -91,6 +105,29 @@ async function providerSlowdowns(userId: string, providerIds: string[]) {
   );
   return new Map(ids.map((id, index) => [id, clampSlowdown(values[index])]));
 }
+async function domainWarmState(userId: string, pacingGroups: string[]) {
+  const groups = [...new Set(pacingGroups)];
+  if (!groups.length)
+    return new Map<string, { count: number; last: number | null }>();
+  const keys = groups.flatMap((group) => {
+    const warm = senderDomainWarmKeys(userId, group);
+    return [warm.count, warm.last];
+  });
+  const values = await redis.mget(...keys);
+  return new Map(
+    groups.map((group, index) => {
+      const count = Number(values[index * 2] ?? 0);
+      const last = Number(values[index * 2 + 1] ?? 0);
+      return [
+        group,
+        {
+          count: Number.isFinite(count) ? Math.max(0, count) : 0,
+          last: Number.isFinite(last) && last > 0 ? last : null,
+        },
+      ];
+    }),
+  );
+}
 export async function acquireProvider(
   userId: string,
   candidates: Candidate[],
@@ -98,12 +135,23 @@ export async function acquireProvider(
   ratePeers: Candidate[] = candidates,
   smoothPacing = process.env.NODE_ENV !== "test",
 ) {
-  const slowdowns = smoothPacing
-    ? await providerSlowdowns(userId, [
-        ...candidates.map((candidate) => candidate.id),
-        ...ratePeers.map((candidate) => candidate.id),
+  const pacingGroups = [
+    ...candidates.map((candidate) => pacingGroupFromRateGroup(candidate.group)),
+    ...ratePeers.map((candidate) => pacingGroupFromRateGroup(candidate.group)),
+  ];
+  const [slowdowns, warmState] = smoothPacing
+    ? await Promise.all([
+        providerSlowdowns(userId, [
+          ...candidates.map((candidate) => candidate.id),
+          ...ratePeers.map((candidate) => candidate.id),
+        ]),
+        domainWarmState(userId, pacingGroups),
       ])
-    : new Map<string, number>();
+    : [
+        new Map<string, number>(),
+        new Map<string, { count: number; last: number | null }>(),
+      ];
+  const now = Date.now();
   const enriched = candidates.map((c) => {
     const pacingGroup = pacingGroupFromRateGroup(c.group);
     const peers = ratePeers.filter((p) => p.group === c.group);
@@ -112,6 +160,10 @@ export async function acquireProvider(
       (p) => pacingGroupFromRateGroup(p.group) === pacingGroup,
     );
     const domainPeers = pacingPeers.length ? pacingPeers : [c];
+    const pacingSecond = Math.min(...domainPeers.map((p) => p.perSecond));
+    const pacingMinute = Math.min(...domainPeers.map((p) => p.perMinute));
+    const warm = warmState.get(pacingGroup) ?? { count: 0, last: null };
+    const idleMs = warm.last === null ? null : Math.max(0, now - warm.last);
     return {
       ...c,
       pacingGroup,
@@ -123,8 +175,11 @@ export async function acquireProvider(
       groupSecond: Math.min(...providerPeers.map((p) => p.perSecond)),
       groupMinute: Math.min(...providerPeers.map((p) => p.perMinute)),
       groupConcurrency: Math.min(...providerPeers.map((p) => p.concurrency)),
-      pacingSecond: Math.min(...domainPeers.map((p) => p.perSecond)),
-      pacingMinute: Math.min(...domainPeers.map((p) => p.perMinute)),
+      pacingSecond,
+      pacingMinute,
+      pacingSlowdown: smoothPacing
+        ? domainSoftStartSlowdown(pacingMinute, warm.count, idleMs)
+        : 1,
     };
   });
   const prefix = `dispatch:${userId}:`;
