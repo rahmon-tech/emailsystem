@@ -1,10 +1,10 @@
-import Link from "next/link";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { Box, Button } from "@mui/material";
 import { ImageOutlined } from "@mui/icons-material";
 import { db } from "@emailsystem/db";
 import { sessionCookie, userFromTokens } from "@emailsystem/core/auth";
+import { appPath } from "@emailsystem/core/paths";
 import { absoluteAppUrl } from "@emailsystem/core/server-paths";
 import { Blast } from "../../../components/blast";
 import { SavedImports } from "../../../components/saved-imports";
@@ -25,8 +25,7 @@ export default async function Page() {
       <SavedImports />
       <Box sx={{ display: "flex", justifyContent: "flex-end", mb: 1.5 }}>
         <Button
-          component={Link}
-          href="/blast/image"
+          href={appPath("/blast/image")}
           size="small"
           startIcon={<ImageOutlined />}
         >
