@@ -2,25 +2,49 @@
 
 ## Verified baseline
 
-The HTML fidelity and defensive tracking milestone is merged on `main`. Remote source `b5882b3c790e7ca2a1c488139469dc19a8b00d12` passed CI run 34319148808, including PostgreSQL/Redis integration, the production subpath browser workflow, migrations, upgrade rehearsal, build, and container readiness.
+Remote `main` is verified at `16e8910040416d45ed0da49a2beda667f523a858` (`feat(email): preserve inline CID attachments across providers`). Push Quality #110 completed successfully for that exact SHA, including dependency install, Prisma generation, fresh PostgreSQL migrations, schema-drift verification, upgrade rehearsal, lint, secret scanning, TypeScript, unit tests, PostgreSQL/Redis integration tests, production build, browser E2E, visual-review artifacts, production-container validation, diagnostics, and cleanup.
 
-## Provider bootstrap, senders, and canonical tracking
+The repository is an existing TypeScript/pnpm application with Next.js + MUI web UI, PostgreSQL/Prisma persistence, Redis-backed safety/rate coordination, a worker process, provider adapters, an email renderer, and Docker deployment assets. Preserve this architecture; do not introduce a second campaign or delivery path.
 
-The current candidate supplements that milestone without introducing a second delivery architecture:
+## Completed product foundation
 
-- a server-only, idempotent bootstrap prepares exactly eight API connections: Resend, Mailgun, SendGrid, Brevo, Postmark, Mailjet, SMTP2GO, and Elastic Email;
-- API credentials and optional backup SMTP credentials remain separate fields in one encrypted provider record, so backups cannot multiply routing capacity;
-- `.env.providers.local` is git-ignored, must be mode `0600`, supplies the bootstrap values only on the controlled machine, and is never printed;
-- dry-run/apply/verify modes expose only safe metadata, perform no automatic delivery, and leave ambiguous Postmark server-token selection unresolved until read-only probes provide evidence;
-- tenant-owned domains and sender identities replace arbitrary campaign `From` text; provider authorization is explicitly domain-wide or address-specific and is rechecked when dispatch begins;
-- bulk aliases do not create providers, increase limits, or change a campaign's stable sender identity;
-- click tracking remains optional and defaults off. When enabled, opaque redirects use `APP_URL/r/<token>`; no hostname product flow, third-party shortener, IP history, user-agent history, cookie, fingerprint, or delivery-state inference is involved;
-- preserved HTML normalization remains deterministic, safe, compatible, and faithful. It does not rewrite copy or mutate content for filter evasion.
+The verified system currently includes:
 
-Local Prisma validation, TypeScript, ESLint, 134 unit tests, secret scanning, diff checks, and a clean production build with `/emailblast` pass. Database-backed migration, integration, browser, and container gates are pending the candidate CI run; this file will not claim them before that evidence exists.
+- the primary Providers → Blast → Activity product shell;
+- provider catalog/configuration, verification, encrypted credentials, sender-domain authorization, and stable sender identities;
+- recipient CSV/TXT/XLSX import and persisted imports;
+- rich/source HTML composition, HTML import, compatibility normalization, sandboxed desktop/mobile preview, plain-text generation, and immutable campaign snapshots;
+- pre-flight checks, campaign preparation, durable delivery records, background dispatch, rate control, safety budgets, pause/resume/cancel controls, retry/reconciliation behavior, suppressions/unsubscribe, webhooks, tracking, Activity reporting, and exports already present in the current architecture;
+- provider pacing and tenant-safe operational telemetry;
+- authorized experiment scopes with transport binding, stop controls, and a tamper-evident evidence ledger;
+- inline-vs-attachment provider message semantics and Content-ID support across SMTP, SES raw MIME, Resend, SendGrid, Postmark, Mailjet, and Mailgun, with fail-closed behavior for unsupported API transports;
+- portable inline Content-ID validation capped at 127 characters and compatibility coverage for supported provider wire formats/MIME.
 
-## Deployment target and access
+The inline-CID foundation was verified both on PR #28 head `39fae831afbcd3ba3e0ec2e309165ef78ca4706c` (Quality #109) and on merged `main` `16e8910040416d45ed0da49a2beda667f523a858` (Quality #110).
 
-Authorized target: `https://app.promptologoy.com/emailblast`, alongside existing VPS projects. The shared-host compose override binds only an isolated loopback web port; the scoped proxy configuration must be reconciled with the live VPS before installation. The requested account is `ray@emailblast.me`; its password and all provider credentials are runtime secrets and are never repository content.
+## Current milestone
 
-Actual VPS installation, account creation, and provider authentication checks remain pending a working authorized remote connection. The workspace TCP attempt to the supplied server on SSH port 22 returned `Network is unreachable`. No server changes, certificate issuance, provider mutation, or live delivery has occurred. The provider `--verify` gate will use only provider-native reads or non-delivery sandbox validation; any real test message requires a separately approved recipient and action.
+Branch: `feat/image-first-campaign-mode`
+
+The next product slice is Image-first campaign composition built on the verified CID transport foundation. The first implementation must remain inside the existing Blast/campaign/delivery architecture and should:
+
+- let the operator choose an image-first message mode without removing the existing rich/source HTML workflow;
+- accept a controlled primary image upload and build email-safe HTML that references it through a CID inline attachment;
+- keep ordinary file attachments distinct from inline message assets;
+- validate Content-IDs and CID references before campaign creation;
+- restrict pre-flight/dispatch to provider transports that explicitly support inline CID assets, instead of discovering incompatibility after delivery is claimed;
+- preserve the same normalized snapshot for preview and send;
+- add focused unit/integration/browser coverage before merge.
+
+No schema change is expected for this first slice because campaign message snapshots are persisted as JSON and the provider message model already carries `disposition` and `contentId`.
+
+## Next dependencies after Image-first
+
+After Image-first is verified, continue in dependency order rather than redesigning completed foundations:
+
+1. image-asset lifecycle and authoring polish: replacement/removal, accessibility/alt-text UX, provider capability visibility, and fidelity edge cases;
+2. reusable message/template workflow if repository truth still lacks a persisted template/library abstraction;
+3. remaining campaign/Activity operational gaps found by current tests and UX review, especially progress/control/export fidelity under real worker states;
+4. final security, concurrency, performance, deployment-readiness, and VPS reconciliation before production installation.
+
+Do not claim VPS deployment until the live target is actually reconciled and verified. Do not add live delivery tests without an explicitly authorized recipient/action.
