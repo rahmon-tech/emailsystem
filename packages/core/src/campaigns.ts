@@ -5,6 +5,7 @@ import type { CampaignState, Prisma } from "@emailsystem/db";
 import { z } from "zod";
 import { normalizeEmail, renderSnapshot } from "@emailsystem/email";
 import { headerText } from "@emailsystem/providers/catalog";
+import { supportsInlineAttachmentTransport } from "@emailsystem/providers/capabilities";
 import type { ProviderMessage } from "@emailsystem/providers";
 import { config } from "./config";
 import { AppError } from "./errors";
@@ -20,6 +21,70 @@ import {
 import { resolveSender } from "./senders";
 import { absoluteAppUrl } from "./server-paths";
 import { validateExperimentCampaignScope } from "./experiments";
+
+const contentIdInput = z
+  .string()
+  .regex(
+    /^[A-Za-z0-9][A-Za-z0-9._@-]{0,126}$/,
+    "Use a safe Content-ID of at most 127 characters.",
+  );
+
+const attachmentInput = z
+  .object({
+    filename: z
+      .string()
+      .max(150)
+      .regex(/^[^/\\\r\n]+$/),
+    content: z
+      .string()
+      .max(7000000)
+      .regex(/^[A-Za-z0-9+/]*={0,2}$/),
+    contentType: z.string().regex(/^[a-z-]+\/[a-z0-9.+-]+$/i),
+    disposition: z.enum(["attachment", "inline"]).default("attachment"),
+    contentId: contentIdInput.optional(),
+  })
+  .strict()
+  .superRefine((attachment, ctx) => {
+    if (attachment.disposition === "inline" && !attachment.contentId)
+      ctx.addIssue({
+        code: "custom",
+        path: ["contentId"],
+        message: "Inline attachments require a Content-ID.",
+      });
+    if (attachment.disposition === "attachment" && attachment.contentId)
+      ctx.addIssue({
+        code: "custom",
+        path: ["contentId"],
+        message: "Ordinary attachments cannot set a Content-ID.",
+      });
+  });
+
+const attachmentsInput = z
+  .array(attachmentInput)
+  .max(5)
+  .superRefine((attachments, ctx) => {
+    const seen = new Set<string>();
+    attachments.forEach((attachment, index) => {
+      if (attachment.disposition !== "inline" || !attachment.contentId) return;
+      if (seen.has(attachment.contentId))
+        ctx.addIssue({
+          code: "custom",
+          path: [index, "contentId"],
+          message: "Inline attachment Content-IDs must be unique.",
+        });
+      seen.add(attachment.contentId);
+    });
+  })
+  .default([]);
+
+function cidReferences(html: string) {
+  return new Set(
+    [...html.matchAll(/\bcid:([A-Za-z0-9][A-Za-z0-9._@-]{0,126})/gi)].map(
+      (match) => match[1],
+    ),
+  );
+}
+
 export const messageInput = z
   .object({
     name: headerText.min(1),
@@ -44,22 +109,7 @@ export const messageInput = z
       .default([]),
     html: z.string().min(1).max(512000),
     text: z.string().max(512000).optional(),
-    attachments: z
-      .array(
-        z.object({
-          filename: z
-            .string()
-            .max(150)
-            .regex(/^[^/\\\r\n]+$/),
-          content: z
-            .string()
-            .max(7000000)
-            .regex(/^[A-Za-z0-9+/]*={0,2}$/),
-          contentType: z.string().regex(/^[a-z-]+\/[a-z0-9.+-]+$/i),
-        }),
-      )
-      .max(5)
-      .default([]),
+    attachments: attachmentsInput,
     dailyBudget: dailyBudget.nullable().optional(),
     tracking: z.object({ enabled: z.boolean() }).strict().optional(),
     scheduledAt: z.iso.datetime().optional(),
@@ -81,6 +131,10 @@ export async function preflight(userId: string, input: unknown) {
     ) > 5000000
   )
     problems.push("Attachments must total at most 5 MB.");
+  const inlineAttachments = data.attachments.filter(
+    (attachment) => attachment.disposition === "inline",
+  );
+  const needsInlineTransport = inlineAttachments.length > 0;
   const list = await db.contactImport.findFirst({
     where: { id: data.importId, userId, state: "READY" },
   });
@@ -114,10 +168,16 @@ export async function preflight(userId: string, input: unknown) {
     from: data.from,
   });
   const sender = senderSelection.sender;
-  const providers = senderSelection.providers;
+  const providers = needsInlineTransport
+    ? senderSelection.providers.filter((provider) =>
+        supportsInlineAttachmentTransport(provider),
+      )
+    : senderSelection.providers;
   if (!providers.length)
     problems.push(
-      "Verify this sender with at least one healthy broadcast provider.",
+      needsInlineTransport
+        ? "Verify this sender with at least one healthy provider transport that supports inline CID images."
+        : "Verify this sender with at least one healthy broadcast provider.",
     );
   const experiment = data.experimentRunId
     ? await db.$transaction((tx) =>
@@ -157,6 +217,18 @@ export async function preflight(userId: string, input: unknown) {
     );
   if (safety.pausedReason) problems.push(safety.pausedReason);
   const snapshot = normalizeEmail(data.html, data.preheader);
+  const referencedCids = cidReferences(snapshot.html);
+  const inlineIds = new Set(
+    inlineAttachments
+      .map((attachment) => attachment.contentId)
+      .filter((contentId): contentId is string => !!contentId),
+  );
+  for (const contentId of referencedCids)
+    if (!inlineIds.has(contentId))
+      problems.push(`Inline image cid:${contentId} has no matching attachment.`);
+  for (const contentId of inlineIds)
+    if (!referencedCids.has(contentId))
+      problems.push(`Inline attachment ${contentId} is not referenced by the email HTML.`);
   const [reputation, tracking] = await Promise.all([
     inspectDestinations(userId, snapshot.html),
     trackingChoice(userId, data.tracking),
@@ -170,7 +242,7 @@ export async function preflight(userId: string, input: unknown) {
     problems.push(
       "Your link policy requires known reputation results. Review unknown destinations or update the policy.",
     );
-  if (!snapshot.text.trim())
+  if (!(data.text?.trim() || snapshot.text.trim()))
     problems.push("The email body is empty after safety checks.");
   const message = {
     from: sender.email,

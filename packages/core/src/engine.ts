@@ -2,6 +2,7 @@ import { checkExistingSafetyOutcomes } from "./safety-brakes";
 import { randomUUID } from "node:crypto";
 import { db } from "@emailsystem/db";
 import { send } from "@emailsystem/providers";
+import { supportsInlineAttachmentTransport } from "@emailsystem/providers/capabilities";
 import type { SendResult, ConnectionInput } from "@emailsystem/providers";
 import { unlocked } from "./providers";
 import { acquireProvider, releaseProvider, rateGroup } from "./dispatcher";
@@ -55,7 +56,12 @@ export async function processDelivery(
     from: string;
     cc: string[];
     bcc: string[];
+    attachments?: { disposition?: string }[];
   };
+  const needsInlineTransport =
+    snapshot.attachments?.some(
+      (attachment) => attachment.disposition === "inline",
+    ) ?? false;
   const senderIdentityId = initial.campaign.senderIdentityId;
   if (!senderIdentityId) return;
   const cost = messageCost(snapshot),
@@ -154,7 +160,8 @@ export async function processDelivery(
         const eligible = authorized.filter(
           (p) =>
             (p.quotaRemaining === null || p.quotaRemaining >= cost) &&
-            (!scopedProviderIds || scopedProviderIds.has(p.id)),
+            (!scopedProviderIds || scopedProviderIds.has(p.id)) &&
+            (!needsInlineTransport || supportsInlineAttachmentTransport(p)),
         );
         if (!eligible.length) {
           await waitForSafety(
@@ -163,9 +170,11 @@ export async function processDelivery(
             [],
             now() + 60000,
             now(),
-            c.experimentRunId
-              ? "No healthy eligible provider remains inside the approved experiment scope"
-              : "No healthy eligible provider · review connections, cooldowns and provider quota",
+            needsInlineTransport
+              ? "No healthy eligible provider supports the campaign's inline CID assets"
+              : c.experimentRunId
+                ? "No healthy eligible provider remains inside the approved experiment scope"
+                : "No healthy eligible provider · review connections, cooldowns and provider quota",
           );
           return false;
         }
@@ -389,6 +398,7 @@ export async function processDelivery(
           user.safetyPausedReason ||
           c.safetyPausedReason ||
           p.revision !== provider!.revision ||
+          (needsInlineTransport && !supportsInlineAttachmentTransport(p)) ||
           !(await providerStillAuthorized(
             tx,
             initial.userId,
