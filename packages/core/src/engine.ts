@@ -27,6 +27,10 @@ import {
   experimentDispatchScope,
   reserveExperimentTransport,
 } from "./experiments";
+import {
+  appendExperimentEvidence,
+  experimentRecipientHash,
+} from "./experiment-evidence";
 export async function processDelivery(
   id: string,
   sendMessage: typeof send = send,
@@ -417,6 +421,7 @@ export async function processDelivery(
         if (currentUsage.some((b) => b.limit !== null && b.used > b.limit))
           return false;
         if (!(await governor.commit(attemptId))) return false;
+        const transmissionStartedAt = new Date(now());
         const experimentReservation = await reserveExperimentTransport(tx, {
           userId: initial.userId,
           runId: c.experimentRunId,
@@ -425,7 +430,7 @@ export async function processDelivery(
           providerId: p.id,
           recipient: initial.email,
           attemptId,
-          now: new Date(now()),
+          now: transmissionStartedAt,
         });
         if (!experimentReservation.allowed) {
           await tx.campaign.updateMany({
@@ -441,10 +446,47 @@ export async function processDelivery(
           where: { id: attemptId },
           data: {
             state: "PROCESSING",
-            transmissionStartedAt: new Date(now()),
+            transmissionStartedAt,
             experimentRunId: experimentReservation.experimentRunId,
           },
         });
+        if (c.experimentRunId)
+          await appendExperimentEvidence(tx, {
+            userId: initial.userId,
+            runId: c.experimentRunId,
+            kind: "transport.started",
+            attemptId,
+            providerId: p.id,
+            campaignId: c.id,
+            createdAt: transmissionStartedAt,
+            payload: {
+              recipientHash: experimentRecipientHash(
+                c.experimentRunId,
+                initial.email,
+              ),
+              senderIdentityId,
+              senderDomain: domain,
+              messageUnits: cost,
+              provider: {
+                type: p.type,
+                transport: p.transport,
+                revision: p.revision,
+                health: p.health,
+                cooldownUntil: p.cooldownUntil,
+                perSecond: p.perSecond,
+                perMinute: p.perMinute,
+                concurrency: p.concurrency,
+              },
+              pacing: {
+                warmupProfile: currentSettings.warmupProfile,
+                accountPerMinute: currentSettings.accountPerMinute,
+                domainPerMinute: currentSettings.domainPerMinute,
+                campaignPerMinute: currentSettings.campaignPerMinute,
+                rateGroup: candidate!.group,
+              },
+              copies: snapshot.cc.length + snapshot.bcc.length,
+            },
+          });
         return true;
       },
       { timeout: 60000 },
@@ -575,6 +617,53 @@ export async function processDelivery(
           initial.userId,
           initial.campaignId,
         );
+      if (initial.campaign.experimentRunId) {
+        const [attemptAfter, deliveryAfter, providerAfter] = await Promise.all([
+          tx.deliveryAttempt.findUniqueOrThrow({
+            where: { id: attemptId },
+            select: {
+              state: true,
+              providerMessageId: true,
+              category: true,
+              safeError: true,
+              finishedAt: true,
+            },
+          }),
+          tx.delivery.findUniqueOrThrow({
+            where: { id },
+            select: { state: true, nextAttemptAt: true },
+          }),
+          tx.providerConnection.findUniqueOrThrow({
+            where: { id: provider!.id },
+            select: { health: true, enabled: true, cooldownUntil: true },
+          }),
+        ]);
+        await appendExperimentEvidence(tx, {
+          userId: initial.userId,
+          runId: initial.campaign.experimentRunId,
+          kind: "transport.outcome",
+          attemptId,
+          providerId: provider!.id,
+          campaignId: initial.campaignId,
+          createdAt: attemptAfter.finishedAt ?? new Date(),
+          payload: {
+            status: outcome.status,
+            providerMessageId: attemptAfter.providerMessageId,
+            category: attemptAfter.category,
+            safeError: attemptAfter.safeError,
+            retryAfterMs:
+              outcome.status === "accepted" ? null : outcome.error.retryAfterMs ?? null,
+            attemptState: attemptAfter.state,
+            deliveryState: deliveryAfter.state,
+            nextAttemptAt: deliveryAfter.nextAttemptAt,
+            providerHealth: providerAfter.health,
+            providerEnabled: providerAfter.enabled,
+            cooldownUntil: providerAfter.cooldownUntil,
+            enforcementStopped:
+              outcome.status !== "accepted" && outcome.error.category === "policy",
+          },
+        });
+      }
       await tx.activityEvent.create({
         data: {
           userId: initial.userId,
