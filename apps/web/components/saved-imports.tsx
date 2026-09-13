@@ -8,7 +8,7 @@ import {
   Stack,
   Typography,
 } from "@mui/material";
-import { DeleteOutline, PeopleOutline } from "@mui/icons-material";
+import { DeleteOutlined, PeopleOutlined } from "@mui/icons-material";
 import { api } from "./api-client";
 import { ResponsiveDialog } from "./shared";
 type ImportRow = {
@@ -41,7 +41,7 @@ export function SavedImports() {
         <Button
           size="small"
           color="inherit"
-          startIcon={<PeopleOutline />}
+          startIcon={<PeopleOutlined />}
           onClick={() => setOpen(true)}
         >
           Saved lists{rows.length ? ` (${rows.length})` : ""}
@@ -124,7 +124,7 @@ export function SavedImports() {
                       }
                     }}
                   >
-                    <DeleteOutline />
+                    <DeleteOutlined />
                   </IconButton>
                 </Stack>
               ))}
