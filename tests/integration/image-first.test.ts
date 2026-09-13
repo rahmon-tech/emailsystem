@@ -135,6 +135,30 @@ test("preflight admits the same mixed snapshot when its transport is CID-capable
   );
 });
 
+test("image-first preflight preserves normalized CC and BCC through the existing campaign contract", async () => {
+  const result = await preflight(userId, {
+    ...input(capableFrom),
+    cc: ["COPY@example.org", "copy-two@example.org"],
+    bcc: ["BLIND@example.org"],
+  });
+
+  assert.equal(result.ready, true);
+  assert.deepEqual(result.message.cc, ["copy@example.org", "copy-two@example.org"]);
+  assert.deepEqual(result.message.bcc, ["blind@example.org"]);
+  assert.match(result.warnings.join(" "), /3 CC\/BCC copies will be sent/i);
+});
+
+test("image-first preflight reuses duplicate CC BCC protection", async () => {
+  const result = await preflight(userId, {
+    ...input(capableFrom),
+    cc: ["copy@example.org"],
+    bcc: ["COPY@example.org"],
+  });
+
+  assert.equal(result.ready, false);
+  assert.match(result.problems.join(" "), /CC and BCC addresses must be unique/i);
+});
+
 test("test message rejects an unsupported CID transport before creating a provider test delivery", async () => {
   await db.providerTestDelivery.deleteMany({ where: { providerId } });
 
