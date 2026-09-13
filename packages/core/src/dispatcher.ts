@@ -1,5 +1,6 @@
 import { redis } from "./redis";
 import { digest } from "./security";
+import type { WarmupProfile } from "./safety-config";
 import {
   DOMAIN_SOFT_START_IDLE_MS,
   DOMAIN_SOFT_START_TTL_SECONDS,
@@ -134,6 +135,7 @@ export async function acquireProvider(
   token: string,
   ratePeers: Candidate[] = candidates,
   smoothPacing = process.env.NODE_ENV !== "test",
+  warmupProfile: WarmupProfile = "balanced",
 ) {
   const pacingGroups = [
     ...candidates.map((candidate) => pacingGroupFromRateGroup(candidate.group)),
@@ -178,7 +180,12 @@ export async function acquireProvider(
       pacingSecond,
       pacingMinute,
       pacingSlowdown: smoothPacing
-        ? domainSoftStartSlowdown(pacingMinute, warm.count, idleMs)
+        ? domainSoftStartSlowdown(
+            pacingMinute,
+            warm.count,
+            idleMs,
+            warmupProfile,
+          )
         : 1,
     };
   });
