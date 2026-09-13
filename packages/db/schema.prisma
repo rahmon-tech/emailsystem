@@ -228,6 +228,8 @@ model Campaign {
   user User @relation(fields:[userId],references:[id],onDelete:Cascade)
   senderIdentityId String?
   senderIdentity SenderIdentity? @relation(fields:[senderIdentityId,userId],references:[id,userId],onDelete:Restrict)
+  experimentRunId String?
+  experimentRun ExperimentRun? @relation(fields:[experimentRunId,userId],references:[id,userId],onDelete:Restrict)
   name String
   state CampaignState @default(DRAFT)
   message Json
@@ -253,8 +255,10 @@ model Campaign {
   trackingLinks TrackingLink[]
   @@unique([id,userId])
   @@unique([userId,startKey])
+  @@unique([experimentRunId,userId])
   @@index([userId,createdAt,id])
   @@index([userId,senderIdentityId])
+  @@index([userId,experimentRunId])
   @@index([state,scheduledAt])
 }
 model Delivery {
@@ -289,6 +293,8 @@ model DeliveryAttempt {
   delivery Delivery @relation(fields:[deliveryId,userId],references:[id,userId],onDelete:Cascade)
   providerId String
   provider ProviderConnection @relation(fields:[providerId,userId],references:[id,userId])
+  experimentRunId String?
+  experimentRun ExperimentRun? @relation(fields:[experimentRunId,userId],references:[id,userId],onDelete:Restrict)
   providerRevision Int
   idempotencyKey String @unique
   state String @default("PROCESSING")
@@ -306,6 +312,7 @@ model DeliveryAttempt {
   @@index([state,startedAt])
   @@index([userId,transmissionStartedAt])
   @@index([userId,state,startedAt])
+  @@index([experimentRunId,startedAt])
 }
 model ProviderEvent {
   id String @id @default(uuid())
@@ -436,9 +443,22 @@ model ExperimentRun {
   stopReason String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  campaign Campaign?
+  attempts DeliveryAttempt[]
+  recipientUses ExperimentRunRecipientUse[]
   @@unique([id,userId])
   @@index([userId,createdAt])
   @@index([userId,state,expiresAt])
+}
+
+model ExperimentRunRecipientUse {
+  userId String
+  runId String
+  run ExperimentRun @relation(fields:[runId,userId],references:[id,userId],onDelete:Cascade)
+  email String
+  firstUsedAt DateTime @default(now())
+  @@id([runId,email])
+  @@index([userId,email])
 }
 
 model DeniedDestination {

@@ -19,11 +19,13 @@ import {
 } from "./tracking";
 import { resolveSender } from "./senders";
 import { absoluteAppUrl } from "./server-paths";
+import { validateExperimentCampaignScope } from "./experiments";
 export const messageInput = z
   .object({
     name: headerText.min(1),
     importId: z.uuid(),
     senderIdentityId: z.uuid().optional(),
+    experimentRunId: z.uuid().optional(),
     from: z
       .email()
       .transform((s) => s.toLowerCase())
@@ -113,18 +115,33 @@ export async function preflight(userId: string, input: unknown) {
   });
   const sender = senderSelection.sender;
   const providers = senderSelection.providers;
+  if (!providers.length)
+    problems.push(
+      "Verify this sender with at least one healthy broadcast provider.",
+    );
+  const experiment = data.experimentRunId
+    ? await db.$transaction((tx) =>
+        validateExperimentCampaignScope(tx, {
+          userId,
+          runId: data.experimentRunId!,
+          senderIdentityId: sender.id,
+          importId: list.id,
+          eligibleProviderIds: providers.map((provider) => provider.id),
+          copyRecipients: copies,
+        }),
+      )
+    : null;
+  const effectiveProviders = experiment
+    ? providers.filter((provider) => experiment.providerIds.includes(provider.id))
+    : providers;
   if (
-    providers.length &&
-    providers.every(
+    effectiveProviders.length &&
+    effectiveProviders.every(
       (p) => p.perSecond < 1 + copies.length || p.perMinute < 1 + copies.length,
     )
   )
     problems.push(
       "Raise the provider rate limits to cover one recipient plus the CC/BCC copies, or remove copies.",
-    );
-  if (!providers.length)
-    problems.push(
-      "Verify this sender with at least one healthy broadcast provider.",
     );
   const safety = await safetyCapacity(userId, sender.email);
   const campaignLimit =
@@ -194,18 +211,21 @@ export async function preflight(userId: string, input: unknown) {
         safety.available,
         campaignLimit ?? Infinity,
         safety.providerUsage
-          .filter((b) => providers.some((p) => b.scope === "provider:" + p.id))
+          .filter((b) =>
+            effectiveProviders.some((p) => b.scope === "provider:" + p.id),
+          )
           .reduce((total, b) => total + Math.max(0, b.limit! - b.used), 0),
       ),
       campaignDaily: campaignLimit,
     },
-    providers: providers.map((p) => ({ id: p.id, name: p.name })),
+    providers: effectiveProviders.map((p) => ({ id: p.id, name: p.name })),
     sender: {
       id: sender.id,
       email: sender.email,
       domain: sender.authorizedDomain.domain,
-      eligibleProviderCount: providers.length,
+      eligibleProviderCount: effectiveProviders.length,
     },
+    experiment,
     message,
     previewHtml: renderSnapshot(
       snapshot.html,
@@ -227,11 +247,21 @@ export async function createCampaign(userId: string, input: unknown) {
     throw new AppError(422, "PREFLIGHT", result.problems.join(" "));
   // Unique owner + start key makes repeated browser submissions refer to one campaign.
   return db.$transaction(async (tx) => {
+    if (result.data.experimentRunId)
+      await validateExperimentCampaignScope(tx, {
+        userId,
+        runId: result.data.experimentRunId,
+        senderIdentityId: result.sender.id,
+        importId: result.data.importId,
+        eligibleProviderIds: result.providers.map((provider) => provider.id),
+        copyRecipients: [...result.data.cc, ...result.data.bcc],
+      });
     const created = await tx.campaign.createMany({
       data: [
         {
           userId,
           senderIdentityId: result.sender.id,
+          experimentRunId: result.data.experimentRunId ?? null,
           name: result.data.name,
           state: "PREPARING",
           message: json(result.message),
@@ -392,6 +422,26 @@ export async function controlCampaign(
           "POLICY",
           "Resolve the provider enforcement block before resuming.",
         );
+      if (c.experimentRunId) {
+        const run = await tx.experimentRun.findFirst({
+          where: { id: c.experimentRunId, userId },
+          select: { state: true, startsAt: true, expiresAt: true },
+        });
+        const now = new Date();
+        if (
+          user.experimentKillSwitchAt ||
+          !run ||
+          run.state !== "RUNNING" ||
+          (run.startsAt && now < run.startsAt) ||
+          !run.expiresAt ||
+          now >= run.expiresAt
+        )
+          throw new AppError(
+            409,
+            "EXPERIMENT_STATE",
+            "The bound experiment run must be active before this campaign can resume.",
+          );
+      }
     }
     let state: CampaignState;
     try {
@@ -423,6 +473,19 @@ export async function controlCampaign(
         ...(state === "CANCELLED" ? { completedAt: new Date() } : {}),
       },
     });
+    if (action === "cancel" && c.experimentRunId)
+      await tx.experimentRun.updateMany({
+        where: {
+          id: c.experimentRunId,
+          userId,
+          state: { in: ["READY", "RUNNING"] },
+        },
+        data: {
+          state: "STOPPED",
+          stoppedAt: new Date(),
+          stopReason: "Bound campaign was cancelled by the operator.",
+        },
+      });
     await tx.auditEvent.create({
       data: { userId, action: `campaign.${action}`, resourceId: id },
     });
@@ -444,6 +507,7 @@ export async function campaignSummary(userId: string, id: string) {
       id: true,
       name: true,
       state: true,
+      experimentRunId: true,
       recipientCount: true,
       intendedRecipientCount: true,
       preparedAt: true,
