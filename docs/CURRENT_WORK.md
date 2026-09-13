@@ -23,30 +23,38 @@ The verified system currently includes:
 
 The canonical delivery-control-plane requirements remain in `docs/DELIVERY_CONTROL_PLANE.md`. They are not superseded by Image-first work. The current known control-plane gap is the distinction between experiment variables being **modeled** and those values being **authoritatively applied** to effective dispatcher/MIME behavior with reproducible evidence; that remains a later dedicated implementation slice.
 
-## Current milestone
+## Verified Image-first parity increment
 
 Branch: `feat/image-first-parity-lifecycle`
 
-The next Image-first parity work is being implemented incrementally rather than as a broad composer rewrite. The first active slice is:
+The first Image-first parity increment is implemented and verified on implementation head `1f1f636c379cfb1f6cba979737fb8a32fcc74c9b`. Full Quality #125 passed for that exact SHA, including fresh migrations, schema-drift and upgrade rehearsal, lint, secret scan, typecheck, unit tests, PostgreSQL/Redis integration tests, production build, Playwright E2E, visual-review screenshots, production-container validation, diagnostics, artifact upload, and cleanup.
+
+That verified increment includes:
 
 1. primary CID image replace/remove lifecycle;
 2. ordinary file attachments alongside the primary inline image while preserving distinct `inline` versus `attachment` semantics;
-3. mirror the authoritative campaign ceiling of at most five total attachments and 5 MB decoded attachment data;
-4. preserve the existing provider-capability fail-closed pre-flight/dispatch behavior;
-5. add browser coverage proving removing/replacing the inline image does not destroy ordinary attachments.
+3. client-side mirroring of the authoritative campaign ceiling of at most five total attachment parts and 5 MB decoded attachment data;
+4. preservation of the existing provider-capability fail-closed pre-flight/dispatch behavior;
+5. browser proof that removing/replacing the inline image does not destroy ordinary attachments;
+6. PostgreSQL integration proof that a mixed snapshot preserves the inline image CID while ordinary attachments remain ordinary attachments;
+7. a narrow Image-first pre-flight response-shape correction so the UI reads the normalized top-level plain-text field returned by the existing core API;
+8. no schema, migration, provider-routing, dispatcher, safety, or alternative delivery-path change.
 
-The red E2E contract was added first on this branch, followed by the lifecycle/attachment UI implementation. No schema or migration change is expected for this slice because both inline and ordinary attachments already live inside the immutable campaign message snapshot.
+PR #30 remains unmerged until this final documentation reconciliation head passes the full repository Quality workflow as well. Do not treat the lifecycle slice as merged until the exact final PR head and the resulting merged `main` SHA are both verified.
 
-## Remaining Image-first parity after this slice
+## Next Image-first parity dependency
 
-Continue in narrow dependency order after this lifecycle/attachment slice is verified and merged:
+After PR #30 is merged and its exact merged `main` SHA is green, the next distinct slice is **Image-first test-message support**.
 
-1. test-message support through the existing test-send path;
-2. CC/BCC parity where the standard composer already supports it;
-3. scheduling parity;
-4. tags/tracking parity using existing campaign owners rather than parallel state;
-5. earlier sender/provider inline-capability visibility before pre-flight while retaining server-side fail-closed enforcement;
-6. accessibility/alt-text UX and rendering/fidelity edge cases across supported transports.
+Reuse the existing `test-message` backend and normalized message/attachment snapshot rather than creating another send path. Reconcile the current provider/test-send owner before coding, then add Image-first test-send UI with sender/provider capability checks appropriate for inline CID content. The same inline/ordinary attachment semantics and fail-closed capability rules must remain authoritative.
+
+After test-message parity, continue narrowly in this order:
+
+1. CC/BCC parity where the standard composer already supports it;
+2. scheduling parity;
+3. tags/tracking parity using existing campaign owners rather than parallel state;
+4. earlier sender/provider inline-capability visibility before pre-flight while retaining server-side fail-closed enforcement;
+5. accessibility/alt-text UX and rendering/fidelity edge cases across supported transports.
 
 ## Delivery-control-plane follow-on
 
