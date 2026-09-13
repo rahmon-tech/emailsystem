@@ -2,6 +2,7 @@ import { z } from "zod";
 import { db } from "@emailsystem/db";
 import { definition } from "@emailsystem/providers";
 import { campaignSummary } from "@emailsystem/core/campaigns";
+import { recipientDeliveryPresentationState } from "@emailsystem/core/delivery-presentation";
 import { requireUser } from "@emailsystem/core/auth";
 import { AppError } from "@emailsystem/core/errors";
 import { errorResponse, response } from "@emailsystem/core/http";
@@ -90,17 +91,15 @@ export async function GET(request: Request, { params }: Context) {
             ? "unavailable"
             : "supported"
           : "unavailable";
-        const presentationState =
-          delivery.state === "PROVIDER_ACCEPTED"
-            ? provider?.transport === "smtp"
-              ? deliveryEvents === "supported"
-                ? "SMTP_ACCEPTED_AWAITING_CONFIRMATION"
-                : "SMTP_ACCEPTED_UNCONFIRMED"
-              : "PROVIDER_ACCEPTED_AWAITING_CONFIRMATION"
-            : delivery.state;
+        const providerContext = provider
+          ? { transport: provider.transport, deliveryEvents }
+          : null;
         return {
           ...delivery,
-          state: presentationState,
+          state: recipientDeliveryPresentationState(
+            delivery.state,
+            providerContext,
+          ),
           provider: provider ? { ...provider, deliveryEvents } : null,
         };
       }),
