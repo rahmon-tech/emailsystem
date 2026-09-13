@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { db } from "@emailsystem/db";
 import { preflight } from "@emailsystem/core/campaigns";
 import { importRecipients } from "@emailsystem/core/imports";
-import { saveProvider } from "@emailsystem/core/providers";
+import { saveProvider, testProvider } from "@emailsystem/core/providers";
 import { redis } from "@emailsystem/core/redis";
 
 let userId = "";
@@ -44,6 +44,21 @@ after(async () => {
 
 const image = Buffer.from("image-bytes").toString("base64");
 const brief = Buffer.from("ordinary-attachment").toString("base64");
+const attachments = () => [
+  {
+    filename: "hero.png",
+    content: image,
+    contentType: "image/png",
+    disposition: "inline" as const,
+    contentId: "hero-image",
+  },
+  {
+    filename: "brief.txt",
+    content: brief,
+    contentType: "text/plain",
+    disposition: "attachment" as const,
+  },
+];
 const input = () => ({
   name: "Image-first integration",
   importId,
@@ -52,24 +67,27 @@ const input = () => ({
   html: '<img src="cid:hero-image" alt="Hero" />',
   text: "Hero",
   tracking: { enabled: false },
-  attachments: [
-    {
-      filename: "hero.png",
-      content: image,
-      contentType: "image/png",
-      disposition: "inline" as const,
-      contentId: "hero-image",
-    },
-    {
-      filename: "brief.txt",
-      content: brief,
-      contentType: "text/plain",
-      disposition: "attachment" as const,
-    },
-  ],
+  attachments: attachments(),
+});
+const testMessage = () => ({
+  from: "sender@example.com",
+  fromName: "",
+  to: "controlled@example.net",
+  cc: [],
+  bcc: [],
+  replyTo: "",
+  subject: "Image-first controlled test",
+  html: '<img src="cid:hero-image" alt="Hero" />',
+  text: "Hero",
+  headers: {},
+  attachments: attachments(),
 });
 
 test("preflight fails closed when a mixed inline/ordinary snapshot has no CID-capable transport", async () => {
+  await db.providerConnection.update({
+    where: { id: providerId },
+    data: { transport: "api" },
+  });
   const result = await preflight(userId, input());
   assert.equal(result.ready, false);
   assert.equal(result.providers.length, 0);
@@ -94,5 +112,52 @@ test("preflight admits the same mixed snapshot when its transport is CID-capable
       ["hero.png", "inline", "hero-image"],
       ["brief.txt", "attachment", null],
     ],
+  );
+});
+
+test("test message rejects an unsupported CID transport before creating a provider test delivery", async () => {
+  await db.providerConnection.update({
+    where: { id: providerId },
+    data: { transport: "api" },
+  });
+  await db.providerTestDelivery.deleteMany({ where: { providerId } });
+
+  await assert.rejects(
+    () =>
+      testProvider(
+        userId,
+        providerId,
+        "controlled@example.net",
+        false,
+        testMessage(),
+      ),
+    /supports inline CID images/i,
+  );
+
+  assert.equal(
+    await db.providerTestDelivery.count({ where: { providerId } }),
+    0,
+  );
+});
+
+test("test message accepts the same CID snapshot through a capable mock transport", async () => {
+  await db.providerConnection.update({
+    where: { id: providerId },
+    data: { transport: "smtp" },
+  });
+  await db.providerTestDelivery.deleteMany({ where: { providerId } });
+
+  const result = await testProvider(
+    userId,
+    providerId,
+    "controlled@example.net",
+    false,
+    testMessage(),
+  );
+
+  assert.equal(result?.status, "accepted");
+  assert.equal(
+    await db.providerTestDelivery.count({ where: { providerId } }),
+    1,
   );
 });
