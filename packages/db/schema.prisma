@@ -33,6 +33,13 @@ enum DeliveryState {
   CANCELLED
   UNKNOWN
 }
+enum ExperimentRunState {
+  READY
+  RUNNING
+  STOPPED
+  COMPLETED
+  EXPIRED
+}
 model User {
   id String @id @default(uuid())
   email String @unique
@@ -42,6 +49,8 @@ model User {
   safetyPausedReason String?
   safetyReviewedAt DateTime?
   trackingSettings Json @default("{}")
+  experimentKillSwitchAt DateTime?
+  experimentKillSwitchReason String?
   deniedDestinations DeniedDestination[]
   sessions Session[]
   providers ProviderConnection[]
@@ -52,6 +61,8 @@ model User {
   campaigns Campaign[]
   suppressions Suppression[]
   audit AuditEvent[]
+  experimentProfiles ExperimentProfile[]
+  experimentRuns ExperimentRun[]
 }
 model Session {
   tokenHash String @id
@@ -93,6 +104,7 @@ model ProviderConnection {
   tests ProviderTestDelivery[]
   events ProviderEvent[]
   domainAuthorizations ProviderDomainAuthorization[]
+  experimentScopes ExperimentProviderScope[]
   @@unique([id,userId])
   @@unique([userId,bootstrapKey])
   @@index([userId,enabled,health])
@@ -128,6 +140,7 @@ model SenderIdentity {
   updatedAt DateTime @updatedAt
   providerAuthorizations ProviderSenderAuthorization[]
   campaigns Campaign[]
+  experimentScopes ExperimentSenderScope[]
   @@unique([id,userId])
   @@unique([userId,email])
   @@unique([authorizedDomainId,localPart])
@@ -344,6 +357,88 @@ model AuditEvent {
   resourceId String
   createdAt DateTime @default(now())
   @@index([userId,createdAt])
+}
+
+model ExperimentProfile {
+  id String @id @default(uuid())
+  userId String
+  user User @relation(fields:[userId],references:[id],onDelete:Cascade)
+  name String
+  version Int @default(1)
+  authorizationRef String
+  description String @default("")
+  variables Json @default("{}")
+  maxRecipients Int
+  maxAttempts Int
+  maxDurationSeconds Int
+  startAt DateTime?
+  endAt DateTime?
+  createdAt DateTime @default(now())
+  providerScopes ExperimentProviderScope[]
+  senderScopes ExperimentSenderScope[]
+  recipients ExperimentRecipient[]
+  runs ExperimentRun[]
+  @@unique([id,userId])
+  @@index([userId,createdAt])
+}
+
+model ExperimentProviderScope {
+  userId String
+  profileId String
+  profile ExperimentProfile @relation(fields:[profileId,userId],references:[id,userId],onDelete:Cascade)
+  providerId String
+  provider ProviderConnection @relation(fields:[providerId,userId],references:[id,userId],onDelete:Restrict)
+  createdAt DateTime @default(now())
+  @@id([profileId,providerId])
+  @@index([userId,providerId])
+}
+
+model ExperimentSenderScope {
+  userId String
+  profileId String
+  profile ExperimentProfile @relation(fields:[profileId,userId],references:[id,userId],onDelete:Cascade)
+  senderIdentityId String
+  senderIdentity SenderIdentity @relation(fields:[senderIdentityId,userId],references:[id,userId],onDelete:Restrict)
+  createdAt DateTime @default(now())
+  @@id([profileId,senderIdentityId])
+  @@index([userId,senderIdentityId])
+}
+
+model ExperimentRecipient {
+  userId String
+  profileId String
+  profile ExperimentProfile @relation(fields:[profileId,userId],references:[id,userId],onDelete:Cascade)
+  email String
+  createdAt DateTime @default(now())
+  @@id([profileId,email])
+  @@index([userId,email])
+}
+
+model ExperimentRun {
+  id String @id @default(uuid())
+  userId String
+  user User @relation(fields:[userId],references:[id],onDelete:Cascade)
+  profileId String
+  profile ExperimentProfile @relation(fields:[profileId,userId],references:[id,userId],onDelete:Restrict)
+  profileVersion Int
+  authorizationRef String
+  state ExperimentRunState @default(READY)
+  maxRecipients Int
+  maxAttempts Int
+  maxDurationSeconds Int
+  recipientsUsed Int @default(0)
+  attemptsUsed Int @default(0)
+  startsAt DateTime?
+  expiresAt DateTime?
+  startedAt DateTime?
+  stoppedAt DateTime?
+  killSwitchAt DateTime?
+  stopReason String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([id,userId])
+  @@index([userId,createdAt])
+  @@index([userId,state,expiresAt])
 }
 
 model DeniedDestination {
