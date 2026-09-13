@@ -6,8 +6,12 @@ import {
 } from "@emailsystem/core/domain-soft-start";
 import { safetySettings } from "@emailsystem/core/safety-config";
 
-test("existing safety settings default to balanced warm-up", () => {
-  assert.equal(safetySettings.parse({}).warmupProfile, "balanced");
+test("existing safety settings default to balanced warm-up without new pacing ceilings", () => {
+  const settings = safetySettings.parse({});
+  assert.equal(settings.warmupProfile, "balanced");
+  assert.equal(settings.accountPerMinute, null);
+  assert.equal(settings.domainPerMinute, null);
+  assert.equal(settings.campaignPerMinute, null);
 });
 
 test("ordinary low-rate sending is not slowed by balanced soft start", () => {
