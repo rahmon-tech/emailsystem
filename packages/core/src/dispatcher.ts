@@ -7,7 +7,6 @@ export interface Candidate {
   perMinute: number;
   concurrency: number;
   group: string;
-  pacingGroup: string;
   cost: number;
 }
 // Redis server time and atomic counters coordinate every process; leases bound crash recovery.
@@ -49,17 +48,23 @@ for _,b in ipairs({base,group,pacing}) do
 end
 redis.call('HSET',KEYS[2],c.id,score+1/c.weight);redis.call('EXPIRE',KEYS[2],3600)
 return c.id`;
+export function senderDomainRateGroup(userId: string, from: string) {
+  const domain = (from.split("@")[1] ?? "").trim().toLowerCase();
+  return digest(`${userId}:sender-domain:${domain}`);
+}
 export function rateGroup(
   userId: string,
   type: string,
   from: string,
   region = "",
 ) {
-  return digest(`${userId}:${type}:${from.split("@")[1]}:${region}`);
-}
-export function pacingGroup(userId: string, from: string) {
   const domain = (from.split("@")[1] ?? "").trim().toLowerCase();
-  return digest(`${userId}:sender-domain:${domain}`);
+  // The first digest preserves provider-specific quota/rate grouping. The second
+  // is a provider-independent sender-domain pacing key carried alongside it.
+  return `${digest(`${userId}:${type}:${domain}:${region}`)}.${senderDomainRateGroup(userId, from)}`;
+}
+function pacingGroupFromRateGroup(group: string) {
+  return group.split(".")[1] ?? group;
 }
 export async function acquireProvider(
   userId: string,
@@ -68,10 +73,14 @@ export async function acquireProvider(
   ratePeers: Candidate[] = candidates,
 ) {
   const enriched = candidates.map((c) => {
+    const pacingGroup = pacingGroupFromRateGroup(c.group);
     const peers = ratePeers.filter((p) => p.group === c.group);
-    const pacingPeers = ratePeers.filter((p) => p.pacingGroup === c.pacingGroup);
+    const pacingPeers = ratePeers.filter(
+      (p) => pacingGroupFromRateGroup(p.group) === pacingGroup,
+    );
     return {
       ...c,
+      pacingGroup,
       groupSecond: Math.min(...peers.map((p) => p.perSecond)),
       groupMinute: Math.min(...peers.map((p) => p.perMinute)),
       groupConcurrency: Math.min(...peers.map((p) => p.concurrency)),
@@ -100,6 +109,9 @@ export async function releaseProvider(
     .multi()
     .zrem(prefix + candidate.id + ":active", token)
     .zrem(prefix + "g:" + candidate.group + ":active", token)
-    .zrem(prefix + "p:" + candidate.pacingGroup + ":active", token)
+    .zrem(
+      prefix + "p:" + pacingGroupFromRateGroup(candidate.group) + ":active",
+      token,
+    )
     .exec();
 }
