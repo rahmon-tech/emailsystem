@@ -2,8 +2,6 @@ import { after, test } from "node:test";
 import assert from "node:assert/strict";
 import { db } from "@emailsystem/db";
 import { createUser } from "@emailsystem/core/auth";
-import { importRecipients } from "@emailsystem/core/imports";
-import { createCampaign } from "@emailsystem/core/campaigns";
 import {
   archiveCampaign,
   listVisibleCampaigns,
@@ -28,18 +26,15 @@ test("finished campaigns can be removed from Activity without deleting history",
   );
   users.push(owner.id, other.id);
 
-  const list = await importRecipients(
-    owner.id,
-    Buffer.from("recipient@example.net"),
-    "archive.txt",
-  );
-  const campaign = await createCampaign(owner.id, {
-    name: "Archive me",
-    from: "sender@example.com",
-    subject: "Archive",
-    html: "<p>Archive test</p>",
-    importId: list.id,
-    startKey: crypto.randomUUID(),
+  const campaign = await db.campaign.create({
+    data: {
+      userId: owner.id,
+      name: "Archive me",
+      state: "DRAFT",
+      message: {},
+      importId: crypto.randomUUID(),
+      startKey: crypto.randomUUID(),
+    },
   });
 
   await assert.rejects(
