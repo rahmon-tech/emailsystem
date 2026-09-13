@@ -131,7 +131,7 @@ test("test message rejects an unsupported CID transport before creating a provid
         false,
         testMessage(),
       ),
-    /supports inline CID images/i,
+    /support inline CID images/i,
   );
 
   assert.equal(
