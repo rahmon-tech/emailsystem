@@ -83,6 +83,12 @@ function fileBase64(file: File) {
   });
 }
 
+const splitEmails = (value: string) =>
+  value
+    .split(/[,;\n]/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+
 export function ImageBlast() {
   const router = useRouter();
   const [imports, setImports] = useState<ImportRow[]>([]);
@@ -92,6 +98,8 @@ export function ImageBlast() {
   const [senderIdentityId, setSenderIdentityId] = useState("");
   const [subject, setSubject] = useState("");
   const [preheader, setPreheader] = useState("");
+  const [cc, setCc] = useState("");
+  const [bcc, setBcc] = useState("");
   const [alt, setAlt] = useState("");
   const [image, setImage] = useState<InlineImage | null>(null);
   const [attachments, setAttachments] = useState<FileAttachment[]>([]);
@@ -136,6 +144,8 @@ export function ImageBlast() {
     senderIdentityId,
     subject,
     preheader,
+    cc: splitEmails(cc),
+    bcc: splitEmails(bcc),
     html,
     text,
     attachments: [
@@ -217,7 +227,8 @@ export function ImageBlast() {
     await run("attachments", async () => {
       if (files.length + (image ? 1 : 0) > maxAttachmentCount)
         throw new Error("The primary image and attachments may total at most 5 files.");
-      const totalBytes = files.reduce((sum, file) => sum + file.size, 0) + (image?.bytes ?? 0);
+      const totalBytes =
+        files.reduce((sum, file) => sum + file.size, 0) + (image?.bytes ?? 0);
       if (totalBytes > maxAttachmentBytes)
         throw new Error("The primary image and attachments must total at most 5 MB.");
       const data = await Promise.all(
@@ -357,6 +368,27 @@ export function ImageBlast() {
                   invalidate();
                 }}
               />
+              <Stack spacing={1.25}>
+                <TextField
+                  label="CC (comma separated)"
+                  value={cc}
+                  onChange={(event) => {
+                    setCc(event.target.value);
+                    invalidate();
+                  }}
+                />
+                <TextField
+                  label="BCC (comma separated)"
+                  value={bcc}
+                  onChange={(event) => {
+                    setBcc(event.target.value);
+                    invalidate();
+                  }}
+                />
+                <Typography variant="caption" color="text.secondary">
+                  These addresses receive a copy of every individual email in this campaign and count toward your sending limits.
+                </Typography>
+              </Stack>
               <Box
                 sx={{
                   border: "1px dashed",
@@ -438,7 +470,11 @@ export function ImageBlast() {
                     }}
                   />
                 </Button>
-                <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.5 }}>
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  sx={{ display: "block", mt: 0.5 }}
+                >
                   Ordinary attachments remain separate from the primary inline image.
                 </Typography>
                 {!!attachments.length && (
@@ -451,7 +487,9 @@ export function ImageBlast() {
                         key={`${attachment.filename}-${index}`}
                         label={attachment.filename}
                         onDelete={() => {
-                          setAttachments((current) => current.filter((_, itemIndex) => itemIndex !== index));
+                          setAttachments((current) =>
+                            current.filter((_, itemIndex) => itemIndex !== index),
+                          );
                           invalidate();
                         }}
                       />
