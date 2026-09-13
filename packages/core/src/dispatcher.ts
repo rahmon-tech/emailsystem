@@ -15,21 +15,43 @@ export interface Candidate {
   group: string;
   cost: number;
 }
+export interface DispatchPacingPolicy {
+  accountPerMinute: number | null;
+  domainPerMinute: number | null;
+  campaignId: string | null;
+  campaignPerMinute: number | null;
+}
+const noPacingPolicy: DispatchPacingPolicy = {
+  accountPerMinute: null,
+  domainPerMinute: null,
+  campaignId: null,
+  campaignPerMinute: null,
+};
 // Redis server time and atomic counters coordinate every process; leases bound crash recovery.
-// Provider, provider-rate-group, and sender-domain pacing are enforced atomically.
+// Provider, provider-rate-group, sender-domain, account, and campaign pacing are enforced atomically.
 const acquireLua = `
 local now=redis.call('TIME'); local ms=now[1]*1000+math.floor(now[2]/1000)
 local candidates=cjson.decode(ARGV[1]);local token=ARGV[2]; local selected=nil; local score=nil
 for _,c in ipairs(candidates) do
  local base=KEYS[1]..c.id;local group=KEYS[1]..'g:'..c.group;local pacing=KEYS[1]..'p:'..c.pacingGroup
+ local account=KEYS[1]..'a';local campaign=KEYS[1]..'c:'..c.campaignGroup
  redis.call('ZREMRANGEBYSCORE',base..':active','-inf',ms);redis.call('ZREMRANGEBYSCORE',group..':active','-inf',ms)
  if c.smooth==1 then redis.call('ZREMRANGEBYSCORE',pacing..':active','-inf',ms) end
  local sec=':'..math.floor(ms/1000);local minute=':'..math.floor(ms/60000)
  local providerNext=tonumber(redis.call('GET',base..':next') or '0')
  local groupNext=tonumber(redis.call('GET',group..':next') or '0')
  local pacingNext=tonumber(redis.call('GET',pacing..':next') or '0')
+ local accountNext=tonumber(redis.call('GET',account..':next') or '0')
+ local campaignNext=tonumber(redis.call('GET',campaign..':next') or '0')
+ local accountAllowed=c.accountMinute<=0 or (
+   ms>=accountNext and tonumber(redis.call('GET',account..':m'..minute) or '0')+c.cost<=c.accountMinute
+ )
+ local campaignAllowed=c.campaignMinute<=0 or (
+   ms>=campaignNext and tonumber(redis.call('GET',campaign..':m'..minute) or '0')+c.cost<=c.campaignMinute
+ )
  local pacingAllowed=(c.smooth==0) or (
-   ms>=providerNext and ms>=groupNext and ms>=pacingNext
+   accountAllowed and campaignAllowed
+   and ms>=providerNext and ms>=groupNext and ms>=pacingNext
    and redis.call('ZCARD',pacing..':active')<1
    and tonumber(redis.call('GET',pacing..':s'..sec) or '0')+c.cost<=c.pacingSecond
    and tonumber(redis.call('GET',pacing..':m'..minute) or '0')+c.cost<=c.pacingMinute
@@ -46,6 +68,7 @@ for _,c in ipairs(candidates) do
 end
 if not selected then return '' end
 local c=selected;local base=KEYS[1]..c.id;local group=KEYS[1]..'g:'..c.group;local pacing=KEYS[1]..'p:'..c.pacingGroup
+local account=KEYS[1]..'a';local campaign=KEYS[1]..'c:'..c.campaignGroup
 if c.smooth==1 then
  local providerGap=math.ceil(math.max(math.ceil(1000*c.cost/c.perSecond),math.ceil(60000*c.cost/c.perMinute))*c.slowdown)
  local groupGap=math.ceil(math.max(math.ceil(1000*c.cost/c.groupSecond),math.ceil(60000*c.cost/c.groupMinute))*c.groupSlowdown)
@@ -56,6 +79,16 @@ if c.smooth==1 then
  local psk=pacing..':s:'..math.floor(ms/1000);local pmk=pacing..':m:'..math.floor(ms/60000)
  redis.call('INCRBY',psk,c.cost);redis.call('PEXPIRE',psk,2000);redis.call('INCRBY',pmk,c.cost);redis.call('PEXPIRE',pmk,120000)
  redis.call('ZADD',pacing..':active',ms+120000,token);redis.call('PEXPIRE',pacing..':active',180000)
+ if c.accountMinute>0 then
+   local accountGap=math.ceil(60000*c.cost/c.accountMinute)
+   redis.call('SET',account..':next',ms+accountGap,'PX',math.max(180000,accountGap+120000))
+   local amk=account..':m:'..math.floor(ms/60000);redis.call('INCRBY',amk,c.cost);redis.call('PEXPIRE',amk,120000)
+ end
+ if c.campaignMinute>0 then
+   local campaignGap=math.ceil(60000*c.cost/c.campaignMinute)
+   redis.call('SET',campaign..':next',ms+campaignGap,'PX',math.max(180000,campaignGap+120000))
+   local cmk=campaign..':m:'..math.floor(ms/60000);redis.call('INCRBY',cmk,c.cost);redis.call('PEXPIRE',cmk,120000)
+ end
  local warmLastKey=pacing..':warm:last';local warmCountKey=pacing..':warm:count'
  local warmLast=tonumber(redis.call('GET',warmLastKey) or '0')
  if warmLast==0 or ms-warmLast>${DOMAIN_SOFT_START_IDLE_MS} then redis.call('SET',warmCountKey,0) end
@@ -136,6 +169,7 @@ export async function acquireProvider(
   ratePeers: Candidate[] = candidates,
   smoothPacing = process.env.NODE_ENV !== "test",
   warmupProfile: WarmupProfile = "balanced",
+  pacingPolicy: DispatchPacingPolicy = noPacingPolicy,
 ) {
   const pacingGroups = [
     ...candidates.map((candidate) => pacingGroupFromRateGroup(candidate.group)),
@@ -154,6 +188,9 @@ export async function acquireProvider(
         new Map<string, { count: number; last: number | null }>(),
       ];
   const now = Date.now();
+  const campaignGroup = pacingPolicy.campaignId
+    ? digest(`${userId}:campaign:${pacingPolicy.campaignId}`)
+    : "none";
   const enriched = candidates.map((c) => {
     const pacingGroup = pacingGroupFromRateGroup(c.group);
     const peers = ratePeers.filter((p) => p.group === c.group);
@@ -163,12 +200,22 @@ export async function acquireProvider(
     );
     const domainPeers = pacingPeers.length ? pacingPeers : [c];
     const pacingSecond = Math.min(...domainPeers.map((p) => p.perSecond));
-    const pacingMinute = Math.min(...domainPeers.map((p) => p.perMinute));
+    const providerDomainMinute = Math.min(...domainPeers.map((p) => p.perMinute));
+    const pacingMinute = Math.min(
+      providerDomainMinute,
+      pacingPolicy.domainPerMinute ?? providerDomainMinute,
+    );
     const warm = warmState.get(pacingGroup) ?? { count: 0, last: null };
     const idleMs = warm.last === null ? null : Math.max(0, now - warm.last);
     return {
       ...c,
       pacingGroup,
+      campaignGroup,
+      accountMinute: pacingPolicy.accountPerMinute ?? 0,
+      campaignMinute:
+        pacingPolicy.campaignId && pacingPolicy.campaignPerMinute
+          ? pacingPolicy.campaignPerMinute
+          : 0,
       smooth: smoothPacing ? 1 : 0,
       slowdown: slowdowns.get(c.id) ?? 1,
       groupSlowdown: Math.max(
