@@ -26,6 +26,7 @@ import {
 import { api } from "./api-client";
 import { Failure, PageTitle, ResponsiveDialog } from "./shared";
 import type { SenderCatalog } from "./sender-settings";
+import { ImageTestMessage } from "./image-test-message";
 
 type ImportRow = {
   id: string;
@@ -562,6 +563,18 @@ export function ImageBlast() {
               >
                 Send campaign
               </Button>
+              <ImageTestMessage
+                senderCatalog={senders}
+                senderIdentityId={senderIdentityId}
+                message={payload()}
+                disabled={
+                  !!busy ||
+                  !senderIdentityId ||
+                  !subject.trim() ||
+                  !image ||
+                  !alt.trim()
+                }
+              />
             </Stack>
           </Card>
         </Stack>
