@@ -60,9 +60,9 @@ function validateInlineAttachments(c: Connection, m: ProviderMessage) {
   for (const attachment of inline) {
     if (
       !attachment.contentId ||
-      !/^[A-Za-z0-9][A-Za-z0-9._@-]{0,127}$/.test(attachment.contentId)
+      !/^[A-Za-z0-9][A-Za-z0-9._@-]{0,126}$/.test(attachment.contentId)
     )
-      throw new Error("Inline attachments require a safe Content-ID of at most 128 characters.");
+      throw new Error("Inline attachments require a safe Content-ID of at most 127 characters.");
     if (seen.has(attachment.contentId))
       throw new Error("Inline attachment Content-IDs must be unique within a message.");
     seen.add(attachment.contentId);
