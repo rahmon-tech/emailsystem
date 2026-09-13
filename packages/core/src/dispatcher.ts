@@ -86,7 +86,9 @@ function clampSlowdown(value: string | null) {
 async function providerSlowdowns(userId: string, providerIds: string[]) {
   const ids = [...new Set(providerIds)];
   if (!ids.length) return new Map<string, number>();
-  const values = await redis.mget(ids.map((id) => providerAdaptiveKey(userId, id)));
+  const values = await redis.mget(
+    ...ids.map((id) => providerAdaptiveKey(userId, id)),
+  );
   return new Map(ids.map((id, index) => [id, clampSlowdown(values[index])]));
 }
 export async function acquireProvider(
