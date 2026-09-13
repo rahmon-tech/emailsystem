@@ -75,6 +75,32 @@ export function normalizeEmail(raw: string, preheader = "") {
     hash: createHash("sha256").update(html).digest("hex"),
   };
 }
+function stabilizeFallbackFlow(html: string) {
+  return html.replace(/<body\b[^>]*>/i, (tag) => {
+    const match = tag.match(/\bstyle\s*=\s*(["'])([\s\S]*?)\1/i);
+    const current = match?.[2] ?? "";
+    const rules = [
+      "width:100%!important",
+      "max-width:100%!important",
+      "box-sizing:border-box!important",
+      !/\bmargin\s*:/i.test(current) ? "margin:0!important" : "",
+      /display\s*:\s*(?:inline-)?flex/i.test(current)
+        ? "flex-direction:column!important"
+        : "",
+      /display\s*:\s*(?:inline-)?grid/i.test(current)
+        ? "grid-template-columns:minmax(0,1fr)!important;grid-auto-flow:row!important"
+        : "",
+    ]
+      .filter(Boolean)
+      .join(";");
+    if (!match) return tag.replace(/>$/, ` style="${rules}">`);
+    const separator = current.trim() && !current.trim().endsWith(";") ? ";" : "";
+    return tag.replace(
+      match[0],
+      `style=${match[1]}${current}${separator}${rules}${match[1]}`,
+    );
+  });
+}
 export function renderSnapshot(html: string, unsubscribeUrl: string) {
   const safe = sanitizeHtml(unsubscribeUrl, {
     allowedTags: [],
@@ -82,10 +108,11 @@ export function renderSnapshot(html: string, unsubscribeUrl: string) {
   }).replaceAll('"', "&quot;");
   const placeholder = "{{unsubscribe_url}}";
   if (html.includes(placeholder)) return html.replaceAll(placeholder, safe);
-  const footer = `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;border-collapse:collapse"><tbody><tr><td align="center" style="padding:24px 12px 8px;font-family:Arial,sans-serif;font-size:11px;line-height:16px;color:#98a2b3"><a href="${safe}" style="color:#98a2b3;text-decoration:underline">Unsubscribe</a></td></tr></tbody></table>`;
-  return /<\/body>/i.test(html)
-    ? html.replace(/<\/body>/i, () => footer + "</body>")
-    : html + footer;
+  const footer = `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="display:table!important;width:100%!important;max-width:100%!important;clear:both!important;float:none!important;flex:0 0 auto!important;align-self:stretch!important;grid-column:1/-1!important;table-layout:fixed!important;border-collapse:collapse!important;margin:0!important;background:transparent!important"><tbody><tr><td align="center" style="width:100%!important;padding:18px 12px 10px!important;font-family:Arial,sans-serif;font-size:11px;line-height:16px;color:#98a2b3;background:transparent!important"><a href="${safe}" style="color:#98a2b3;text-decoration:underline">Unsubscribe</a></td></tr></tbody></table>`;
+  const flowing = stabilizeFallbackFlow(html);
+  return /<\/body>/i.test(flowing)
+    ? flowing.replace(/<\/body>/i, () => footer + "</body>")
+    : flowing + footer;
 }
 export const previewCsp =
   "default-src 'none'; style-src 'unsafe-inline'; img-src https: http: data: cid:; font-src https:; form-action 'none'; base-uri 'none'; script-src 'none'; connect-src 'none'";
