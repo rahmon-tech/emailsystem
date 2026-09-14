@@ -7,6 +7,7 @@ export const experimentVariables = z
   .object({
     pacingProfile: z.enum(["smooth", "bounded-burst"]).default("smooth"),
     pacingIntervalMs: z.number().int().min(0).max(60_000).optional(),
+    pacingBurstSize: z.number().int().min(1).max(50).optional(),
     concurrency: z.number().int().min(1).max(50).optional(),
     transportEncoding: z
       .enum(["provider-default", "quoted-printable", "base64"])
@@ -23,7 +24,29 @@ export const experimentVariables = z
       ])
       .default("html"),
   })
-  .strict();
+  .strict()
+  .superRefine((variables, ctx) => {
+    if (variables.pacingProfile === "bounded-burst") {
+      if (!variables.pacingIntervalMs)
+        ctx.addIssue({
+          code: "custom",
+          path: ["pacingIntervalMs"],
+          message:
+            "Bounded-burst pacing requires a positive pacing interval window.",
+        });
+      if (variables.pacingBurstSize === undefined)
+        ctx.addIssue({
+          code: "custom",
+          path: ["pacingBurstSize"],
+          message: "Bounded-burst pacing requires an explicit burst size.",
+        });
+    } else if (variables.pacingBurstSize !== undefined)
+      ctx.addIssue({
+        code: "custom",
+        path: ["pacingBurstSize"],
+        message: "Burst size is only valid with bounded-burst pacing.",
+      });
+  });
 
 const createProfileInput = z
   .object({
