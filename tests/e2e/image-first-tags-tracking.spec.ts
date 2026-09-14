@@ -42,7 +42,7 @@ test("image-first reuses account tracking defaults and the existing campaign tag
     await expect(page).toHaveURL(/\/blast$/);
     await page.goto(appPath("/blast/image"));
 
-    const tracking = page.getByRole("checkbox", {
+    const tracking = page.getByRole("switch", {
       name: "Track clicks",
       exact: true,
     });
