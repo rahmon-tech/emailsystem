@@ -443,13 +443,15 @@ export async function processDelivery(
           now: transmissionStartedAt,
         });
         if (!experimentReservation.allowed) {
-          await tx.campaign.updateMany({
-            where: { id: c.id, state: { in: ["QUEUED", "SENDING"] } },
-            data: {
-              state: "PAUSED",
-              safeError: experimentReservation.reason,
-            },
-          });
+          if (!experimentReservation.retryable) {
+            await tx.campaign.updateMany({
+              where: { id: c.id, state: { in: ["QUEUED", "SENDING"] } },
+              data: {
+                state: "PAUSED",
+                safeError: experimentReservation.reason,
+              },
+            });
+          }
           return false;
         }
         await tx.deliveryAttempt.update({
@@ -494,6 +496,19 @@ export async function processDelivery(
                 campaignPerMinute: currentSettings.campaignPerMinute,
                 rateGroup: candidate!.group,
               },
+              experimentControls: experimentReservation.controls
+                ? {
+                    concurrency: {
+                      cap: experimentReservation.controls.concurrencyCap,
+                      activeBeforeStart:
+                        experimentReservation.controls.activeTransportsBeforeStart,
+                      activeAfterStart:
+                        experimentReservation.controls.activeTransportsBeforeStart === null
+                          ? null
+                          : experimentReservation.controls.activeTransportsBeforeStart + 1,
+                    },
+                  }
+                : null,
               copies: snapshot.cc.length + snapshot.bcc.length,
             },
           });
