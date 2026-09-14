@@ -5,7 +5,14 @@ import { send } from "@emailsystem/providers";
 import { supportsInlineAttachmentTransport } from "@emailsystem/providers/capabilities";
 import type { SendResult, ConnectionInput } from "@emailsystem/providers";
 import { unlocked } from "./providers";
-import { acquireProvider, releaseProvider, rateGroup } from "./dispatcher";
+import {
+  acquireExperimentPacing,
+  acquireProvider,
+  commitExperimentPacing,
+  releaseExperimentPacing,
+  releaseProvider,
+  rateGroup,
+} from "./dispatcher";
 import { lockCampaign, deliveryMessage } from "./campaigns";
 import { retryDecision, unclaimedStates } from "./domain";
 import { maskEmail } from "./security";
@@ -26,6 +33,7 @@ import {
 } from "./senders";
 import {
   experimentDispatchScope,
+  experimentVariables,
   reserveExperimentTransport,
 } from "./experiments";
 import {
@@ -74,6 +82,16 @@ export async function processDelivery(
   let quotaPeers: string[] = [];
   let transmitted = false;
   let permitAt = 0;
+  let experimentPacing:
+    | {
+        runId: string;
+        profile: "smooth";
+        configuredIntervalMs: number;
+        effectiveMinimumIntervalMs: number;
+      }
+    | undefined;
+  let experimentPacingReserved = false;
+  let experimentPacingCommitted = false;
   try {
     const claimed = await db.$transaction(
       async (tx) => {
@@ -148,6 +166,24 @@ export async function processDelivery(
             data: { state: "PAUSED", safeError: experimentScope.reason },
           });
           return false;
+        }
+        experimentPacing = undefined;
+        if (c.experimentRunId) {
+          const run = await tx.experimentRun.findFirst({
+            where: { id: c.experimentRunId, userId: initial.userId },
+            select: { profile: { select: { variables: true } } },
+          });
+          if (run) {
+            const variables = experimentVariables.parse(run.profile.variables);
+            const interval = variables.pacingIntervalMs ?? 0;
+            if (variables.pacingProfile === "smooth" && interval > 0)
+              experimentPacing = {
+                runId: c.experimentRunId,
+                profile: "smooth",
+                configuredIntervalMs: interval,
+                effectiveMinimumIntervalMs: interval,
+              };
+          }
         }
         const scopedProviderIds = experimentScope.providerIds
           ? new Set(experimentScope.providerIds)
@@ -253,6 +289,26 @@ export async function processDelivery(
             (p.settings as ConnectionInput["settings"]).region,
           ),
         }));
+        if (experimentPacing) {
+          const pacingPermit = await acquireExperimentPacing(
+            initial.userId,
+            experimentPacing.runId,
+            attemptId,
+            experimentPacing.effectiveMinimumIntervalMs,
+          );
+          if (!pacingPermit.allowed) {
+            await waitForSafety(
+              tx,
+              c,
+              [],
+              pacingPermit.nextAllowedAt,
+              now(),
+              "Experiment smooth pacing interval is active.",
+            );
+            return false;
+          }
+          experimentPacingReserved = true;
+        }
         permitAt = Date.now();
         const chosen = await acquireProvider(
           initial.userId,
@@ -454,6 +510,17 @@ export async function processDelivery(
           }
           return false;
         }
+        if (experimentPacing && experimentPacingReserved) {
+          if (
+            !(await commitExperimentPacing(
+              initial.userId,
+              experimentPacing.runId,
+              attemptId,
+            ))
+          )
+            return false;
+          experimentPacingCommitted = true;
+        }
         await tx.deliveryAttempt.update({
           where: { id: attemptId },
           data: {
@@ -496,19 +563,38 @@ export async function processDelivery(
                 campaignPerMinute: currentSettings.campaignPerMinute,
                 rateGroup: candidate!.group,
               },
-              experimentControls: experimentReservation.controls
-                ? {
-                    concurrency: {
-                      cap: experimentReservation.controls.concurrencyCap,
-                      activeBeforeStart:
-                        experimentReservation.controls.activeTransportsBeforeStart,
-                      activeAfterStart:
-                        experimentReservation.controls.activeTransportsBeforeStart === null
-                          ? null
-                          : experimentReservation.controls.activeTransportsBeforeStart + 1,
-                    },
-                  }
-                : null,
+              experimentControls:
+                experimentReservation.controls || experimentPacing
+                  ? {
+                      ...(experimentReservation.controls
+                        ? {
+                            concurrency: {
+                              cap: experimentReservation.controls.concurrencyCap,
+                              activeBeforeStart:
+                                experimentReservation.controls
+                                  .activeTransportsBeforeStart,
+                              activeAfterStart:
+                                experimentReservation.controls
+                                  .activeTransportsBeforeStart === null
+                                  ? null
+                                  : experimentReservation.controls
+                                      .activeTransportsBeforeStart + 1,
+                            },
+                          }
+                        : {}),
+                      ...(experimentPacing
+                        ? {
+                            pacing: {
+                              profile: experimentPacing.profile,
+                              configuredIntervalMs:
+                                experimentPacing.configuredIntervalMs,
+                              effectiveMinimumIntervalMs:
+                                experimentPacing.effectiveMinimumIntervalMs,
+                            },
+                          }
+                        : {}),
+                    }
+                  : null,
               copies: snapshot.cc.length + snapshot.bcc.length,
             },
           });
@@ -764,6 +850,16 @@ export async function processDelivery(
           }
         },
         { timeout: 60000 },
+      );
+    if (
+      experimentPacing &&
+      experimentPacingReserved &&
+      !experimentPacingCommitted
+    )
+      await releaseExperimentPacing(
+        initial.userId,
+        experimentPacing.runId,
+        attemptId,
       );
     if (candidate) await releaseProvider(initial.userId, candidate, attemptId);
   }

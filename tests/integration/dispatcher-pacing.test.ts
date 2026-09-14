@@ -2,8 +2,11 @@ import { test, after } from "node:test";
 import assert from "node:assert/strict";
 import { redis } from "@emailsystem/core/redis";
 import {
+  acquireExperimentPacing,
   acquireProvider,
+  commitExperimentPacing,
   providerAdaptiveKey,
+  releaseExperimentPacing,
   releaseProvider,
   rateGroup,
   senderDomainWarmKeys,
@@ -352,4 +355,49 @@ test("campaign pacing ceiling is isolated by campaign", async () => {
     "p2",
   );
   await releaseProvider(user, two, otherToken);
+});
+
+test("experiment smooth pacing permit serializes concurrent workers and releases only its owner", async () => {
+  const user = crypto.randomUUID();
+  const run = crypto.randomUUID();
+  users.push(user);
+  const tokens = Array.from({ length: 24 }, () => crypto.randomUUID());
+
+  const permits = await Promise.all(
+    tokens.map((token) => acquireExperimentPacing(user, run, token, 60_000)),
+  );
+  const winners = permits
+    .map((permit, index) => ({ permit, token: tokens[index]! }))
+    .filter(({ permit }) => permit.allowed);
+  assert.equal(winners.length, 1);
+
+  const winner = winners[0]!;
+  assert.equal(await commitExperimentPacing(user, run, winner.token), true);
+  const committedBlock = await acquireExperimentPacing(
+    user,
+    run,
+    crypto.randomUUID(),
+    60_000,
+  );
+  assert.equal(committedBlock.allowed, false);
+  const [seconds, micros] = await redis.time();
+  const redisNow = Number(seconds) * 1000 + Math.floor(Number(micros) / 1000);
+  assert(committedBlock.nextAllowedAt > redisNow);
+
+  const releasableRun = crypto.randomUUID();
+  const owner = crypto.randomUUID();
+  const reserved = await acquireExperimentPacing(user, releasableRun, owner, 60_000);
+  assert.equal(reserved.allowed, true);
+  assert.equal(
+    await releaseExperimentPacing(user, releasableRun, crypto.randomUUID()),
+    false,
+  );
+  assert.equal(await releaseExperimentPacing(user, releasableRun, owner), true);
+  const replacement = await acquireExperimentPacing(
+    user,
+    releasableRun,
+    crypto.randomUUID(),
+    60_000,
+  );
+  assert.equal(replacement.allowed, true);
 });
