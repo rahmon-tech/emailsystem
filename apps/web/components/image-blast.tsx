@@ -109,6 +109,7 @@ export function ImageBlast() {
   const [tags, setTags] = useState("");
   const [scheduledAt, setScheduledAt] = useState("");
   const [alt, setAlt] = useState("");
+  const [altAuthored, setAltAuthored] = useState(false);
   const [image, setImage] = useState<InlineImage | null>(null);
   const [attachments, setAttachments] = useState<FileAttachment[]>([]);
   const [preview, setPreview] = useState<Preview | null>(null);
@@ -238,7 +239,7 @@ export function ImageBlast() {
         contentId: `image-${crypto.randomUUID()}`,
         bytes: file.size,
       });
-      if (!alt.trim())
+      if (!altAuthored)
         setAlt(file.name.replace(/\.[^.]+$/, "").replace(/[-_]+/g, " "));
       invalidate();
     });
@@ -512,7 +513,9 @@ export function ImageBlast() {
                 label="Alt text"
                 value={alt}
                 onChange={(event) => {
-                  setAlt(event.target.value);
+                  const nextAlt = event.target.value;
+                  setAlt(nextAlt);
+                  setAltAuthored(Boolean(nextAlt.trim()));
                   invalidate();
                 }}
                 helperText="Also becomes the plain-text fallback when images are unavailable."
