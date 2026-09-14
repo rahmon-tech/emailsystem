@@ -189,24 +189,18 @@ Encoding choices used by an experiment must be captured in its evidence so resul
 
 Image-first sending is a supported content-format requirement, not an anti-filter bypass mechanism.
 
-Supported product shapes should include:
+Supported product shapes include normal CID-inline, hosted-image, attachment-only, and image-dominant message forms where client/provider compatibility is proven. The verified `/blast/image` path currently covers the CID-inline product flow through the existing campaign/delivery engine, including asset lifecycle, ordinary attachments, test-message, CC/BCC, scheduling, tags/tracking, inline-capability visibility, alt-text fidelity, and an optional ordinary HTTP(S) destination link behind the primary image. Those links reuse the existing campaign tracking pipeline when tracking is enabled.
 
-1. **Inline image (CID)** — a minimal HTML/MIME wrapper references an embedded image using `multipart/related`.
-2. **Hosted image** — HTML contains a normal image URL with dimensions/alt text and optional ordinary destination link.
-3. **Attachment-only image** — the photo is a standard MIME attachment and the body contains a small text/HTML explanation.
-4. **Image-dominant template** — a large visual is the primary presentation while a real text alternative remains available.
+Important implementation requirements remain:
 
-Important implementation requirements:
+- permit only safe formats where compatibility is proven;
+- enforce bounded encoded size/file-count limits;
+- preserve meaningful `alt` text and a plain-text alternative;
+- record image/content mode when used by an experiment;
+- preserve requested MIME structure consistently across supported provider adapters;
+- preview the actual message structure before sending.
 
-- permit common safe formats (for example PNG/JPEG/WebP only where client/provider compatibility is proven);
-- enforce bounded dimensions and encoded size;
-- preserve or generate meaningful `alt` text and a plain-text alternative;
-- record whether the image was hosted, CID-inline, or attached;
-- ensure provider adapters preserve the requested MIME structure consistently;
-- preview the actual message structure before sending;
-- include image mode in experiment evidence/compatibility results.
-
-An email cannot universally use a photo as a body without MIME structure: attachment-only is possible, while an inline visual normally still requires a minimal MIME/HTML wrapper. Some clients also block remote images by default, so image-only campaigns can be less accessible and less reliable than a normal HTML/text message. EmailSystem should make those tradeoffs visible rather than disguising them.
+An email cannot universally use a photo as a body without MIME structure. Some clients also block remote images by default, so image-only campaigns can be less accessible and less reliable than a normal HTML/text message. EmailSystem should make those tradeoffs visible rather than disguising them.
 
 ## Implementation status
 
@@ -223,23 +217,24 @@ An email cannot universally use a photo as a body without MIME structure: attach
 - experiment transport reservations that re-check run state, time window, provider/sender scope, recipient allowlist and hard ceilings immediately before transport starts;
 - tamper-evident chained SHA-256 experiment evidence with transport-start/outcome records, run-scoped recipient hashes, integrity verification and tenant-safe JSON export;
 - standards-compliant inline-vs-attachment provider message semantics and CID compatibility across supported SMTP/API transports, with unsupported inline transports failing closed;
-- merged Image-first CID composition path using the existing Blast/campaign/delivery architecture.
+- verified Image-first CID composition/product path using the existing Blast/campaign/delivery architecture, including the optional primary-image HTTP(S) destination link;
+- verified experiment `concurrency` binding: the approved value is enforced immediately before transport as a run-wide cap across workers/providers; production/account/domain/provider/campaign ceilings remain authoritative; saturation is retryable and defers without pausing the campaign, consuming an experiment attempt, or starting transport; `transport.started` evidence records the applied cap and occupancy before/after start.
 
 ### Partially implemented / requires proof before claiming complete
 
-- experiment variables already model smooth/bounded-burst pacing, optional pacing interval, concurrency, transfer encoding/UTF-8 charset and content mode, but those approved values still need authoritative binding into the effective dispatcher/MIME behavior rather than merely being stored as profile metadata;
-- transport-start evidence records configured pacing/provider state, but should also record the **effective applied experiment values** and any derived pacing gap so a judge/operator can reproduce the exact run;
+- experiment variables still model smooth/bounded-burst pacing and optional pacing interval, transfer encoding/UTF-8 charset, and content mode, but those approved values still need authoritative binding into the effective dispatcher/rendering/MIME behavior rather than merely being stored as profile metadata;
+- concurrency evidence now records the effective applied cap/occupancy, while remaining experiment variables should likewise record their effective applied values and derived pacing gap so an operator can reproduce the exact run;
 - provider adaptive slowdown state is consumed by the dispatcher and temporary/rate-limit cooldown is enforced, but the complete pressure→slowdown→gradual-recovery loop and restart durability still need focused end-to-end proof before being treated as finished;
 - failover behavior exists through eligible-provider selection, while dedicated tests should explicitly prove that temporary provider unavailability may fail over and a true policy block pauses instead of routing around enforcement.
 
 ### Remaining major milestones
 
-- bind approved experiment pacing/concurrency/encoding/content variables into the existing dispatcher/provider-rendering owners while keeping production/domain/account ceilings authoritative;
+- bind approved experiment pacing behavior into the existing dispatcher/pacing owners while keeping production/domain/account/provider ceilings authoritative;
+- bind approved standards-compliant encoding/charset and content-mode variables into the existing rendering/provider owners where repository truth still shows metadata-only behavior;
 - add focused reproducibility/evidence tests for those effective experiment values and explicit temporary-failover-vs-policy-stop behavior;
 - richer provider health/effective-rate/`nextAllowedAt` telemetry in Activity;
 - privacy/retention controls for experiment evidence and message snapshots;
 - final Activity/UX for experiment configuration, live evidence, stop/review state and export;
-- continue Image-first parity/asset lifecycle: ordinary attachments, remove/replace lifecycle, test-send, CC/BCC, scheduling, tags/tracking, capability visibility and rendering/accessibility edge cases;
 - end-to-end CI/security/tenant/race coverage for every new mutation path;
 - final production hardening and VPS reconciliation only after repository Quality is green.
 

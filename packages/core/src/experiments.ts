@@ -341,6 +341,11 @@ export async function experimentDispatchScope(
   };
 }
 
+type ExperimentTransportControls = {
+  concurrencyCap: number | null;
+  activeTransportsBeforeStart: number | null;
+};
+
 export async function reserveExperimentTransport(
   tx: Prisma.TransactionClient,
   input: {
@@ -354,10 +359,15 @@ export async function reserveExperimentTransport(
     now?: Date;
   },
 ): Promise<
-  | { allowed: true; experimentRunId: string | null }
-  | { allowed: false; reason: string }
+  | {
+      allowed: true;
+      experimentRunId: string | null;
+      controls: ExperimentTransportControls | null;
+    }
+  | { allowed: false; reason: string; retryable?: boolean }
 > {
-  if (!input.runId) return { allowed: true, experimentRunId: null };
+  if (!input.runId)
+    return { allowed: true, experimentRunId: null, controls: null };
   const now = input.now ?? new Date();
   await lockExperimentControl(tx, input.userId, input.runId);
   const [user, run] = await Promise.all([
@@ -380,6 +390,7 @@ export async function reserveExperimentTransport(
         campaign: { select: { id: true } },
         profile: {
           select: {
+            variables: true,
             providerScopes: { select: { providerId: true } },
             senderScopes: { select: { senderIdentityId: true } },
           },
@@ -454,6 +465,26 @@ export async function reserveExperimentTransport(
       allowed: false,
       reason: "Recipient is outside the controlled experiment allowlist.",
     };
+
+  const variables = experimentVariables.parse(run.profile.variables);
+  let activeTransportsBeforeStart: number | null = null;
+  if (variables.concurrency !== undefined) {
+    activeTransportsBeforeStart = await tx.deliveryAttempt.count({
+      where: {
+        userId: input.userId,
+        experimentRunId: run.id,
+        transmissionStartedAt: { not: null },
+        finishedAt: null,
+      },
+    });
+    if (activeTransportsBeforeStart >= variables.concurrency)
+      return {
+        allowed: false,
+        retryable: true,
+        reason: "Experiment concurrency capacity is currently occupied.",
+      };
+  }
+
   if (run.attemptsUsed >= run.maxAttempts) {
     await tx.experimentRun.update({
       where: { id: run.id },
@@ -518,7 +549,14 @@ export async function reserveExperimentTransport(
       resourceId: input.attemptId,
     },
   });
-  return { allowed: true, experimentRunId: run.id };
+  return {
+    allowed: true,
+    experimentRunId: run.id,
+    controls: {
+      concurrencyCap: variables.concurrency ?? null,
+      activeTransportsBeforeStart,
+    },
+  };
 }
 
 export async function listExperimentProfiles(userId: string) {
