@@ -66,7 +66,9 @@ test("image-first reuses account tracking defaults and the existing campaign tag
       mimeType: "image/png",
       buffer: png,
     });
-    await page.getByLabel("Alt text").fill("Tags tracking campaign visual");
+    await page
+      .getByRole("textbox", { name: "Alt text", exact: true })
+      .fill("Tags tracking campaign visual");
 
     const preflightRequest = page.waitForRequest(
       (request) =>
