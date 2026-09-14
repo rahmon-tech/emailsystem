@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   Alert,
   Button,
+  Chip,
   DialogActions,
   DialogContent,
   MenuItem,
@@ -84,15 +85,18 @@ export function ImageTestMessage({
     .flatMap((domain) => domain.senders)
     .find((item) => item.id === senderIdentityId);
 
-  const eligibleProviders = useMemo(
+  const senderProviders = useMemo(
     () =>
       providers.filter(
         (provider) =>
-          provider.enabled &&
-          !!sender?.availableProviderIds.includes(provider.id) &&
-          supportsInlineAttachmentTransport(provider),
+          provider.enabled && !!sender?.availableProviderIds.includes(provider.id),
       ),
     [providers, sender],
+  );
+
+  const eligibleProviders = useMemo(
+    () => senderProviders.filter(supportsInlineAttachmentTransport),
+    [senderProviders],
   );
 
   const show = () => {
@@ -131,6 +135,27 @@ export function ImageTestMessage({
 
   return (
     <>
+      {!!sender && !!senderProviders.length && (
+        <Stack spacing={1}>
+          <Alert severity={eligibleProviders.length ? "success" : "warning"}>
+            {eligibleProviders.length
+              ? `Inline CID ready · ${eligibleProviders.length} of ${senderProviders.length} eligible provider${senderProviders.length === 1 ? "" : "s"} can send this Image-first message.`
+              : `Inline CID unavailable · 0 of ${senderProviders.length} eligible provider${senderProviders.length === 1 ? "" : "s"} can send this Image-first message.`}
+          </Alert>
+          <Stack direction="row" sx={{ gap: 1, flexWrap: "wrap" }}>
+            {senderProviders.map((provider) => (
+              <Chip
+                key={provider.id}
+                label={provider.name}
+                size="small"
+                variant={
+                  supportsInlineAttachmentTransport(provider) ? "filled" : "outlined"
+                }
+              />
+            ))}
+          </Stack>
+        </Stack>
+      )}
       <Button
         startIcon={<ScienceOutlined />}
         disabled={disabled}
