@@ -1,7 +1,11 @@
 import { after, before, test } from "node:test";
 import assert from "node:assert/strict";
 import { db } from "@emailsystem/db";
-import { preflight } from "@emailsystem/core/campaigns";
+import {
+  createCampaign,
+  preflight,
+  prepareCampaign,
+} from "@emailsystem/core/campaigns";
 import { importRecipients } from "@emailsystem/core/imports";
 import { saveProvider, testProvider } from "@emailsystem/core/providers";
 import { redis } from "@emailsystem/core/redis";
@@ -159,6 +163,23 @@ test("image-first preflight reuses duplicate CC BCC protection", async () => {
 
   assert.equal(result.ready, false);
   assert.match(result.problems.join(" "), /CC and BCC addresses must be unique/i);
+});
+
+test("image-first scheduling reuses campaign and delivery timing owners", async () => {
+  const scheduledAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+  const campaign = await createCampaign(userId, {
+    ...input(capableFrom),
+    name: "Scheduled image-first integration",
+    scheduledAt,
+    startKey: crypto.randomUUID(),
+  });
+
+  assert.equal(campaign.scheduledAt.toISOString(), scheduledAt);
+  await prepareCampaign(campaign.id);
+  const delivery = await db.delivery.findFirstOrThrow({
+    where: { campaignId: campaign.id, userId },
+  });
+  assert.equal(delivery.nextAttemptAt.toISOString(), scheduledAt);
 });
 
 test("test message rejects an unsupported CID transport before creating a provider test delivery", async () => {
