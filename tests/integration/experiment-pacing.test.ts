@@ -44,8 +44,8 @@ test("smooth experiment pacing is a run-wide transport-start floor with evidence
     transport: "api",
     credentials: {},
     settings: { fromEmail: "sender@example.com" },
-    perSecond: 1000,
-    perMinute: 60_000,
+    perSecond: 100,
+    perMinute: 6000,
     concurrency: 10,
   });
   assert(provider);
