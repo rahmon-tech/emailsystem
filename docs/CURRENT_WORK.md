@@ -2,7 +2,7 @@
 
 ## Verified baseline
 
-The verified predecessor on remote `main` is `73f0a16ad148d1e752b9b69b794dbb98ecbea22f` (`feat(image): add scheduling parity (#33)`). Full merged-main Quality #149 passed for that exact SHA, including fresh migrations, schema-drift and upgrade rehearsal, lint, secret scan, strict typecheck, unit tests, PostgreSQL/Redis integration tests, production build, Playwright E2E, visual-review screenshots, production-container validation, diagnostics, artifact upload, cleanup, and container shutdown.
+The verified predecessor on remote `main` is `0b97d2f237f019c47cb05d4ea2f7c16a3c41e827` (`feat(image): add tags and tracking parity (#34)`). Full merged-main Quality #155 passed for that exact SHA, including fresh migrations, schema-drift and upgrade rehearsal, lint, secret scan, strict typecheck, unit tests, PostgreSQL/Redis integration tests, production build, Playwright E2E, visual-review screenshots, production-container validation, diagnostics, artifact upload, cleanup, and container shutdown.
 
 The repository remains an existing TypeScript/pnpm application with Next.js + MUI web UI, PostgreSQL/Prisma persistence, Redis-backed safety/rate coordination, a worker process, provider adapters, an email renderer, and Docker deployment assets. Preserve this architecture; do not introduce a second campaign, delivery engine, experiment sender, provider-routing path, scheduler, tracking subsystem, or test-send path.
 
@@ -23,40 +23,35 @@ The verified system currently includes:
 - verified Image-first primary-image replace/remove lifecycle plus ordinary attachments sharing the authoritative five-file / 5 MB campaign attachment ceiling;
 - verified Image-first test-message support through the existing `POST /test-message` API and `testProvider` owner, including sender-authorized CID-capable provider filtering and server-side fail-closed transport enforcement;
 - verified Image-first CC/BCC parity through the same core campaign contract, including normalization, duplicate/list/suppression protection, copy-cost warnings, and browser payload proof;
-- verified Image-first scheduling parity through the existing `scheduledAt` campaign/delivery contract, including browser-local time to ISO conversion and PostgreSQL proof that scheduled eligibility propagates unchanged to prepared deliveries.
+- verified Image-first scheduling parity through the existing `scheduledAt` campaign/delivery contract, including browser-local time to ISO conversion and PostgreSQL proof that scheduled eligibility propagates unchanged to prepared deliveries;
+- verified Image-first tags/tracking parity through the existing campaign tags contract, tracking settings, `trackingChoice`, snapshot rewrite, redirect, and analytics owners.
 
 The canonical delivery-control-plane requirements remain in `docs/DELIVERY_CONTROL_PLANE.md`. They are not superseded by Image-first work. The current known control-plane gap is the distinction between experiment variables being **modeled** and those values being **authoritatively applied** to effective dispatcher/MIME behavior with reproducible evidence; that remains a later dedicated implementation slice.
 
-## Current milestone — Image-first tags/tracking parity
+## Current milestone — earlier Image-first inline-capability visibility
 
-This milestone reuses the standard Blast campaign tags contract plus the existing tracking settings, `trackingChoice`, snapshot-rewrite, redirect, and analytics owners. It does not add a parallel tracking backend.
+This milestone reuses the existing sender/provider catalog plus `supportsInlineAttachmentTransport()` capability owner. It does not add or alter provider capability detection, routing, MIME rendering, test-send enforcement, schema, migrations, workers, or delivery behavior.
 
 The candidate in this tree:
 
-- exposes `Tags (comma separated)` with the same comma/semicolon/newline splitting behavior used by standard Blast;
-- submits those tags through the existing campaign/pre-flight payload and authoritative core validation/storage path;
-- loads the account tracking configuration through the existing tracking settings API and inherits `defaultEnabled`;
-- exposes the same `Track clicks` control while keeping direct sending available if tracking settings cannot be loaded;
-- invalidates preview/pre-flight whenever tags or tracking selection changes;
-- submits only the requested tracking choice and relies on existing server-side `trackingChoice` resolution;
-- shows the resolved pre-flight tracking state without claiming links were rewritten before campaign snapshot creation;
-- changes no Prisma schema, migration, worker, dispatcher, provider routing, redirect route, tracking persistence, or deployment behavior.
+- derives the selected sender's enabled eligible providers from the existing `availableProviderIds` relationship;
+- separately derives the subset that supports inline CID using the existing capability helper;
+- surfaces the usable ratio immediately after sender selection and before preview/pre-flight;
+- names each eligible provider in the same early composer area so mixed-capability sender configurations are visible before the user reaches test-send/pre-flight;
+- keeps the existing fail-closed server-side test-send/pre-flight enforcement authoritative;
+- changes no provider-routing, MIME backend, dispatcher, schema, migration, worker, or deployment behavior.
 
 TDD/verification evidence is explicit:
 
-- test-only head `5347ae6590d90a578877a0631f0756f76f5a9325` produced the intended Quality #150 browser failure before Image-first exposed tags/tracking parity;
-- implementation head `c30faf205938f21c101b12f9e55b852a15dfa028` passed migrations, schema/drift, upgrade rehearsal, lint, secrets, TypeScript, unit, integration, build, and production-container validation in Quality #151; Playwright then exposed only an ambiguous `Alt text` test selector;
-- selector-only head `cbc7e3de2a642564c966df277dc55f8fc7e19efe` removed that ambiguity; Quality #152 again passed every non-browser gate, and the browser artifact proved the rendered MUI control had the correct checked ARIA `switch` semantics while the test still queried the wrong `checkbox` role;
-- selector-only head `d52d15659fd6e25e46f5cf4d24898fe4e1e7623f` corrected the test to target the actual switch role; full Quality #153 passed, including the tags payload, inherited tracking default/toggle, server-resolved tracking text, Playwright suite, screenshots, production-container validation, diagnostics, artifact upload, cleanup, and container shutdown.
+- test-only head `28bd46df23a42ca69252ae92542e19f4cd183fbc` defined the browser contract for one sender with two eligible transports and intentionally failed because no early capability signal existed;
+- implementation head `9950c8fee5f7e5ba382858afd0f4d6d66ad60bda` added only the narrow composer visibility behavior while reusing existing owners;
+- full Quality #157 passed for `9950c8fee5f7e5ba382858afd0f4d6d66ad60bda`, including migrations, schema/drift, upgrade rehearsal, lint, secrets, strict TypeScript, unit/integration tests, production build, Playwright E2E, screenshots, production-container validation, diagnostics/artifacts, cleanup, and container shutdown.
 
 This documentation checkpoint changes no runtime behavior. Publication still requires full Quality on the exact reconciled PR head, an unchanged verified `main` parent, an exact-head guarded merge, and merged-main Quality on the resulting SHA.
 
-## Remaining Image-first parity after tags/tracking
+## Remaining Image-first parity after inline-capability visibility
 
-Continue narrowly in this order:
-
-1. earlier sender/provider inline-capability visibility before pre-flight while retaining server-side fail-closed enforcement;
-2. accessibility/alt-text UX and rendering/fidelity edge cases across supported transports.
+Continue narrowly with accessibility/alt-text UX and rendering/fidelity edge cases across supported transports. Reconcile exact existing behavior first; do not rebuild the MIME/provider backend that is already verified.
 
 No live recipient or external provider may be used for automated parity proof.
 
