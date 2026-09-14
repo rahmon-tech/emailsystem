@@ -2,7 +2,7 @@
 
 ## Verified baseline
 
-The verified predecessor on remote `main` is `0b97d2f237f019c47cb05d4ea2f7c16a3c41e827` (`feat(image): add tags and tracking parity (#34)`). Full merged-main Quality #155 passed for that exact SHA, including fresh migrations, schema-drift and upgrade rehearsal, lint, secret scan, strict typecheck, unit tests, PostgreSQL/Redis integration tests, production build, Playwright E2E, visual-review screenshots, production-container validation, diagnostics, artifact upload, cleanup, and container shutdown.
+Remote `main` is verified at `eb8099dc28815e00490665268cc3c52e83871c8c` (`feat(image): show inline capability before preflight (#35)`). Full merged-main Quality #159 passed for that exact SHA, including fresh migrations, schema-drift and upgrade rehearsal, lint, secret scan, strict typecheck, unit tests, PostgreSQL/Redis integration tests, production build, Playwright E2E, visual-review screenshots, production-container validation, diagnostics, artifact upload, cleanup, and container shutdown.
 
 The repository remains an existing TypeScript/pnpm application with Next.js + MUI web UI, PostgreSQL/Prisma persistence, Redis-backed safety/rate coordination, a worker process, provider adapters, an email renderer, and Docker deployment assets. Preserve this architecture; do not introduce a second campaign, delivery engine, experiment sender, provider-routing path, scheduler, tracking subsystem, or test-send path.
 
@@ -24,40 +24,42 @@ The verified system currently includes:
 - verified Image-first test-message support through the existing `POST /test-message` API and `testProvider` owner, including sender-authorized CID-capable provider filtering and server-side fail-closed transport enforcement;
 - verified Image-first CC/BCC parity through the same core campaign contract, including normalization, duplicate/list/suppression protection, copy-cost warnings, and browser payload proof;
 - verified Image-first scheduling parity through the existing `scheduledAt` campaign/delivery contract, including browser-local time to ISO conversion and PostgreSQL proof that scheduled eligibility propagates unchanged to prepared deliveries;
-- verified Image-first tags/tracking parity through the existing campaign tags contract, tracking settings, `trackingChoice`, snapshot rewrite, redirect, and analytics owners.
+- verified Image-first tags/tracking parity through the existing campaign tags contract, tracking settings, `trackingChoice`, snapshot rewrite, redirect, and analytics owners;
+- verified Image-first inline-capability visibility that reuses the sender/provider catalog and `supportsInlineAttachmentTransport()` owner to surface eligible-versus-CID-capable transports before preview/pre-flight while preserving fail-closed server-side enforcement.
 
-The canonical delivery-control-plane requirements remain in `docs/DELIVERY_CONTROL_PLANE.md`. They are not superseded by Image-first work. The current known control-plane gap is the distinction between experiment variables being **modeled** and those values being **authoritatively applied** to effective dispatcher/MIME behavior with reproducible evidence; that remains a later dedicated implementation slice.
+The canonical delivery-control-plane requirements remain in `docs/DELIVERY_CONTROL_PLANE.md`. They are not superseded by Image-first work. The current known control-plane gap is the distinction between experiment variables being **modeled** and those values being **authoritatively applied** to effective dispatcher/MIME behavior with reproducible evidence; that remains the next dedicated implementation area after publication of the final Image-first parity slice.
 
-## Current milestone — earlier Image-first inline-capability visibility
+## Current milestone — final Image-first alt-text fidelity
 
-This milestone reuses the existing sender/provider catalog plus `supportsInlineAttachmentTransport()` capability owner. It does not add or alter provider capability detection, routing, MIME rendering, test-send enforcement, schema, migrations, workers, or delivery behavior.
+This milestone is intentionally narrow. It changes only Image-first composer alt-text provenance plus isolated browser proof. It does not alter CID HTML rendering, preview generation, provider adapters, MIME behavior, campaign/delivery contracts, schema, migrations, workers, routing, dispatcher behavior, or deployment configuration.
 
-The candidate in this tree:
+The candidate in this tree now preserves the distinction between generated and user-authored alt text:
 
-- derives the selected sender's enabled eligible providers from the existing `availableProviderIds` relationship;
-- separately derives the subset that supports inline CID using the existing capability helper;
-- surfaces the usable ratio immediately after sender selection and before preview/pre-flight;
-- names each eligible provider in the same early composer area so mixed-capability sender configurations are visible before the user reaches test-send/pre-flight;
-- keeps the existing fail-closed server-side test-send/pre-flight enforcement authoritative;
-- changes no provider-routing, MIME backend, dispatcher, schema, migration, worker, or deployment behavior.
+- filename-derived alt text remains automatic until the user actually authors a nonblank description;
+- replacing the primary image refreshes generated alt text from the replacement filename;
+- manually authored nonblank alt text remains stable across later primary-image replacement;
+- clearing the alt field returns it to the un-authored/generated state so a later replacement can derive a fresh filename-based description;
+- existing plain-text fallback and downstream rendering behavior remain unchanged;
+- automated browser proof uses only an isolated mock provider and no live recipient or external provider.
 
-TDD/verification evidence is explicit:
+TDD/verification evidence is explicit and canonical:
 
-- test-only head `28bd46df23a42ca69252ae92542e19f4cd183fbc` defined the browser contract for one sender with two eligible transports and intentionally failed because no early capability signal existed;
-- implementation head `9950c8fee5f7e5ba382858afd0f4d6d66ad60bda` added only the narrow composer visibility behavior while reusing existing owners;
-- full Quality #157 passed for `9950c8fee5f7e5ba382858afd0f4d6d66ad60bda`, including migrations, schema/drift, upgrade rehearsal, lint, secrets, strict TypeScript, unit/integration tests, production build, Playwright E2E, screenshots, production-container validation, diagnostics/artifacts, cleanup, and container shutdown.
+- corrected test-only head `90905bf8931c0bd35d639902ebc29d97f3ef6ae8`, whose exact parent is verified merged `main` `eb8099dc28815e00490665268cc3c52e83871c8c`, added only the browser contract and seeded the existing provider prerequisite so the test reached `/blast/image` truthfully;
+- Quality #163 for `90905bf8931c0bd35d639902ebc29d97f3ef6ae8` passed migrations/schema, upgrade rehearsal, lint, secrets, strict TypeScript, unit/integration tests, and production build before failing at Playwright on the unchanged stale generated-alt behavior, establishing the intended red boundary;
+- implementation head `904d796ab02d519583dd79efd94abb8b189a8649` added the narrow generated-versus-authored alt provenance state and no other runtime subsystem change;
+- full Quality #164 passed for `904d796ab02d519583dd79efd94abb8b189a8649`, including fresh migrations, schema/drift verification, upgrade rehearsal, lint, secrets, strict TypeScript, unit/integration tests, production build, Playwright E2E, screenshots, production-container validation, diagnostics/artifacts, cleanup, and container shutdown.
 
-This documentation checkpoint changes no runtime behavior. Publication still requires full Quality on the exact reconciled PR head, an unchanged verified `main` parent, an exact-head guarded merge, and merged-main Quality on the resulting SHA.
+This documentation checkpoint changes no runtime behavior. Publication still requires full Quality on this exact reconciled PR head, confirmation that remote `main` remains `eb8099dc28815e00490665268cc3c52e83871c8c`, a guarded exact-head merge, and merged-main Quality on the resulting SHA.
 
-## Remaining Image-first parity after inline-capability visibility
+## Image-first parity boundary
 
-Continue narrowly with accessibility/alt-text UX and rendering/fidelity edge cases across supported transports. Reconcile exact existing behavior first; do not rebuild the MIME/provider backend that is already verified.
+The currently planned Image-first parity sequence is complete through primary-image/attachment lifecycle, test message, CC/BCC, scheduling, tags/tracking, inline-capability visibility, and alt-text replacement fidelity. Do not invent additional parity slices without reconciling a concrete observed gap from current tests, UX, or supported-provider behavior.
 
 No live recipient or external provider may be used for automated parity proof.
 
 ## Delivery-control-plane follow-on
 
-After the Image-first parity increments, resume the dedicated control-plane gap from repository truth rather than rebuilding existing routing:
+After this final Image-first parity milestone is published, resume the dedicated control-plane gap from repository truth rather than rebuilding existing routing:
 
 - bind approved experiment pacing/concurrency/encoding/content variables into existing dispatcher/provider-rendering owners;
 - ensure production/account/domain/provider safety ceilings remain authoritative and experiments can only vary behavior inside their authorized envelope;
@@ -70,7 +72,7 @@ Experiments must never silently route around a provider policy/enforcement decis
 
 ## Later dependencies
 
-After Image-first parity and the dedicated delivery-control-plane completion slices:
+After the dedicated delivery-control-plane completion slices:
 
 - reusable message/template workflow if repository truth still lacks a persisted template/library abstraction;
 - remaining campaign/Activity operational gaps found by current tests and UX review, especially progress/control/export fidelity under real worker states;
