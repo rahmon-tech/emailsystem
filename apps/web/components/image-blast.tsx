@@ -11,8 +11,10 @@ import {
   Chip,
   DialogActions,
   DialogContent,
+  FormControlLabel,
   MenuItem,
   Stack,
+  Switch,
   TextField,
   Typography,
 } from "@mui/material";
@@ -26,6 +28,7 @@ import {
 import { api } from "./api-client";
 import { Failure, PageTitle, ResponsiveDialog } from "./shared";
 import type { SenderCatalog } from "./sender-settings";
+import type { TrackingConfig } from "./tracking-settings";
 import { ImageTestMessage } from "./image-test-message";
 
 type ImportRow = {
@@ -56,6 +59,7 @@ type Flight = {
   previewHtml: string;
   text: string;
   sender: { email: string; eligibleProviderCount: number };
+  tracking: { enabled: boolean };
 };
 
 const imageTypes = new Set(["image/png", "image/jpeg", "image/gif", "image/webp"]);
@@ -83,7 +87,7 @@ function fileBase64(file: File) {
   });
 }
 
-const splitEmails = (value: string) =>
+const splitValues = (value: string) =>
   value
     .split(/[,;\n]/)
     .map((item) => item.trim())
@@ -93,6 +97,8 @@ export function ImageBlast() {
   const router = useRouter();
   const [imports, setImports] = useState<ImportRow[]>([]);
   const [senders, setSenders] = useState<SenderCatalog | null>(null);
+  const [trackingConfig, setTrackingConfig] = useState<TrackingConfig | null>(null);
+  const [tracking, setTracking] = useState({ enabled: false });
   const [importId, setImportId] = useState("");
   const [name, setName] = useState("");
   const [senderIdentityId, setSenderIdentityId] = useState("");
@@ -100,6 +106,7 @@ export function ImageBlast() {
   const [preheader, setPreheader] = useState("");
   const [cc, setCc] = useState("");
   const [bcc, setBcc] = useState("");
+  const [tags, setTags] = useState("");
   const [scheduledAt, setScheduledAt] = useState("");
   const [alt, setAlt] = useState("");
   const [image, setImage] = useState<InlineImage | null>(null);
@@ -118,6 +125,17 @@ export function ImageBlast() {
 
   useEffect(() => {
     let active = true;
+    void api<TrackingConfig>("tracking")
+      .then((data) => {
+        if (!active) return;
+        setTrackingConfig(data);
+        setTracking({ enabled: data.settings.defaultEnabled });
+        setFlight(null);
+        setPreview(null);
+      })
+      .catch(() => {
+        /* Direct sending remains available if tracking settings cannot be loaded. */
+      });
     void Promise.all([
       api<ImportRow[]>("imports"),
       api<SenderCatalog>("senders"),
@@ -145,8 +163,9 @@ export function ImageBlast() {
     senderIdentityId,
     subject,
     preheader,
-    cc: splitEmails(cc),
-    bcc: splitEmails(bcc),
+    cc: splitValues(cc),
+    bcc: splitValues(bcc),
+    tags: splitValues(tags),
     scheduledAt: scheduledAt ? new Date(scheduledAt).toISOString() : undefined,
     html,
     text,
@@ -169,7 +188,7 @@ export function ImageBlast() {
         disposition: "attachment" as const,
       })),
     ],
-    tracking: { enabled: false },
+    tracking: { enabled: tracking.enabled },
     startKey,
   });
 
@@ -392,6 +411,15 @@ export function ImageBlast() {
                 </Typography>
               </Stack>
               <TextField
+                label="Tags (comma separated)"
+                value={tags}
+                onChange={(event) => {
+                  setTags(event.target.value);
+                  invalidate();
+                }}
+                helperText="Use tags to organize and filter campaigns after launch."
+              />
+              <TextField
                 label="Schedule (your local time)"
                 type="datetime-local"
                 slotProps={{ inputLabel: { shrink: true } }}
@@ -401,6 +429,29 @@ export function ImageBlast() {
                   invalidate();
                 }}
               />
+              <Box>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={tracking.enabled}
+                      onChange={(event) => {
+                        setTracking({ enabled: event.target.checked });
+                        invalidate();
+                      }}
+                    />
+                  }
+                  label="Track clicks"
+                />
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  sx={{ display: "block" }}
+                >
+                  {tracking.enabled
+                    ? `Links use ${trackingConfig?.appUrl ?? "the configured app URL"}/r/…; the campaign snapshot decides which safe links are rewritten.`
+                    : "Tracking is off; safe links stay direct."}
+                </Typography>
+              </Box>
               <Box
                 sx={{
                   border: "1px dashed",
@@ -568,6 +619,13 @@ export function ImageBlast() {
                     ? `${flight.count.toLocaleString()} recipients · ${flight.providers.length} inline-capable provider${flight.providers.length === 1 ? "" : "s"}`
                     : "Resolve the pre-flight issues before sending."}
                 </Alert>
+              )}
+              {flight && (
+                <Typography variant="body2" color="text.secondary">
+                  {flight.tracking.enabled
+                    ? "Tracking on · click links will be rewritten when the campaign snapshot is created."
+                    : "Tracking off · safe links stay direct."}
+                </Typography>
               )}
               {flight?.problems.map((problem) => (
                 <Alert severity="error" key={problem}>

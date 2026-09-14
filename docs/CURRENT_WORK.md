@@ -2,9 +2,9 @@
 
 ## Verified baseline
 
-The verified predecessor on remote `main` is `c1664948121495f4b81d8215c3e9623166bd21b7` (`feat(image): add CC BCC parity (#32)`). Full merged-main Quality #144 passed for that exact SHA, including fresh migrations, schema-drift and upgrade rehearsal, lint, secret scan, strict typecheck, unit tests, PostgreSQL/Redis integration tests, production build, Playwright E2E, visual-review screenshots, production-container validation, diagnostics, artifact upload, cleanup, and container shutdown.
+The verified predecessor on remote `main` is `73f0a16ad148d1e752b9b69b794dbb98ecbea22f` (`feat(image): add scheduling parity (#33)`). Full merged-main Quality #149 passed for that exact SHA, including fresh migrations, schema-drift and upgrade rehearsal, lint, secret scan, strict typecheck, unit tests, PostgreSQL/Redis integration tests, production build, Playwright E2E, visual-review screenshots, production-container validation, diagnostics, artifact upload, cleanup, and container shutdown.
 
-The repository remains an existing TypeScript/pnpm application with Next.js + MUI web UI, PostgreSQL/Prisma persistence, Redis-backed safety/rate coordination, a worker process, provider adapters, an email renderer, and Docker deployment assets. Preserve this architecture; do not introduce a second campaign, delivery engine, experiment sender, provider-routing path, scheduler, or test-send path.
+The repository remains an existing TypeScript/pnpm application with Next.js + MUI web UI, PostgreSQL/Prisma persistence, Redis-backed safety/rate coordination, a worker process, provider adapters, an email renderer, and Docker deployment assets. Preserve this architecture; do not introduce a second campaign, delivery engine, experiment sender, provider-routing path, scheduler, tracking subsystem, or test-send path.
 
 ## Completed product foundation
 
@@ -22,35 +22,41 @@ The verified system currently includes:
 - the authenticated `/blast/image` Image-first composer using the existing Blast/campaign/delivery architecture;
 - verified Image-first primary-image replace/remove lifecycle plus ordinary attachments sharing the authoritative five-file / 5 MB campaign attachment ceiling;
 - verified Image-first test-message support through the existing `POST /test-message` API and `testProvider` owner, including sender-authorized CID-capable provider filtering and server-side fail-closed transport enforcement;
-- verified Image-first CC/BCC parity through the same core campaign contract, including normalization, duplicate/list/suppression protection, copy-cost warnings, and browser payload proof.
+- verified Image-first CC/BCC parity through the same core campaign contract, including normalization, duplicate/list/suppression protection, copy-cost warnings, and browser payload proof;
+- verified Image-first scheduling parity through the existing `scheduledAt` campaign/delivery contract, including browser-local time to ISO conversion and PostgreSQL proof that scheduled eligibility propagates unchanged to prepared deliveries.
 
 The canonical delivery-control-plane requirements remain in `docs/DELIVERY_CONTROL_PLANE.md`. They are not superseded by Image-first work. The current known control-plane gap is the distinction between experiment variables being **modeled** and those values being **authoritatively applied** to effective dispatcher/MIME behavior with reproducible evidence; that remains a later dedicated implementation slice.
 
-## Current milestone — Image-first scheduling parity
+## Current milestone — Image-first tags/tracking parity
 
-Scheduling parity reuses the existing standard Blast and campaign/delivery owners rather than adding another scheduler.
+This milestone reuses the standard Blast campaign tags contract plus the existing tracking settings, `trackingChoice`, snapshot-rewrite, redirect, and analytics owners. It does not add a parallel tracking backend.
 
-The implementation in this tree:
+The candidate in this tree:
 
-- exposes `Schedule (your local time)` in Image-first with the same `datetime-local` contract as standard Blast;
-- converts the browser-local value to an ISO timestamp before pre-flight/create-campaign submission;
-- changes the primary action and confirmation language from send to schedule when a time is present;
-- leaves immediate-send behavior unchanged when the scheduling field is empty;
-- relies on the existing core `scheduledAt` validation and campaign persistence;
-- relies on existing campaign preparation to copy `Campaign.scheduledAt` to each delivery `nextAttemptAt`;
-- changes no Prisma schema, migration, worker, dispatcher, routing, provider, or deployment behavior.
+- exposes `Tags (comma separated)` with the same comma/semicolon/newline splitting behavior used by standard Blast;
+- submits those tags through the existing campaign/pre-flight payload and authoritative core validation/storage path;
+- loads the account tracking configuration through the existing tracking settings API and inherits `defaultEnabled`;
+- exposes the same `Track clicks` control while keeping direct sending available if tracking settings cannot be loaded;
+- invalidates preview/pre-flight whenever tags or tracking selection changes;
+- submits only the requested tracking choice and relies on existing server-side `trackingChoice` resolution;
+- shows the resolved pre-flight tracking state without claiming links were rewritten before campaign snapshot creation;
+- changes no Prisma schema, migration, worker, dispatcher, provider routing, redirect route, tracking persistence, or deployment behavior.
 
-TDD evidence is explicit: test-only head `996fb9439866c113d43a77d21925c0549e5c2df8` produced the intended Playwright failure because Image-first did not yet expose the scheduling field. The implemented code/integration head `7eb7191c76d383819c2beca342d2b5b9db5536e3` then passed full Quality #147, including the browser local-time→ISO proof and PostgreSQL proof that the requested time persists on the campaign and propagates unchanged to prepared deliveries.
+TDD/verification evidence is explicit:
 
-This documentation checkpoint does not change runtime behavior. Publication still requires full Quality on the exact final PR head, an unchanged verified `main` parent, an exact-head guarded merge, and merged-main Quality on the resulting SHA.
+- test-only head `5347ae6590d90a578877a0631f0756f76f5a9325` produced the intended Quality #150 browser failure before Image-first exposed tags/tracking parity;
+- implementation head `c30faf205938f21c101b12f9e55b852a15dfa028` passed migrations, schema/drift, upgrade rehearsal, lint, secrets, TypeScript, unit, integration, build, and production-container validation in Quality #151; Playwright then exposed only an ambiguous `Alt text` test selector;
+- selector-only head `cbc7e3de2a642564c966df277dc55f8fc7e19efe` removed that ambiguity; Quality #152 again passed every non-browser gate, and the browser artifact proved the rendered MUI control had the correct checked ARIA `switch` semantics while the test still queried the wrong `checkbox` role;
+- selector-only head `d52d15659fd6e25e46f5cf4d24898fe4e1e7623f` corrected the test to target the actual switch role; full Quality #153 passed, including the tags payload, inherited tracking default/toggle, server-resolved tracking text, Playwright suite, screenshots, production-container validation, diagnostics, artifact upload, cleanup, and container shutdown.
 
-## Remaining Image-first parity after scheduling
+This documentation checkpoint changes no runtime behavior. Publication still requires full Quality on the exact reconciled PR head, an unchanged verified `main` parent, an exact-head guarded merge, and merged-main Quality on the resulting SHA.
+
+## Remaining Image-first parity after tags/tracking
 
 Continue narrowly in this order:
 
-1. tags/tracking parity using the existing campaign tags and tracking settings/owners rather than parallel state;
-2. earlier sender/provider inline-capability visibility before pre-flight while retaining server-side fail-closed enforcement;
-3. accessibility/alt-text UX and rendering/fidelity edge cases across supported transports.
+1. earlier sender/provider inline-capability visibility before pre-flight while retaining server-side fail-closed enforcement;
+2. accessibility/alt-text UX and rendering/fidelity edge cases across supported transports.
 
 No live recipient or external provider may be used for automated parity proof.
 
