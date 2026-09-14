@@ -74,8 +74,24 @@ function escapeAttribute(value: string) {
     .replaceAll(">", "&gt;");
 }
 
-function imageHtml(image: InlineImage, alt: string) {
-  return `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0"><tr><td align="center" style="padding:0;margin:0"><img src="cid:${image.contentId}" alt="${escapeAttribute(alt)}" width="1200" style="display:block;width:100%;max-width:1200px;height:auto;border:0;outline:none;text-decoration:none;margin:0 auto" /></td></tr></table>`;
+function normalizeImageDestination(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+  try {
+    const url = new URL(trimmed);
+    if (url.protocol !== "http:" && url.protocol !== "https:") return null;
+    return url.href;
+  } catch {
+    return null;
+  }
+}
+
+function imageHtml(image: InlineImage, alt: string, destination: string) {
+  const imageMarkup = `<img src="cid:${image.contentId}" alt="${escapeAttribute(alt)}" width="1200" style="display:block;width:100%;max-width:1200px;height:auto;border:0;outline:none;text-decoration:none;margin:0 auto" />`;
+  const content = destination
+    ? `<a href="${escapeAttribute(destination)}" style="display:block;text-decoration:none;border:0">${imageMarkup}</a>`
+    : imageMarkup;
+  return `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0"><tr><td align="center" style="padding:0;margin:0">${content}</td></tr></table>`;
 }
 
 function fileBase64(file: File) {
@@ -110,6 +126,7 @@ export function ImageBlast() {
   const [scheduledAt, setScheduledAt] = useState("");
   const [alt, setAlt] = useState("");
   const [altAuthored, setAltAuthored] = useState(false);
+  const [imageDestination, setImageDestination] = useState("");
   const [image, setImage] = useState<InlineImage | null>(null);
   const [attachments, setAttachments] = useState<FileAttachment[]>([]);
   const [preview, setPreview] = useState<Preview | null>(null);
@@ -156,7 +173,14 @@ export function ImageBlast() {
     };
   }, []);
 
-  const html = image ? imageHtml(image, alt.trim()) : "<p></p>";
+  const normalizedImageDestination = normalizeImageDestination(imageDestination);
+  const imageDestinationError =
+    imageDestination.trim() && normalizedImageDestination === null
+      ? "Use a complete http:// or https:// URL."
+      : "";
+  const html = image
+    ? imageHtml(image, alt.trim(), normalizedImageDestination ?? "")
+    : "<p></p>";
   const text = alt.trim() || subject.trim();
   const payload = () => ({
     name,
@@ -521,6 +545,20 @@ export function ImageBlast() {
                 helperText="Also becomes the plain-text fallback when images are unavailable."
                 required
               />
+              <TextField
+                label="Image destination URL (optional)"
+                type="url"
+                value={imageDestination}
+                onChange={(event) => {
+                  setImageDestination(event.target.value);
+                  invalidate();
+                }}
+                error={Boolean(imageDestinationError)}
+                helperText={
+                  imageDestinationError ||
+                  "Optional. Makes the whole primary image clickable; existing click tracking applies when enabled."
+                }
+              />
               <Box>
                 <Button component="label" startIcon={<AttachFileOutlined />}>
                   {busy === "attachments" ? "Reading attachments…" : "Add attachments"}
@@ -595,7 +633,13 @@ export function ImageBlast() {
               )}
               <Button
                 variant="outlined"
-                disabled={!!busy || !image || !subject || !alt.trim()}
+                disabled={
+                  !!busy ||
+                  !image ||
+                  !subject ||
+                  !alt.trim() ||
+                  Boolean(imageDestinationError)
+                }
                 onClick={() =>
                   void run("preview", async () => {
                     setPreview(
@@ -650,7 +694,8 @@ export function ImageBlast() {
                   !senderIdentityId ||
                   !subject.trim() ||
                   !image ||
-                  !alt.trim()
+                  !alt.trim() ||
+                  Boolean(imageDestinationError)
                 }
                 onClick={() =>
                   void run("preflight", async () => {
@@ -683,7 +728,8 @@ export function ImageBlast() {
                   !senderIdentityId ||
                   !subject.trim() ||
                   !image ||
-                  !alt.trim()
+                  !alt.trim() ||
+                  Boolean(imageDestinationError)
                 }
               />
             </Stack>
