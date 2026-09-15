@@ -111,23 +111,26 @@ PR #41 merged at `09234cf551897598365936a4fe5b214b6852b0fd`. Exact-head Quality 
 
 Canonical PR #41 evidence: Quality #193 proved the message-model gap; #194 advanced to provider-behavior red; #195 passed the raw-MIME provider contract; #197 produced the clean runtime red after the non-canonical #196 fixture issue; #199 left only actual message propagation red; `f424afb942aa7b90271f15eab730cd9b6fccafdd` passed full Quality #200; reconciled head `827092c75ab883ee195348b1187de6f618928471` passed #201; guarded merge `09234cf551897598365936a4fe5b214b6852b0fd` passed merged-main #202; checkpoint `a78414484f9e93a5ea334227b99a7187fa98f49a` passed #203.
 
-### Verified candidate CID-inline content-mode contract — PR #42
+### Published CID-inline content-mode contract — PR #42
 
-PR #42 is a verified candidate on exact parent `a78414484f9e93a5ea334227b99a7187fa98f49a`; it is not published until reconciled exact-head and merged-main Quality complete.
+PR #42 merged at `9c4b8d52c08980ded11434f352de3e1eb643e33f`. Final exact-head Quality #207 and merged-main Quality #208 passed fully.
 
 - `contentMode: "cid-inline"` requires every scoped provider transport to support inline CID attachments; incompatible scopes fail closed at experiment-profile creation.
 - A campaign bound to a CID-inline experiment must contain at least one real inline attachment with a safe Content-ID referenced by the campaign HTML before campaign mutation/preflight proceeds.
 - Existing campaign preflight remains authoritative for CID reference matching, provider eligibility, attachment bounds, sender authorization, suppressions, tracking/reputation, safety, and readiness.
 - Successful `transport.started` evidence reports `requestedMode: "cid-inline"` and `effectiveMode: "cid-inline"` only when the stored immutable campaign snapshot actually proves the CID-inline structure; otherwise effective mode remains null rather than claiming application.
 - The binding reuses existing campaign/Image-first/CID/provider-capability and evidence owners. It adds no experiment-only renderer or conversion.
-- `html`, `text`, `hosted-image`, `attachment-only`, and `image-dominant` remain metadata-only and must not be reported as effective behavior in this slice.
+- `html`, `text`, `hosted-image`, `attachment-only`, and `image-dominant` remain metadata-only and must not be reported as effective behavior until separately reconciled and proven.
 - All ordinary production pacing/rate/quota/concurrency, sender/recipient scope, suppression, policy, hard experiment ceilings, and kill-switch controls remain authoritative.
 - No schema/migration, second delivery engine, provider adapter, second MIME stack, worker replacement, live recipient, or external provider was introduced.
 
-Canonical PR #42 evidence so far:
+Canonical PR #42 evidence:
 
+- exact parent `a78414484f9e93a5ea334227b99a7187fa98f49a` / Quality #203;
 - test-only `b8013f5f7f96c7ac759f3a105cad8c293f364194` / Quality #204 passed every gate through unit and failed exactly the three intended integration assertions: incompatible provider scope accepted, missing CID structure accepted, and missing effective content evidence;
-- implementation `2da16fb8fb90e8ac63826ffd47ec0285f7b8ffc1` bound the existing owners and passed full Quality #205, including production-container validation and cleanup.
+- implementation `2da16fb8fb90e8ac63826ffd47ec0285f7b8ffc1` bound the existing owners and passed full Quality #205, including production-container validation and cleanup;
+- documentation reconciliation advanced through `dd9913690c84ef6406990a03e62ec589c750be28` to final exact head `197d9c1c20fc8774a499eab647608964ed4fd1c4`; Quality #207 passed fully;
+- guarded merge produced `9c4b8d52c08980ded11434f352de3e1eb643e33f`; merged-main Quality #208 passed fully.
 
 ### Stop conditions and kill switch
 
@@ -148,7 +151,7 @@ Current applied evidence includes:
 - smooth pacing: profile, configured interval, effective minimum interval;
 - bounded burst: profile, configured window, burst size, occupancy before/after an admitted start;
 - explicit transport encoding: requested encoding, deterministic effective encoding where applicable, UTF-8 charset;
-- verified candidate CID-inline content mode: requested mode plus effective mode only when the immutable stored campaign structure proves the CID reference and matching inline attachment.
+- CID-inline content mode: requested mode plus effective mode only when the immutable stored campaign structure proves the CID reference and matching inline attachment.
 
 Remaining experiment variables must record effective applied values/derived state only when runtime proof exists; do not report metadata-only variables as effective behavior.
 
@@ -171,11 +174,11 @@ EmailSystem supports normal email/MIME compatibility: UTF-8 normalization, quote
 
 Experiment `contentMode` values are `html`, `text`, `cid-inline`, `hosted-image`, `attachment-only`, and `image-dominant`, but schema acceptance alone never proves runtime behavior. Each mode must map only to structures already owned by existing campaign/renderer/provider paths.
 
-### Verified candidate first slice — `cid-inline`
+### Published first slice — `cid-inline`
 
-Repository truth makes `cid-inline` the first deterministic binding because campaign attachment validation, CID reference matching, provider capability filtering, Image-first structure, and supported transport semantics already exist. PR #42 now proves that experiment scope and evidence are bound to those owners without a new renderer or conversion path.
+`cid-inline` is published through PR #42 and merged-main Quality #208. It is the first runtime-bound content mode because campaign attachment validation, CID reference matching, provider capability filtering, Image-first structure, and supported transport semantics already existed and could be reused without a new renderer or conversion path.
 
-Do not treat the remaining modes as implemented. In particular, do not pretend `text` is already text-only: `ProviderMessage` currently carries both HTML and text and API adapters ordinarily send both. Likewise do not fabricate hosted-image, attachment-only, or image-dominant transformations. After PR #42 publication, reconcile remaining modes against repository truth before selecting the next bounded TDD slice.
+Do not treat the remaining modes as implemented. In particular, do not pretend `text` is already text-only: `ProviderMessage` currently carries both HTML and text and API adapters ordinarily send both. Likewise do not fabricate hosted-image, attachment-only, or image-dominant transformations. Reconcile remaining modes against repository truth before selecting the next bounded TDD slice; if no deterministic owner exists without redesign, advance to the next control-plane dependency rather than inventing semantics.
 
 ## Image-first message mode
 
@@ -200,11 +203,8 @@ Image-first is a supported content format, not an anti-filter bypass. Verified `
 - verified experiment run-wide concurrency binding;
 - verified experiment smooth-pacing binding;
 - verified experiment bounded-burst pacing binding;
-- published explicit transport-encoding + UTF-8 binding at `09234cf551897598365936a4fe5b214b6852b0fd`, merged-main Quality #202 green, with documentation checkpoint `a78414484f9e93a5ea334227b99a7187fa98f49a` / Quality #203 green.
-
-### Verified candidate / requires publication
-
-- PR #42 CID-inline content-mode binding: implementation `2da16fb8fb90e8ac63826ffd47ec0285f7b8ffc1` passed full Quality #205 after the exact three-test red boundary in Quality #204; publication still requires reconciled exact-head Quality, guarded merge, and merged-main exact-SHA Quality.
+- published explicit transport-encoding + UTF-8 binding at `09234cf551897598365936a4fe5b214b6852b0fd`, merged-main Quality #202 green, with documentation checkpoint `a78414484f9e93a5ea334227b99a7187fa98f49a` / Quality #203 green;
+- published CID-inline content-mode binding at `9c4b8d52c08980ded11434f352de3e1eb643e33f`, merged-main Quality #208 green.
 
 ### Current partially implemented / requires proof
 
@@ -216,8 +216,7 @@ Image-first is a supported content format, not an anti-filter bypass. Verified `
 
 ### Remaining major milestones
 
-- publish PR #42 through reconciled exact-head and merged-main Quality;
-- reconcile remaining content modes only where deterministic existing owners exist, then bind them as separate narrow slices;
+- reconcile remaining content modes only where deterministic existing owners exist, then bind them as separate narrow slices when justified;
 - finish remaining reproducibility/effective-value evidence;
 - add explicit temporary-failover-versus-policy-stop proof;
 - finish provider pressure/slowdown/recovery telemetry and restart-durability proof;

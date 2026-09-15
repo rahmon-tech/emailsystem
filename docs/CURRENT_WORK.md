@@ -2,7 +2,7 @@
 
 ## Verified baseline
 
-Remote `main` is verified at `a78414484f9e93a5ea334227b99a7187fa98f49a` (`docs: advance verified transport encoding checkpoint`). Quality #203 passed for that exact SHA after published PR #41 / merged-main Quality #202, including fresh migrations, schema/drift and upgrade rehearsal, lint, secret scan, strict TypeScript, unit tests, PostgreSQL/Redis integration, production build, Playwright E2E, visual-review screenshots, production-container validation, diagnostics, artifact upload, cleanup, and container shutdown.
+Remote `main` is verified at `9c4b8d52c08980ded11434f352de3e1eb643e33f` (`feat(experiment): bind cid inline content mode`, PR #42). Full merged-main Quality #208 passed for that exact SHA, including fresh migrations, schema/drift and upgrade rehearsal, lint, secret scan, strict TypeScript, unit tests, PostgreSQL/Redis integration, production build, Playwright E2E, visual-review screenshots, production-container validation, diagnostics, artifact upload, cleanup, and container shutdown.
 
 The repository remains an existing TypeScript/pnpm application with Next.js + MUI web UI, PostgreSQL/Prisma persistence, Redis-backed safety/rate coordination, a worker process, provider adapters, an email renderer, and Docker deployment assets. Preserve this architecture; do not introduce a second campaign, delivery engine, experiment sender, provider-routing path, scheduler, tracking subsystem, test-send path, renderer, or MIME stack.
 
@@ -14,7 +14,7 @@ The verified system on `main` includes:
 - provider configuration/verification, encrypted credentials, sender authorization, recipient imports, immutable campaign snapshots, pre-flight, background dispatch, tracking, Activity, exports, suppressions/unsubscribe, retry/reconciliation, and delivery safety controls;
 - weighted/fair multi-provider routing, provider-specific limits/quotas/concurrency, provider-independent sender-domain pacing, account/domain/campaign ceilings, cooldowns, warm-up/soft-start, complaint/hard-bounce brakes, and fail-closed policy enforcement;
 - authorized experiment profiles/runs with authorization metadata, provider/sender scopes, controlled-recipient allowlists, hard recipient/attempt/duration limits, bounded windows, account kill switch, transport reservation checks, and tamper-evident evidence/export;
-- verified experiment run-wide concurrency, smooth-pacing, and bounded-burst bindings;
+- verified experiment run-wide concurrency, smooth-pacing, bounded-burst, and CID-inline content-mode bindings;
 - standards-compliant explicit experiment transfer-encoding binding for SMTP/SES raw MIME with UTF-8 charset and fail-closed incompatible provider scopes;
 - inline-vs-attachment provider message semantics and Content-ID support across supported SMTP/API transports, with fail-closed behavior for unsupported inline transports;
 - the authenticated `/blast/image` Image-first composer using the existing campaign/delivery architecture, including primary-image lifecycle, ordinary attachments, test-message, CC/BCC, scheduling, tags/tracking, inline-capability visibility, alt-text replacement fidelity, and the optional primary-image HTTP(S) destination link.
@@ -46,34 +46,42 @@ Published contract:
 - `transport.started` evidence records requested encoding, effective explicit encoding (or null for provider-default), and UTF-8 charset;
 - no schema/migration, second renderer/MIME stack, worker, live recipient, or external-provider delivery was introduced.
 
-## Current milestone — CID-inline content-mode binding
+### CID-inline content mode — PR #42
 
-Draft PR #42, `feat(experiment): bind cid inline content mode`, is now a verified candidate on top of exact verified parent `a78414484f9e93a5ea334227b99a7187fa98f49a`.
+PR #42 is published at `9c4b8d52c08980ded11434f352de3e1eb643e33f`; final exact-head Quality #207 and merged-main Quality #208 both passed fully.
 
 Canonical TDD/Quality evidence:
 
-- test-only commit `b8013f5f7f96c7ac759f3a105cad8c293f364194` produced Quality #204 with every gate through unit green and exactly three intended PostgreSQL/Redis integration failures: incompatible provider scope was not rejected, missing CID-inline structure was not rejected before campaign mutation, and effective content-mode evidence was absent;
-- implementation commit `2da16fb8fb90e8ac63826ffd47ec0285f7b8ffc1` binds the existing owners only: provider inline-capability validation, experiment campaign/preflight CID structure validation, and tamper-evident `transport.started` content evidence;
-- full Quality #205 passed on exact `2da16fb8fb90e8ac63826ffd47ec0285f7b8ffc1`, including migrations/drift/upgrade, lint, secrets, strict TypeScript, unit, PostgreSQL/Redis integration, production build, Playwright E2E, screenshots, production-container validation, diagnostics/artifacts, cleanup, and shutdown.
+- exact verified parent `a78414484f9e93a5ea334227b99a7187fa98f49a` passed Quality #203;
+- test-only `b8013f5f7f96c7ac759f3a105cad8c293f364194` / Quality #204 passed every gate through unit and failed exactly the three intended PostgreSQL/Redis integration assertions: incompatible provider scope accepted, missing CID-inline structure accepted, and effective content-mode evidence absent;
+- implementation `2da16fb8fb90e8ac63826ffd47ec0285f7b8ffc1` bound the existing provider-capability, campaign/preflight, and evidence owners and passed full Quality #205;
+- canonical documentation reconciliation advanced through `dd9913690c84ef6406990a03e62ec589c750be28` to exact head `197d9c1c20fc8774a499eab647608964ed4fd1c4`; Quality #207 passed fully;
+- guarded merge produced `9c4b8d52c08980ded11434f352de3e1eb643e33f`; merged-main Quality #208 passed fully.
 
-Verified candidate contract:
+Published contract:
 
-- `contentMode: "cid-inline"` requires every scoped provider to support inline CID attachments; incompatible scopes fail closed before campaign mutation;
-- a campaign bound to a `cid-inline` experiment must contain at least one real inline attachment with a safe Content-ID referenced by campaign HTML;
-- existing campaign preflight remains authoritative for CID reference matching, provider filtering, attachment bounds, sender authorization, suppressions, tracking/reputation, safety, and readiness;
-- successful `transport.started` evidence records `{ requestedMode: "cid-inline", effectiveMode: "cid-inline" }` only when the stored campaign snapshot actually proves the CID-inline structure;
-- no schema/migration, second renderer/MIME stack, provider adapter, worker, live recipient, or external-provider delivery was introduced.
+- `contentMode: "cid-inline"` requires every scoped provider to support inline CID attachments; incompatible scopes fail closed at experiment-profile creation;
+- a campaign bound to a CID-inline experiment must contain at least one real inline attachment with a safe Content-ID referenced by campaign HTML before campaign mutation/preflight proceeds;
+- existing campaign preflight remains authoritative for CID matching, provider eligibility, attachment bounds, sender authorization, suppressions, tracking/reputation, safety, and readiness;
+- successful `transport.started` evidence records `{ requestedMode: "cid-inline", effectiveMode: "cid-inline" }` only when the immutable stored campaign snapshot proves the structure;
+- production pacing/rate/quota/concurrency, sender/recipient scope, suppression, policy enforcement, hard experiment limits, and kill switch remain authoritative;
+- no schema/migration, second renderer/MIME stack, provider adapter, worker replacement, live recipient, or external-provider delivery was introduced.
 
-PR #42 is not published until the reconciled exact head passes fresh Quality, the PR is guarded-merged against its exact head while `main` remains the expected verified parent, and merged-main Quality passes on the resulting SHA.
+`html`, `text`, `hosted-image`, `attachment-only`, and `image-dominant` remain metadata-only and must not be reported as effective behavior until separately reconciled and proven.
 
-`html`, `text`, `hosted-image`, `attachment-only`, and `image-dominant` remain metadata-only in this candidate and must not be reported as effective behavior.
+## Current milestone — post-content-mode dependency selection
+
+Reconcile the remaining content modes against actual existing campaign/message/renderer/provider owners before binding another mode. Do not assume schema acceptance means runtime support and do not invent transformations merely to satisfy profile metadata.
+
+Repository truth already warns against starting with `text`: `ProviderMessage` currently carries both HTML and text and API adapters ordinarily send both. Any text-only semantics require an explicit owner-level design rather than silently dropping HTML.
+
+If none of the remaining modes has a deterministic existing owner without redesign, advance to the next documented dependency instead of manufacturing a content-mode implementation.
 
 ## Delivery-control-plane follow-on
 
-After PR #42 publication, continue from repository truth in dependency order:
+Continue from repository truth in dependency order:
 
-- reconcile the remaining content modes against actual existing message/renderer/provider owners before choosing the next bounded slice; do not assume schema acceptance means runtime support;
-- do not start with `text` unless owner-level reconciliation resolves the current requirement that `ProviderMessage` carries both HTML and text and API adapters ordinarily send both;
+- reconcile remaining content modes only where deterministic existing owners exist;
 - finish remaining effective experiment-value/reproducibility evidence;
 - add explicit temporary-failover-versus-policy-stop proof;
 - finish provider effective-rate/pressure/recovery telemetry and restart-durability proof;
