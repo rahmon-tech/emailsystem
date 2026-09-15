@@ -2,7 +2,7 @@
 
 ## Verified baseline
 
-Remote `main` is published at PR #47 merge `e486779a1de6ca3ad24cf59980b2f5c39242fb42`, whose merged-main Quality #225 passed fully. The exact proof head `6e5d5612a73ab0888540046afc13f88356f62684` passed exact-head Quality #224 before the guarded merge. The prior documentation checkpoint `b024c31f7aa2b92e1e76e5ca07b00aae3e2112d7` / Quality #223 remains the verified parent baseline from which PR #47 was developed.
+Remote `main` is published at PR #49 merge `60c6177709b7142ff862e7adc53371d5a493ff15`, whose merged-main Quality #229 passed fully. The exact proof head `6d207dc3b0f65b15a3b934caaca8a351c129594a` passed exact-head Quality #228 before the guarded merge. The prior documentation checkpoint `00b49f7b754b1f1350ffd0f8b3eba29ad62f7963` / Quality #226 remains the verified parent baseline from which PR #49 was developed.
 
 The repository remains an existing TypeScript/pnpm application with Next.js + MUI web UI, PostgreSQL/Prisma persistence, Redis-backed safety/rate coordination, a worker process, provider adapters, an email renderer, and Docker deployment assets. Preserve this architecture; do not introduce a second campaign, delivery engine, experiment sender, provider-routing path, scheduler, tracking subsystem, test-send path, renderer, or MIME stack.
 
@@ -13,6 +13,7 @@ The verified system on `main` includes:
 - the primary Providers → Blast → Activity product shell;
 - provider configuration/verification, encrypted credentials, sender authorization, recipient imports, immutable campaign snapshots, pre-flight, background dispatch, tracking, Activity, exports, suppressions/unsubscribe, retry/reconciliation, and delivery safety controls;
 - weighted/fair multi-provider routing, provider-specific limits/quotas/concurrency, provider-independent sender-domain pacing, account/domain/campaign ceilings, cooldowns, warm-up/soft-start, complaint/hard-bounce brakes, and fail-closed policy enforcement;
+- provider adaptive slowdown consumption, configured-versus-effective pacing telemetry, cooldown/pressure presentation, and verified restart reconstruction of adaptive slowdown/cooldown from durable delivery-attempt history;
 - authorized experiment profiles/runs with authorization metadata, provider/sender scopes, controlled-recipient allowlists, hard recipient/attempt/duration limits, bounded windows, account kill switch, transport reservation checks, tamper-evident evidence/export, and an atomic run-start approved-envelope snapshot using run-scoped recipient hashes;
 - verified experiment run-wide concurrency, smooth-pacing, bounded-burst, CID-inline content-mode, HTML-content evidence bindings, and explicit temporary-failover-versus-policy-stop behavior;
 - standards-compliant explicit experiment transfer-encoding binding for SMTP/SES raw MIME with UTF-8 charset and fail-closed incompatible provider scopes;
@@ -104,13 +105,26 @@ Proof contract:
 - even after a simulated premature operator requeue, the existing fail-closed policy check prevents a second delivery transport attempt and does not route around enforcement through another healthy scoped provider;
 - the milestone adds focused integration proof only: no production source, schema/migration, provider adapter, renderer, MIME path, worker, or routing implementation changed.
 
+### Provider adaptation restart durability — PR #49
+
+PR #49 is published at `60c6177709b7142ff862e7adc53371d5a493ff15`. Its exact proof head `6d207dc3b0f65b15a3b934caaca8a351c129594a` passed Quality #228, and merged-main Quality #229 passed fully.
+
+Proof contract:
+
+- a real temporary provider rejection creates durable delivery-attempt pressure evidence with a finished timestamp and temporary category;
+- deleting the provider adaptive Redis key and clearing the derived provider cooldown simulates loss of ephemeral/derived pacing state without deleting durable attempt history;
+- the existing `refreshProviderAdaptation()` owner reconstructs a slowdown greater than 1 and a future provider cooldown from that durable recent attempt history;
+- existing provider pacing telemetry then exposes the reconstructed slowdown, an effective rate below the configured rate, and active cooldown pressure;
+- deleting the adaptive Redis key a second time and refreshing reconstructs the slowdown again, proving restart recovery is derived from durable history rather than dependent on stale cache state;
+- the milestone adds focused integration proof only: no production source, schema/migration, provider adapter, renderer, MIME path, worker, or routing implementation changed.
+
 ## Delivery-control-plane follow-on
 
-With PR #47 published, continue from repository truth in dependency order:
+With PR #49 published, continue from repository truth in dependency order:
 
 - do not fabricate semantics for `text`, `hosted-image`, `attachment-only`, or `image-dominant`; bind another content mode only if a deterministic existing owner is proven without redesign;
 - additional experiment values may be reported as effective only when runtime proof exists; the run-start snapshot records the approved envelope, not fabricated application of metadata-only values;
-- finish provider effective-rate/pressure/recovery telemetry and restart-durability proof next;
+- finish the remaining provider gradual-recovery end-to-end proof so healthy history demonstrably reduces/clears adaptive slowdown and returns pressure toward normal without exceeding configured ceilings; restart reconstruction is now published;
 - add privacy/retention controls for experiment evidence/message snapshots;
 - finish experiment Activity/UX/export polish;
 - run final security, tenant-isolation, concurrency, performance, provider-resilience, deployment-readiness, and VPS reconciliation before claiming final production installation.
