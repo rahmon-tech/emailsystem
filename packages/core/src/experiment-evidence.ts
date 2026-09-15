@@ -10,6 +10,11 @@ function record(value: unknown): Record<string, unknown> | null {
     : null;
 }
 
+function hasHtmlSnapshot(value: unknown) {
+  const message = record(value);
+  return typeof message?.html === "string" && message.html.trim().length > 0;
+}
+
 function hasCidInlineSnapshot(value: unknown) {
   const message = record(value);
   if (!message || typeof message.html !== "string" || !Array.isArray(message.attachments))
@@ -78,7 +83,16 @@ export async function appendExperimentEvidence(
                           : null,
                       },
                     }
-                  : {}),
+                  : variables.contentMode === "html"
+                    ? {
+                        content: {
+                          requestedMode: "html",
+                          effectiveMode: hasHtmlSnapshot(campaign?.message)
+                            ? "html"
+                            : null,
+                        },
+                      }
+                    : {}),
               }
             : {}),
         },
