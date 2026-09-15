@@ -25,6 +25,31 @@ function hasCidInlineSnapshot(value: unknown) {
   });
 }
 
+function hasHtmlSnapshot(value: unknown) {
+  const message = record(value);
+  return (
+    !!message &&
+    typeof message.html === "string" &&
+    message.html.trim().length > 0 &&
+    typeof message.text === "string" &&
+    message.text.trim().length > 0
+  );
+}
+
+function contentEvidence(contentMode: string, message: unknown) {
+  if (contentMode === "cid-inline")
+    return {
+      requestedMode: "cid-inline",
+      effectiveMode: hasCidInlineSnapshot(message) ? "cid-inline" : null,
+    };
+  if (contentMode === "html")
+    return {
+      requestedMode: "html",
+      effectiveMode: hasHtmlSnapshot(message) ? "html" : null,
+    };
+  return null;
+}
+
 export async function appendExperimentEvidence(
   tx: Parameters<typeof appendExperimentEvidenceBase>[0],
   input: Parameters<typeof appendExperimentEvidenceBase>[1],
@@ -54,6 +79,9 @@ export async function appendExperimentEvidence(
     if (pacing || variables) {
       const root = record(payload) ?? {};
       const controls = record(root.experimentControls) ?? {};
+      const content = variables
+        ? contentEvidence(variables.contentMode, campaign?.message)
+        : null;
       payload = {
         ...root,
         experimentControls: {
@@ -69,16 +97,7 @@ export async function appendExperimentEvidence(
                       : variables.transportEncoding,
                   charset: variables.charset,
                 },
-                ...(variables.contentMode === "cid-inline"
-                  ? {
-                      content: {
-                        requestedMode: "cid-inline",
-                        effectiveMode: hasCidInlineSnapshot(campaign?.message)
-                          ? "cid-inline"
-                          : null,
-                      },
-                    }
-                  : {}),
+                ...(content ? { content } : {}),
               }
             : {}),
         },
