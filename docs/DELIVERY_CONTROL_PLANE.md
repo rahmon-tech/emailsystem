@@ -1,12 +1,10 @@
 # Delivery Control Plane & Authorized Resilience Experiments
 
-This document is the canonical product/engineering addendum for EmailSystem's adaptive multi-provider delivery control plane and its explicitly authorized resilience-testing capabilities. It exists so requirements survive implementation slices without creating parallel systems.
+This document is the canonical product/engineering addendum for EmailSystem's adaptive multi-provider delivery control plane and explicitly authorized resilience-testing capabilities. Requirements are implemented as narrow slices through existing owners; experiments are never a second sender or a second product.
 
 ## Product intent
 
-EmailSystem is not a queue that hands an entire recipient list to providers as fast as possible. The delivery engine must absorb campaigns quickly, then release actual transport attempts at a controlled, observable, tenant-safe pace.
-
-Authorized resilience experiments reuse the production delivery engine and provider integrations; they are not a second product or a separate sender. Experiment behavior must be explicit, scoped, bounded, observable, and auditable. Provider policy/enforcement blocks remain fail-closed states and must never be silently converted into enforcement circumvention.
+EmailSystem absorbs campaigns quickly and releases actual transport attempts at a controlled, observable, tenant-safe pace. Authorized experiments reuse the production delivery engine and provider integrations. Experiment behavior must be explicit, scoped, bounded, observable, auditable, and unable to silently route around provider policy/enforcement.
 
 ## Production delivery engine
 
@@ -58,11 +56,11 @@ The resulting action must remain explicit: continue, slow down, cool down, tempo
 
 ## Activity and observability
 
-Activity should make the control plane understandable without exposing secrets or recipient data unnecessarily. Show, where evidence exists: intended/completed/remaining recipients, observed messages/minute from real starts, evidence-backed ETA, active/eligible provider count, cooldown/pressure, configured versus effective pace, warm-up profile/stage, safety waits/policy-review state, and the last meaningful pacing decision/reason. Never invent an ETA when dispatch is idle or evidence is stale.
+Activity should expose intended/completed/remaining recipients, observed messages/minute from real starts, evidence-backed ETA, active/eligible provider count, cooldown/pressure, configured versus effective pace, warm-up profile/stage, safety waits/policy-review state, and the last meaningful pacing decision where evidence exists. Never invent an ETA when dispatch is idle or evidence is stale. Avoid exposing secrets or recipient data unnecessarily.
 
 ## Authorized resilience experiment mode
 
-Authorized experiments reuse the same core delivery engine and are represented as explicit run/profile state so intent, scope, and evidence remain distinguishable from ordinary campaigns.
+Authorized experiments reuse the same core delivery engine and are explicit run/profile state so intent, scope, and evidence remain distinguishable from ordinary campaigns.
 
 ### Scope metadata and controlled recipients
 
@@ -70,23 +68,13 @@ Each experiment records authorization/reference metadata, tenant/account, provid
 
 - Support explicit controlled-recipient allowlists where required.
 - Prevent accidental expansion beyond configured experiment scope.
-- Preserve suppression, sender authorization, provider enforcement and safety controls unless an approved test contract changes a benign variable inside the authorized envelope.
+- Preserve suppression, sender authorization, provider enforcement and safety controls unless an approved experiment changes a benign variable inside the authorized envelope.
 
 ### Experiment profiles
 
-Profiles may vary legitimate parameters such as:
+Profiles may vary legitimate parameters such as pacing interval/effective rate inside configured ceilings, bounded-burst versus smooth pacing, concurrency inside configured ceilings, provider-supported transport configuration, standards-compliant MIME transfer encoding/charset, and content structures already owned by the existing renderer/provider model. Provider selection/rotation weights or retry/cooldown behavior may vary only when separately implemented and authorized.
 
-- pacing interval/effective rate inside configured ceilings;
-- bounded-burst versus smooth pacing profiles;
-- provider selection/rotation weights where separately implemented and authorized;
-- concurrency inside configured ceilings;
-- retry timing/cooldown behavior where separately implemented and authorized;
-- provider-supported transport configuration;
-- standards-compliant MIME transfer encoding and charset;
-- HTML/text/image-first content mode;
-- attachment versus inline-image transport.
-
-Experiments measure provider consistency/resilience. They must not conceal messages from the provider that must transmit them or silently route around policy blocks.
+Experiments measure provider consistency/resilience. They must not conceal messages from the transmitting provider or bypass provider enforcement.
 
 ### Verified run-wide concurrency contract
 
@@ -98,28 +86,30 @@ For `pacingProfile: "smooth"`, positive `pacingIntervalMs` is an additional run-
 
 ### Verified bounded-burst contract
 
-For `pacingProfile: "bounded-burst"`, the profile requires both a positive `pacingIntervalMs` and an explicit positive bounded `pacingBurstSize`.
+For `pacingProfile: "bounded-burst"`, the profile requires a positive `pacingIntervalMs` and explicit positive bounded `pacingBurstSize`.
 
 - `pacingIntervalMs` is the run-wide burst-window duration.
 - `pacingBurstSize` is the maximum experiment transport starts admitted in that window.
-- Redis server time and atomic coordination scope the window to tenant + experiment run, so workers/providers cannot multiply capacity through races or provider rotation.
-- Unstarted slots use tokenized reservation/commit/release semantics; only the owning token may release an uncommitted reservation, while committed starts remain charged to the active window.
-- A full window defers through the existing campaign `safetyWaitUntil` / `safetyWaitReason` path to the Redis-derived next window without consuming an experiment attempt.
-- Provider, provider-rate-group, sender-domain, account, campaign, warm-up, adaptive, quota, concurrency, suppression, policy, kill-switch and safety controls remain independently authoritative and may only reduce/spread the nominal burst.
+- Redis server time and atomic coordination scope the window to tenant + experiment run so workers/providers cannot multiply capacity through races or rotation.
+- Unstarted slots use tokenized reservation/commit/release semantics; only the owning token may release an uncommitted reservation, while committed starts remain charged.
+- A full window defers through existing campaign `safetyWaitUntil` / `safetyWaitReason` state to the Redis-derived next window without consuming an experiment attempt.
+- Production provider/rate-group/sender-domain/account/campaign/warm-up/adaptive/quota/concurrency/suppression/policy/kill-switch/safety controls remain independently authoritative and may only reduce/spread the nominal burst.
 - `transport.started` evidence records `profile`, `windowMs`, `burstSize`, `occupancyBeforeStart`, and `occupancyAfterStart`.
 
-### Verified candidate explicit transport-encoding contract
+### Published explicit transport-encoding contract — PR #41
 
-PR #41 is verified as a candidate at `f424afb942aa7b90271f15eab730cd9b6fccafdd` with full Quality #200, but is not published until its reconciled exact head and merged-main SHA both pass Quality.
+PR #41 merged at `09234cf551897598365936a4fe5b214b6852b0fd`. Exact-head Quality #201 and merged-main Quality #202 passed fully.
 
 - `transportEncoding` supports `provider-default`, `quoted-printable`, and `base64`; `charset` remains standards-compliant UTF-8.
 - An explicit non-default encoding is allowed only on transports that deterministically own raw MIME: SMTP and SES raw MIME.
-- API-body provider scopes fail closed at experiment-profile creation for an explicit non-default encoding rather than silently claiming compliance.
-- The approved explicit encoding/charset is written into the existing immutable campaign message snapshot and reaches the existing `deliveryMessage()`/provider message path without a second renderer or sender.
+- API-body provider scopes fail closed at experiment-profile creation for explicit non-default encoding.
+- The approved explicit encoding/charset is written into the existing immutable campaign message snapshot and reaches the existing `deliveryMessage()` / `ProviderMessage` path without a second renderer or sender.
 - SMTP applies the existing Nodemailer encoding option; SES applies the existing MailComposer raw-MIME path.
 - `transport.started` evidence records requested encoding, effective explicit encoding (or null for provider-default), and UTF-8 charset.
-- Ordinary provider-default sending, production pacing, quotas, concurrency, suppression, policy blocks, hard experiment ceilings and kill switch remain independently authoritative.
-- No schema/migration, second delivery engine, worker replacement, live recipient, or external provider was introduced.
+- Ordinary provider-default sending, production pacing, quotas, concurrency, suppression, policy blocks, hard experiment ceilings, and kill switch remain authoritative.
+- No schema/migration, second delivery engine, second MIME stack, worker replacement, live recipient, or external provider was introduced.
+
+Canonical PR #41 evidence: Quality #193 proved the message-model gap; #194 advanced to provider-behavior red; #195 passed the raw-MIME provider contract; #197 produced the clean runtime red after the non-canonical #196 fixture issue; #199 left only actual message propagation red; `f424afb942aa7b90271f15eab730cd9b6fccafdd` passed full Quality #200; reconciled head `827092c75ab883ee195348b1187de6f618928471` passed #201; guarded merge `09234cf551897598365936a4fe5b214b6852b0fd` passed merged-main #202.
 
 ### Stop conditions and kill switch
 
@@ -127,21 +117,21 @@ PR #41 is verified as a candidate at `f424afb942aa7b90271f15eab730cd9b6fccafdd` 
 - The account/admin kill switch stops new experiment transport starts.
 - Provider policy/enforcement responses are captured as evidence.
 - Normal behavior is fail-closed on policy block.
-- Any authorized continuation after enforcement remains explicit, scoped and auditable rather than automatic rerouting.
+- Any authorized continuation after enforcement remains explicit, scoped, and auditable rather than automatic rerouting.
 
 ## Evidence capture
 
-Persist enough safe evidence to reproduce each relevant experiment/pacing observation without leaking secrets, including profile/version, provider identity/type/transport, safe tenant/sender identifiers, campaign/delivery/attempt IDs, timestamps, configured ceilings, applied experiment controls, effective pacing gap/rate where known, provider pressure/cooldown, safe response category/details, retry hints, durable state transitions, policy/health transitions, stop reason, and outcome classification.
+Persist enough safe evidence to reproduce each relevant observation without leaking secrets: profile/version, provider identity/type/transport, safe tenant/sender identifiers, campaign/delivery/attempt IDs, timestamps, configured ceilings, applied experiment controls, effective pacing gap/rate where known, provider pressure/cooldown, safe response category/details, retry hints, durable state transitions, policy/health transitions, stop reason, and outcome classification.
 
 Evidence/audit records should be append-only or otherwise tamper-evident at the application level.
 
-For pacing and encoding evidence:
+Current applied evidence includes:
 
-- smooth pacing records the applied profile, configured interval, and effective minimum interval;
-- bounded-burst pacing records the applied profile, configured window duration, configured burst size, and run-wide occupancy before/after each admitted start;
-- the verified candidate transport-encoding binding records requested encoding, effective explicit encoding where deterministic, and UTF-8 charset.
+- smooth pacing: profile, configured interval, effective minimum interval;
+- bounded burst: profile, configured window, burst size, occupancy before/after an admitted start;
+- explicit transport encoding: requested encoding, deterministic effective encoding where applicable, UTF-8 charset.
 
-Remaining experiment variables must likewise record their effective applied values/derived state when they become runtime-bound so runs remain reproducible.
+Remaining experiment variables must record effective applied values/derived state only when runtime proof exists; do not report metadata-only variables as effective behavior.
 
 ## Privacy and platform-internal obfuscation
 
@@ -152,29 +142,40 @@ The privacy goal is to minimize sensitive information inside EmailSystem, not hi
 - Redact provider responses before persistence/display.
 - Avoid long-term message-body retention when not operationally required.
 - Add explicit retention controls for experiment evidence/message snapshots.
-- Keep secrets out of Git, CI artifacts, screenshots and support references.
+- Keep secrets out of Git, CI artifacts, screenshots, and support references.
 
 ## Standards-compliant encoding
 
-EmailSystem should support normal email/MIME compatibility: UTF-8 normalization, quoted-printable where appropriate, base64 for binary content where appropriate, correct MIME boundaries/content types, attachment encoding, inline CID, multipart structures, and deterministic HTML/text rendering. Encoding choices used by experiments must be captured in evidence.
-
-Experiment encoding work must reuse the existing renderer/MIME/provider owners. It must not create anti-filter obfuscation, a parallel MIME stack, or a second sender path. An explicitly required encoding that cannot be honored by a transport must fail closed rather than silently pretending it was applied.
-
-The current PR #41 candidate satisfies that boundary for explicit transfer encoding: SMTP/Nodemailer and SES/MailComposer own the explicit raw-MIME choice, while API-body transports are rejected for explicit non-default encoding.
+EmailSystem supports normal email/MIME compatibility: UTF-8 normalization, quoted-printable/base64 where appropriate, correct MIME boundaries/content types, attachment encoding, inline CID, multipart structures, and deterministic HTML/text rendering. Experiment encoding work must reuse existing renderer/MIME/provider owners and must not create anti-filter obfuscation or a parallel MIME stack. An explicitly required encoding that cannot be honored fails closed.
 
 ## Content modes
 
-Experiment `contentMode` must map only to message structures actually supported by the existing renderer/provider model. HTML, text, CID-inline, hosted-image, attachment-only, and image-dominant modes may be bound incrementally where repository truth shows a real owner and deterministic representation.
+Experiment `contentMode` values are `html`, `text`, `cid-inline`, `hosted-image`, `attachment-only`, and `image-dominant`, but they are not all runtime-bound merely because the profile schema accepts them. Each mode must map only to message structures actually supported by existing campaign/renderer/provider owners.
 
-Do not fabricate unsupported conversions or create an experiment-only renderer. Image-first and CID behavior continue to reuse the verified campaign/delivery architecture.
+### Current first slice — `cid-inline`
 
-`contentMode` remains the next distinct metadata-only experiment variable after PR #41 publication; it is not made complete by the transport-encoding candidate.
+Repository truth makes `cid-inline` the smallest deterministic content-mode binding:
+
+- campaign attachment validation already requires a safe Content-ID for inline assets, forbids Content-ID on ordinary attachments, and rejects duplicate inline IDs;
+- existing preflight already verifies every HTML `cid:` reference has a matching inline attachment and every inline attachment is referenced;
+- campaigns containing inline attachments already filter providers through `supportsInlineAttachmentTransport`;
+- `/blast/image` already produces the exact HTML + matching-inline-attachment structure;
+- verified SMTP/SES/supported API adapters already preserve inline CID semantics.
+
+The bounded `cid-inline` contract is therefore:
+
+- a `contentMode: "cid-inline"` experiment profile must use provider scopes whose transports support inline CID; incompatible scopes fail closed before campaign mutation;
+- a campaign bound to such a run must contain at least one real inline attachment with a safe Content-ID referenced by its HTML;
+- existing preflight remains authoritative for CID reference matching, provider eligibility, attachment bounds, sender authorization, suppressions, tracking/reputation, safety, and campaign readiness;
+- no experiment-only renderer or conversion is introduced;
+- successful `transport.started` evidence may report `effectiveMode: "cid-inline"` only when the stored campaign snapshot proves the structure; otherwise it must not claim effective application;
+- the other content modes remain metadata-only until separately reconciled and bound.
+
+Do not start content-mode work by pretending `text` is already text-only: `ProviderMessage` currently requires both HTML and text and API adapters ordinarily send both. Likewise do not fabricate hosted-image, attachment-only, or image-dominant conversions.
 
 ## Image-first message mode
 
-Image-first sending is a supported content format, not an anti-filter bypass mechanism. Verified `/blast/image` currently covers the CID-inline product flow through the existing campaign/delivery engine, including asset lifecycle, ordinary attachments, test-message, CC/BCC, scheduling, tags/tracking, inline-capability visibility, alt-text fidelity, and an optional ordinary HTTP(S) destination link behind the primary image. Those links reuse the existing campaign tracking pipeline when enabled.
-
-Preserve safe formats, bounded size/file counts, meaningful alt/plain-text alternatives, proven provider MIME compatibility, and preview of the actual message structure.
+Image-first is a supported content format, not an anti-filter bypass. Verified `/blast/image` covers the CID-inline product flow through the existing campaign/delivery engine, including asset lifecycle, ordinary attachments, test-message, CC/BCC, scheduling, tags/tracking, inline-capability visibility, alt-text fidelity, and an optional ordinary HTTP(S) destination link behind the primary image. Preserve safe formats, bounded size/file counts, meaningful alt/plain-text alternatives, provider MIME compatibility, and preview of the actual structure.
 
 ## Implementation status
 
@@ -192,76 +193,35 @@ Preserve safe formats, bounded size/file counts, meaningful alt/plain-text alter
 - tamper-evident chained SHA-256 experiment evidence with transport-start/outcome records, run-scoped recipient hashes, integrity verification and tenant-safe JSON export;
 - standards-compliant inline-vs-attachment semantics and CID compatibility across supported SMTP/API transports;
 - verified Image-first CID product path including optional primary-image HTTP(S) destination link;
-- verified experiment run-wide `concurrency` binding;
+- verified experiment run-wide concurrency binding;
 - verified experiment smooth-pacing binding;
-- verified experiment bounded-burst pacing binding.
-
-The current verified `main` documentation checkpoint is `631150eb97d12d42e805699b6d752494b6f2ba8c`, with Quality #192 fully green. PR #41 remains a branch candidate until publication gates complete.
-
-### Published pacing evidence
-
-Smooth pacing PR #39 merged at `c797f5732e7a513f1b646b7458cc42a5929b62e2`; merged-main Quality #184 passed and checkpoint `e3eb700b213484dba3f195ea2dbdaacc22366b0d` passed Quality #185.
-
-Bounded-burst PR #40 followed red-first proof:
-
-- Quality #186 failed because `pacingBurstSize` was not accepted by the strict experiment variable model;
-- `57a0da91a9bb0d929d691e373106ffa4fe8ab73d` established the explicit profile contract;
-- Quality #187 then failed because three transports started inside a configured two-start window (`actual 3`, `expected 2`);
-- `1bef0f53b53deaa38eabb11e2b75e6130cf85d38` bound the atomic runtime control;
-- `9d396319a512591d56ed2f69a283c95b0071c9e1` added direct cross-worker Redis race proof and passed full Quality #189;
-- reconciled exact PR head `479627157cbc8709e38c3b7f05822b8d3fbeabf0` passed Quality #190;
-- guarded merge produced `8e80c4ff6077726291deed0dab6ed935c2c4d460`;
-- full merged-main Quality #191 passed on that exact SHA.
-
-No schema/migration, second delivery engine, second worker path, live recipient, or external provider was introduced by either pacing binding.
-
-### Verified candidate transport-encoding evidence — PR #41
-
-- verified parent `631150eb97d12d42e805699b6d752494b6f2ba8c` passed Quality #192;
-- `c8ac5c14734e8a0e8acf8755f833863e2b73b7f8` / Quality #193 proved `ProviderMessage` lacked the encoding contract;
-- `537b8f2297dd383e64e78c968469cc727b26539a` / Quality #194 advanced to provider-behavior red;
-- `804ab399c30911253c722761c824e2db8336b4a9` passed full provider-contract Quality #195 after binding SMTP/SES raw MIME and fail-closing API-body transports;
-- `bdcc75dc9ae2d3a18da1e31a176112403e2d92ff` / Quality #196 exposed a Custom-SMTP fixture issue and the real missing runtime binding, so it is not the canonical runtime red;
-- `0f5a69c7cd7b07d225731b1b6754b5ab0adabcc0` / Quality #197 produced the clean runtime red with only the two intended integration assertions failing;
-- `a2cca56de67aa450d86ef624dd4c1c75270a4014` exposed the raw-MIME capability helper; Quality #198 was superseded/cancelled;
-- `53dc6f5832e09a4368a93ea7396fed509f653707` made incompatible explicit-encoding provider scopes fail closed; Quality #199 passed that assertion and left only actual message propagation red (`undefined` versus `base64`);
-- `f424afb942aa7b90271f15eab730cd9b6fccafdd` completed snapshot/runtime/evidence binding and passed full Quality #200.
-
-This remains a verified candidate, not a published main capability, until reconciled exact-head Quality, guarded merge, and merged-main Quality complete.
+- verified experiment bounded-burst pacing binding;
+- published explicit transport-encoding + UTF-8 binding at `09234cf551897598365936a4fe5b214b6852b0fd`, merged-main Quality #202 green.
 
 ### Current partially implemented / requires proof
 
-- `contentMode` remains metadata-only and must be bound through existing renderer/message/Image-first/CID owners in narrow deterministic slices;
+- `contentMode` is metadata-only; begin with the bounded `cid-inline` slice above;
+- remaining content modes require separate owner-level reconciliation and proof;
 - provider adaptive slowdown state is consumed by the dispatcher and temporary/rate-limit cooldown is enforced, but the complete pressure → slowdown → gradual-recovery loop and restart durability still need focused end-to-end proof;
-- eligible-provider failover exists, while dedicated proof must distinguish temporary unavailability failover from true policy-block fail-closed behavior;
+- eligible-provider failover exists, while dedicated proof must distinguish temporary-unavailability failover from policy-block fail-closed behavior;
 - remaining effective experiment values must record applied values/derived state so runs are reproducible;
 - privacy/retention controls and final experiment Activity/UX/export polish remain incomplete.
 
-### Current next milestone after PR #41 publication — content-mode binding
-
-Proceed red-first in the smallest dependency-complete slices:
-
-- reconcile `html`, `text`, `cid-inline`, `hosted-image`, `attachment-only`, and `image-dominant` against actual existing message structures before changing behavior;
-- bind only deterministic structures that current renderer/provider/Image-first owners can already represent;
-- never fabricate unsupported conversions or create a second renderer;
-- capture the effective applied content mode in tamper-evident evidence;
-- preserve every existing scope, policy, suppression, safety and production-capacity control;
-- use controlled recipients and mock/local transports only unless explicit live authorization is separately granted.
-
 ### Remaining major milestones
 
-- publish PR #41 through reconciled exact-head and merged-main Quality;
-- bind `contentMode` and finish remaining reproducibility/effective-value evidence;
+- bind `cid-inline` red-first and publish it through exact-head + merged-main Quality;
+- reconcile remaining content modes only where deterministic existing owners exist;
+- finish remaining reproducibility/effective-value evidence;
 - add explicit temporary-failover-versus-policy-stop proof;
 - finish provider pressure/slowdown/recovery telemetry and restart-durability proof;
-- add privacy/retention controls for experiment evidence and message snapshots;
-- finish experiment Activity/UX for configuration, live evidence, stop/review and export;
+- add privacy/retention controls for experiment evidence/message snapshots;
+- finish experiment Activity/UX for configuration, live evidence, stop/review, and export;
 - maintain CI/security/tenant/race coverage for every new mutation path;
 - complete final production hardening and VPS reconciliation only after repository Quality is green.
 
 ## Non-negotiable experiment boundary
 
-Experiments may vary behavior only **inside** the authorized envelope; they may never expand it. Recipient allowlists, authorization metadata, provider/sender scope, configured production ceilings, suppression rules, complaint/bounce brakes, policy-block state, hard time/volume limits and kill switch remain authoritative regardless of experiment profile. Experimental behavior must never silently route around provider enforcement.
+Experiments may vary behavior only **inside** the authorized envelope; they may never expand it. Recipient allowlists, authorization metadata, provider/sender scope, configured production ceilings, suppression rules, complaint/bounce brakes, policy-block state, hard time/volume limits, and kill switch remain authoritative regardless of profile. Experimental behavior must never silently route around provider enforcement.
 
 ## Engineering rule
 
