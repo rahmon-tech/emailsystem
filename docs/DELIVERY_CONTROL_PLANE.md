@@ -98,7 +98,7 @@ For `pacingProfile: "bounded-burst"`, the profile requires a positive `pacingInt
 
 ### Published explicit transport-encoding contract — PR #41
 
-PR #41 merged at `09234cf551897598365936a4fe5b214b6852b0fd`. Exact-head Quality #201 and merged-main Quality #202 passed fully.
+PR #41 merged at `09234cf551897598365936a4fe5b214b6852b0fd`. Exact-head Quality #201 and merged-main Quality #202 passed fully; documentation checkpoint `a78414484f9e93a5ea334227b99a7187fa98f49a` passed Quality #203.
 
 - `transportEncoding` supports `provider-default`, `quoted-printable`, and `base64`; `charset` remains standards-compliant UTF-8.
 - An explicit non-default encoding is allowed only on transports that deterministically own raw MIME: SMTP and SES raw MIME.
@@ -109,7 +109,25 @@ PR #41 merged at `09234cf551897598365936a4fe5b214b6852b0fd`. Exact-head Quality 
 - Ordinary provider-default sending, production pacing, quotas, concurrency, suppression, policy blocks, hard experiment ceilings, and kill switch remain authoritative.
 - No schema/migration, second delivery engine, second MIME stack, worker replacement, live recipient, or external provider was introduced.
 
-Canonical PR #41 evidence: Quality #193 proved the message-model gap; #194 advanced to provider-behavior red; #195 passed the raw-MIME provider contract; #197 produced the clean runtime red after the non-canonical #196 fixture issue; #199 left only actual message propagation red; `f424afb942aa7b90271f15eab730cd9b6fccafdd` passed full Quality #200; reconciled head `827092c75ab883ee195348b1187de6f618928471` passed #201; guarded merge `09234cf551897598365936a4fe5b214b6852b0fd` passed merged-main #202.
+Canonical PR #41 evidence: Quality #193 proved the message-model gap; #194 advanced to provider-behavior red; #195 passed the raw-MIME provider contract; #197 produced the clean runtime red after the non-canonical #196 fixture issue; #199 left only actual message propagation red; `f424afb942aa7b90271f15eab730cd9b6fccafdd` passed full Quality #200; reconciled head `827092c75ab883ee195348b1187de6f618928471` passed #201; guarded merge `09234cf551897598365936a4fe5b214b6852b0fd` passed merged-main #202; checkpoint `a78414484f9e93a5ea334227b99a7187fa98f49a` passed #203.
+
+### Verified candidate CID-inline content-mode contract — PR #42
+
+PR #42 is a verified candidate on exact parent `a78414484f9e93a5ea334227b99a7187fa98f49a`; it is not published until reconciled exact-head and merged-main Quality complete.
+
+- `contentMode: "cid-inline"` requires every scoped provider transport to support inline CID attachments; incompatible scopes fail closed at experiment-profile creation.
+- A campaign bound to a CID-inline experiment must contain at least one real inline attachment with a safe Content-ID referenced by the campaign HTML before campaign mutation/preflight proceeds.
+- Existing campaign preflight remains authoritative for CID reference matching, provider eligibility, attachment bounds, sender authorization, suppressions, tracking/reputation, safety, and readiness.
+- Successful `transport.started` evidence reports `requestedMode: "cid-inline"` and `effectiveMode: "cid-inline"` only when the stored immutable campaign snapshot actually proves the CID-inline structure; otherwise effective mode remains null rather than claiming application.
+- The binding reuses existing campaign/Image-first/CID/provider-capability and evidence owners. It adds no experiment-only renderer or conversion.
+- `html`, `text`, `hosted-image`, `attachment-only`, and `image-dominant` remain metadata-only and must not be reported as effective behavior in this slice.
+- All ordinary production pacing/rate/quota/concurrency, sender/recipient scope, suppression, policy, hard experiment ceilings, and kill-switch controls remain authoritative.
+- No schema/migration, second delivery engine, provider adapter, second MIME stack, worker replacement, live recipient, or external provider was introduced.
+
+Canonical PR #42 evidence so far:
+
+- test-only `b8013f5f7f96c7ac759f3a105cad8c293f364194` / Quality #204 passed every gate through unit and failed exactly the three intended integration assertions: incompatible provider scope accepted, missing CID structure accepted, and missing effective content evidence;
+- implementation `2da16fb8fb90e8ac63826ffd47ec0285f7b8ffc1` bound the existing owners and passed full Quality #205, including production-container validation and cleanup.
 
 ### Stop conditions and kill switch
 
@@ -129,7 +147,8 @@ Current applied evidence includes:
 
 - smooth pacing: profile, configured interval, effective minimum interval;
 - bounded burst: profile, configured window, burst size, occupancy before/after an admitted start;
-- explicit transport encoding: requested encoding, deterministic effective encoding where applicable, UTF-8 charset.
+- explicit transport encoding: requested encoding, deterministic effective encoding where applicable, UTF-8 charset;
+- verified candidate CID-inline content mode: requested mode plus effective mode only when the immutable stored campaign structure proves the CID reference and matching inline attachment.
 
 Remaining experiment variables must record effective applied values/derived state only when runtime proof exists; do not report metadata-only variables as effective behavior.
 
@@ -150,28 +169,13 @@ EmailSystem supports normal email/MIME compatibility: UTF-8 normalization, quote
 
 ## Content modes
 
-Experiment `contentMode` values are `html`, `text`, `cid-inline`, `hosted-image`, `attachment-only`, and `image-dominant`, but they are not all runtime-bound merely because the profile schema accepts them. Each mode must map only to message structures actually supported by existing campaign/renderer/provider owners.
+Experiment `contentMode` values are `html`, `text`, `cid-inline`, `hosted-image`, `attachment-only`, and `image-dominant`, but schema acceptance alone never proves runtime behavior. Each mode must map only to structures already owned by existing campaign/renderer/provider paths.
 
-### Current first slice — `cid-inline`
+### Verified candidate first slice — `cid-inline`
 
-Repository truth makes `cid-inline` the smallest deterministic content-mode binding:
+Repository truth makes `cid-inline` the first deterministic binding because campaign attachment validation, CID reference matching, provider capability filtering, Image-first structure, and supported transport semantics already exist. PR #42 now proves that experiment scope and evidence are bound to those owners without a new renderer or conversion path.
 
-- campaign attachment validation already requires a safe Content-ID for inline assets, forbids Content-ID on ordinary attachments, and rejects duplicate inline IDs;
-- existing preflight already verifies every HTML `cid:` reference has a matching inline attachment and every inline attachment is referenced;
-- campaigns containing inline attachments already filter providers through `supportsInlineAttachmentTransport`;
-- `/blast/image` already produces the exact HTML + matching-inline-attachment structure;
-- verified SMTP/SES/supported API adapters already preserve inline CID semantics.
-
-The bounded `cid-inline` contract is therefore:
-
-- a `contentMode: "cid-inline"` experiment profile must use provider scopes whose transports support inline CID; incompatible scopes fail closed before campaign mutation;
-- a campaign bound to such a run must contain at least one real inline attachment with a safe Content-ID referenced by its HTML;
-- existing preflight remains authoritative for CID reference matching, provider eligibility, attachment bounds, sender authorization, suppressions, tracking/reputation, safety, and campaign readiness;
-- no experiment-only renderer or conversion is introduced;
-- successful `transport.started` evidence may report `effectiveMode: "cid-inline"` only when the stored campaign snapshot proves the structure; otherwise it must not claim effective application;
-- the other content modes remain metadata-only until separately reconciled and bound.
-
-Do not start content-mode work by pretending `text` is already text-only: `ProviderMessage` currently requires both HTML and text and API adapters ordinarily send both. Likewise do not fabricate hosted-image, attachment-only, or image-dominant conversions.
+Do not treat the remaining modes as implemented. In particular, do not pretend `text` is already text-only: `ProviderMessage` currently carries both HTML and text and API adapters ordinarily send both. Likewise do not fabricate hosted-image, attachment-only, or image-dominant transformations. After PR #42 publication, reconcile remaining modes against repository truth before selecting the next bounded TDD slice.
 
 ## Image-first message mode
 
@@ -196,12 +200,15 @@ Image-first is a supported content format, not an anti-filter bypass. Verified `
 - verified experiment run-wide concurrency binding;
 - verified experiment smooth-pacing binding;
 - verified experiment bounded-burst pacing binding;
-- published explicit transport-encoding + UTF-8 binding at `09234cf551897598365936a4fe5b214b6852b0fd`, merged-main Quality #202 green.
+- published explicit transport-encoding + UTF-8 binding at `09234cf551897598365936a4fe5b214b6852b0fd`, merged-main Quality #202 green, with documentation checkpoint `a78414484f9e93a5ea334227b99a7187fa98f49a` / Quality #203 green.
+
+### Verified candidate / requires publication
+
+- PR #42 CID-inline content-mode binding: implementation `2da16fb8fb90e8ac63826ffd47ec0285f7b8ffc1` passed full Quality #205 after the exact three-test red boundary in Quality #204; publication still requires reconciled exact-head Quality, guarded merge, and merged-main exact-SHA Quality.
 
 ### Current partially implemented / requires proof
 
-- `contentMode` is metadata-only; begin with the bounded `cid-inline` slice above;
-- remaining content modes require separate owner-level reconciliation and proof;
+- `html`, `text`, `hosted-image`, `attachment-only`, and `image-dominant` remain metadata-only and require separate owner-level reconciliation/proof;
 - provider adaptive slowdown state is consumed by the dispatcher and temporary/rate-limit cooldown is enforced, but the complete pressure → slowdown → gradual-recovery loop and restart durability still need focused end-to-end proof;
 - eligible-provider failover exists, while dedicated proof must distinguish temporary-unavailability failover from policy-block fail-closed behavior;
 - remaining effective experiment values must record applied values/derived state so runs are reproducible;
@@ -209,8 +216,8 @@ Image-first is a supported content format, not an anti-filter bypass. Verified `
 
 ### Remaining major milestones
 
-- bind `cid-inline` red-first and publish it through exact-head + merged-main Quality;
-- reconcile remaining content modes only where deterministic existing owners exist;
+- publish PR #42 through reconciled exact-head and merged-main Quality;
+- reconcile remaining content modes only where deterministic existing owners exist, then bind them as separate narrow slices;
 - finish remaining reproducibility/effective-value evidence;
 - add explicit temporary-failover-versus-policy-stop proof;
 - finish provider pressure/slowdown/recovery telemetry and restart-durability proof;
