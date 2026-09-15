@@ -2,9 +2,9 @@
 
 ## Verified baseline
 
-Remote `main` is verified at `8e80c4ff6077726291deed0dab6ed935c2c4d460` (`feat(experiment): bind bounded burst pacing (#40)`). Full merged-main Quality #191 passed for that exact SHA, including fresh migrations, schema-drift and upgrade rehearsal, lint, secret scan, strict TypeScript, unit tests, PostgreSQL/Redis integration, production build, Playwright E2E, visual-review screenshots, production-container validation, diagnostics, artifact upload, cleanup, and container shutdown.
+Remote `main` is verified at documentation checkpoint `631150eb97d12d42e805699b6d752494b6f2ba8c`; full Quality #192 passed for that exact SHA. The underlying published bounded-burst product merge is `8e80c4ff6077726291deed0dab6ed935c2c4d460`, with merged-main Quality #191 fully green.
 
-The repository remains an existing TypeScript/pnpm application with Next.js + MUI web UI, PostgreSQL/Prisma persistence, Redis-backed safety/rate coordination, a worker process, provider adapters, an email renderer, and Docker deployment assets. Preserve this architecture; do not introduce a second campaign, delivery engine, experiment sender, provider-routing path, scheduler, tracking subsystem, or test-send path.
+The repository remains an existing TypeScript/pnpm application with Next.js + MUI web UI, PostgreSQL/Prisma persistence, Redis-backed safety/rate coordination, a worker process, provider adapters, an email renderer, and Docker deployment assets. Preserve this architecture; do not introduce a second campaign, delivery engine, experiment sender, provider-routing path, scheduler, tracking subsystem, test-send path, or MIME stack.
 
 ## Completed product foundation
 
@@ -32,7 +32,7 @@ The contract is deliberately additive: positive experiment `pacingIntervalMs` is
 
 ### Bounded-burst pacing — PR #40
 
-PR #40 is published at `8e80c4ff6077726291deed0dab6ed935c2c4d460`; merged-main Quality #191 passed fully.
+PR #40 is published at `8e80c4ff6077726291deed0dab6ed935c2c4d460`; merged-main Quality #191 passed fully. Documentation checkpoint `631150eb97d12d42e805699b6d752494b6f2ba8c` then passed Quality #192.
 
 Canonical evidence:
 
@@ -49,27 +49,41 @@ Canonical evidence:
 
 The published bounded-burst contract is additive only: `pacingIntervalMs` is the run-wide burst-window duration and `pacingBurstSize` is the maximum experiment transport starts admitted in the window. A full window uses the existing campaign `safetyWaitUntil` / `safetyWaitReason` owner and does not consume an experiment attempt. `transport.started` evidence records `profile`, `windowMs`, `burstSize`, `occupancyBeforeStart`, and `occupancyAfterStart`. Existing production ceilings, provider enforcement, suppression, kill-switch and safety controls remain authoritative. No schema/migration, second delivery engine, second worker path, live recipient, or external provider was introduced.
 
-## Current milestone — transport encoding, charset, and content-mode binding
+## Current milestone — explicit transport encoding + UTF-8 charset
 
-Repository truth still treats approved experiment `transportEncoding`, UTF-8 `charset`, and `contentMode` primarily as profile metadata. The next slice must reconcile those variables against the existing renderer, MIME construction, provider message model, SMTP/raw-MIME paths, API provider adapters, Image-first/CID support, and test-message path before changing behavior.
+PR #41 (`feat/experiment-transport-encoding-binding`) is a **verified candidate, not yet published**. Its exact implementation head `f424afb942aa7b90271f15eab730cd9b6fccafdd` passed full Quality #200, including fresh migrations, schema/drift and upgrade rehearsal, lint, secret scan, strict TypeScript, unit tests, PostgreSQL/Redis integration, production build, Playwright E2E, screenshots, production-container validation, diagnostics, artifact upload, cleanup, and shutdown.
 
-Execution rules for this milestone:
+Canonical evidence:
 
-- begin from this exact verified baseline and preserve the existing rendering/provider owners;
-- do not invent a parallel renderer, MIME stack, sender path, provider adapter family, or experiment-only message pipeline;
-- use red-first tests to prove the first concrete metadata-only gap before implementation;
-- keep `charset` standards-compliant and UTF-8; do not introduce non-standard obfuscation or anti-filter behavior;
-- bind `transportEncoding` only where the existing transport owner can apply it correctly and fail closed where a provider path cannot honor an explicitly required encoding;
-- bind `contentMode` to existing supported message structures rather than fabricating unsupported transformations; CID-inline, attachment, HTML/text, and Image-first behavior must continue to reuse their current owners;
-- record effective applied encoding/charset/content-mode values in tamper-evident experiment evidence so a run is reproducible;
-- preserve recipient allowlists, provider/sender scope, production pacing/rate/quota/concurrency ceilings, suppression, policy enforcement, hard experiment limits, and kill switch;
-- use controlled recipients and mock/local transports only; no live recipient or external provider without explicit authorization.
+- verified parent `631150eb97d12d42e805699b6d752494b6f2ba8c` passed Quality #192;
+- `c8ac5c14734e8a0e8acf8755f833863e2b73b7f8` added the first provider-contract red; Quality #193 failed at strict TypeScript because `ProviderMessage` could not express `transportEncoding`;
+- `537b8f2297dd383e64e78c968469cc727b26539a` added the bounded provider message contract for `provider-default`, `quoted-printable`, `base64`, and UTF-8; Quality #194 then reached the intended provider-behavior red;
+- `804ab399c30911253c722761c824e2db8336b4a9` bound explicit encoding to the existing SMTP/Nodemailer and SES raw-MIME/MailComposer owners and made API-body transports fail closed; full provider-contract Quality #195 passed;
+- `bdcc75dc9ae2d3a18da1e31a176112403e2d92ff` introduced the runtime test, while Quality #196 exposed a Custom-SMTP sender-authorization fixture problem in addition to the real missing runtime binding, so it is not the canonical runtime red;
+- `0f5a69c7cd7b07d225731b1b6754b5ab0adabcc0` corrected the fixture to verified SES raw MIME plus an API-only scope; Quality #197 produced the clean runtime red: 94 integration tests passed and only message/evidence propagation plus incompatible-provider rejection failed;
+- `a2cca56de67aa450d86ef624dd4c1c75270a4014` exposed the shared raw-MIME encoding capability helper; Quality #198 was superseded/cancelled;
+- `53dc6f5832e09a4368a93ea7396fed509f653707` added profile-time rejection for incompatible explicit-encoding scopes; Quality #199 then passed that assertion and failed only because the actual delivery message still had `transportEncoding === undefined` instead of `base64`;
+- `f424afb942aa7b90271f15eab730cd9b6fccafdd` completed the runtime binding through the existing campaign snapshot/delivery-message path and enriched the existing tamper-evident `transport.started` evidence; full Quality #200 passed.
 
-Before coding, inspect current renderer/provider contracts and select the smallest dependency-complete slice. Prefer one narrow end-to-end variable binding at a time if repository truth shows materially different owners.
+Verified candidate contract:
+
+- explicit non-default transfer encoding is permitted only where the existing transport owns raw MIME deterministically: SMTP and SES raw MIME;
+- provider scopes containing API-body transports fail closed at experiment profile creation for explicit non-default encoding;
+- the campaign snapshot stores the approved explicit `transportEncoding` and UTF-8 `charset`; existing `deliveryMessage()` remains the sole provider-message construction owner and naturally propagates those snapshot fields;
+- SMTP uses Nodemailer's normal transfer-encoding option; SES uses the existing MailComposer raw-MIME path; no parallel MIME renderer was introduced;
+- `transport.started` evidence records requested encoding, effective encoding, and UTF-8 charset; provider-default remains ordinary provider behavior and is not falsely reported as a deterministic explicit encoding;
+- recipient allowlists, provider/sender scope, pacing/rate/quota/concurrency ceilings, suppression, policy enforcement, hard experiment limits, kill switch, and ordinary campaign behavior remain authoritative;
+- no schema/migration, worker, second delivery engine, live recipient, or external provider change was introduced.
+
+Publication is still gated on a fresh exact-head Quality after this documentation reconciliation, re-reading `main` and the PR head, guarded merge using the exact green head, and merged-main Quality on the resulting merge SHA.
+
+## Next distinct dependency — content-mode binding
+
+After PR #41 is published and its post-merge checkpoint is verified, continue red-first with `contentMode`. Reconcile each supported value (`html`, `text`, `cid-inline`, `hosted-image`, `attachment-only`, `image-dominant`) against the message structures and Image-first/CID owners that already exist. Do not fabricate unsupported conversions or introduce an experiment-only renderer. Bind the smallest deterministic mode first and record the effective applied content mode in experiment evidence.
 
 ## Delivery-control-plane follow-on
 
-After encoding/charset/content-mode binding is published, continue from repository truth in dependency order:
+After content-mode binding is published, continue from repository truth in dependency order:
 
 - finish remaining effective experiment-value/reproducibility evidence;
 - add explicit temporary-failover-versus-policy-stop proof;

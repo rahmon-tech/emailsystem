@@ -108,6 +108,19 @@ For `pacingProfile: "bounded-burst"`, the profile requires both a positive `paci
 - Provider, provider-rate-group, sender-domain, account, campaign, warm-up, adaptive, quota, concurrency, suppression, policy, kill-switch and safety controls remain independently authoritative and may only reduce/spread the nominal burst.
 - `transport.started` evidence records `profile`, `windowMs`, `burstSize`, `occupancyBeforeStart`, and `occupancyAfterStart`.
 
+### Verified candidate explicit transport-encoding contract
+
+PR #41 is verified as a candidate at `f424afb942aa7b90271f15eab730cd9b6fccafdd` with full Quality #200, but is not published until its reconciled exact head and merged-main SHA both pass Quality.
+
+- `transportEncoding` supports `provider-default`, `quoted-printable`, and `base64`; `charset` remains standards-compliant UTF-8.
+- An explicit non-default encoding is allowed only on transports that deterministically own raw MIME: SMTP and SES raw MIME.
+- API-body provider scopes fail closed at experiment-profile creation for an explicit non-default encoding rather than silently claiming compliance.
+- The approved explicit encoding/charset is written into the existing immutable campaign message snapshot and reaches the existing `deliveryMessage()`/provider message path without a second renderer or sender.
+- SMTP applies the existing Nodemailer encoding option; SES applies the existing MailComposer raw-MIME path.
+- `transport.started` evidence records requested encoding, effective explicit encoding (or null for provider-default), and UTF-8 charset.
+- Ordinary provider-default sending, production pacing, quotas, concurrency, suppression, policy blocks, hard experiment ceilings and kill switch remain independently authoritative.
+- No schema/migration, second delivery engine, worker replacement, live recipient, or external provider was introduced.
+
 ### Stop conditions and kill switch
 
 - Every experiment has hard volume/time ceilings.
@@ -122,10 +135,11 @@ Persist enough safe evidence to reproduce each relevant experiment/pacing observ
 
 Evidence/audit records should be append-only or otherwise tamper-evident at the application level.
 
-For pacing evidence:
+For pacing and encoding evidence:
 
 - smooth pacing records the applied profile, configured interval, and effective minimum interval;
-- bounded-burst pacing records the applied profile, configured window duration, configured burst size, and run-wide occupancy before/after each admitted start.
+- bounded-burst pacing records the applied profile, configured window duration, configured burst size, and run-wide occupancy before/after each admitted start;
+- the verified candidate transport-encoding binding records requested encoding, effective explicit encoding where deterministic, and UTF-8 charset.
 
 Remaining experiment variables must likewise record their effective applied values/derived state when they become runtime-bound so runs remain reproducible.
 
@@ -146,11 +160,15 @@ EmailSystem should support normal email/MIME compatibility: UTF-8 normalization,
 
 Experiment encoding work must reuse the existing renderer/MIME/provider owners. It must not create anti-filter obfuscation, a parallel MIME stack, or a second sender path. An explicitly required encoding that cannot be honored by a transport must fail closed rather than silently pretending it was applied.
 
+The current PR #41 candidate satisfies that boundary for explicit transfer encoding: SMTP/Nodemailer and SES/MailComposer own the explicit raw-MIME choice, while API-body transports are rejected for explicit non-default encoding.
+
 ## Content modes
 
 Experiment `contentMode` must map only to message structures actually supported by the existing renderer/provider model. HTML, text, CID-inline, hosted-image, attachment-only, and image-dominant modes may be bound incrementally where repository truth shows a real owner and deterministic representation.
 
 Do not fabricate unsupported conversions or create an experiment-only renderer. Image-first and CID behavior continue to reuse the verified campaign/delivery architecture.
+
+`contentMode` remains the next distinct metadata-only experiment variable after PR #41 publication; it is not made complete by the transport-encoding candidate.
 
 ## Image-first message mode
 
@@ -178,6 +196,8 @@ Preserve safe formats, bounded size/file counts, meaningful alt/plain-text alter
 - verified experiment smooth-pacing binding;
 - verified experiment bounded-burst pacing binding.
 
+The current verified `main` documentation checkpoint is `631150eb97d12d42e805699b6d752494b6f2ba8c`, with Quality #192 fully green. PR #41 remains a branch candidate until publication gates complete.
+
 ### Published pacing evidence
 
 Smooth pacing PR #39 merged at `c797f5732e7a513f1b646b7458cc42a5929b62e2`; merged-main Quality #184 passed and checkpoint `e3eb700b213484dba3f195ea2dbdaacc22366b0d` passed Quality #185.
@@ -195,32 +215,43 @@ Bounded-burst PR #40 followed red-first proof:
 
 No schema/migration, second delivery engine, second worker path, live recipient, or external provider was introduced by either pacing binding.
 
+### Verified candidate transport-encoding evidence — PR #41
+
+- verified parent `631150eb97d12d42e805699b6d752494b6f2ba8c` passed Quality #192;
+- `c8ac5c14734e8a0e8acf8755f833863e2b73b7f8` / Quality #193 proved `ProviderMessage` lacked the encoding contract;
+- `537b8f2297dd383e64e78c968469cc727b26539a` / Quality #194 advanced to provider-behavior red;
+- `804ab399c30911253c722761c824e2db8336b4a9` passed full provider-contract Quality #195 after binding SMTP/SES raw MIME and fail-closing API-body transports;
+- `bdcc75dc9ae2d3a18da1e31a176112403e2d92ff` / Quality #196 exposed a Custom-SMTP fixture issue and the real missing runtime binding, so it is not the canonical runtime red;
+- `0f5a69c7cd7b07d225731b1b6754b5ab0adabcc0` / Quality #197 produced the clean runtime red with only the two intended integration assertions failing;
+- `a2cca56de67aa450d86ef624dd4c1c75270a4014` exposed the raw-MIME capability helper; Quality #198 was superseded/cancelled;
+- `53dc6f5832e09a4368a93ea7396fed509f653707` made incompatible explicit-encoding provider scopes fail closed; Quality #199 passed that assertion and left only actual message propagation red (`undefined` versus `base64`);
+- `f424afb942aa7b90271f15eab730cd9b6fccafdd` completed snapshot/runtime/evidence binding and passed full Quality #200.
+
+This remains a verified candidate, not a published main capability, until reconciled exact-head Quality, guarded merge, and merged-main Quality complete.
+
 ### Current partially implemented / requires proof
 
-- `transportEncoding`, UTF-8 `charset`, and `contentMode` experiment variables remain to be reconciled and runtime-bound through existing renderer/MIME/provider owners where repository truth still shows metadata-only behavior;
+- `contentMode` remains metadata-only and must be bound through existing renderer/message/Image-first/CID owners in narrow deterministic slices;
 - provider adaptive slowdown state is consumed by the dispatcher and temporary/rate-limit cooldown is enforced, but the complete pressure → slowdown → gradual-recovery loop and restart durability still need focused end-to-end proof;
 - eligible-provider failover exists, while dedicated proof must distinguish temporary unavailability failover from true policy-block fail-closed behavior;
 - remaining effective experiment values must record applied values/derived state so runs are reproducible;
 - privacy/retention controls and final experiment Activity/UX/export polish remain incomplete.
 
-### Current next milestone — encoding/charset/content-mode binding
+### Current next milestone after PR #41 publication — content-mode binding
 
-Before implementation, reconcile `transportEncoding`, `charset`, and `contentMode` against the actual renderer, MIME construction, provider message model, SMTP/raw-MIME paths, API adapters, Image-first/CID support, and test-message path.
+Proceed red-first in the smallest dependency-complete slices:
 
-Then proceed red-first in the smallest dependency-complete slices:
-
-- prove one concrete metadata-only behavior gap before changing runtime behavior;
-- keep UTF-8 standards-compliant;
-- honor explicit transfer-encoding choices only where the current transport can deterministically apply them and fail closed where it cannot;
-- bind content modes only to existing supported message structures rather than inventing a second rendering system;
-- capture the effective applied values in tamper-evident evidence;
+- reconcile `html`, `text`, `cid-inline`, `hosted-image`, `attachment-only`, and `image-dominant` against actual existing message structures before changing behavior;
+- bind only deterministic structures that current renderer/provider/Image-first owners can already represent;
+- never fabricate unsupported conversions or create a second renderer;
+- capture the effective applied content mode in tamper-evident evidence;
 - preserve every existing scope, policy, suppression, safety and production-capacity control;
 - use controlled recipients and mock/local transports only unless explicit live authorization is separately granted.
 
 ### Remaining major milestones
 
-- publish encoding/charset/content-mode bindings through exact-head and merged-main Quality;
-- finish remaining reproducibility/effective-value evidence;
+- publish PR #41 through reconciled exact-head and merged-main Quality;
+- bind `contentMode` and finish remaining reproducibility/effective-value evidence;
 - add explicit temporary-failover-versus-policy-stop proof;
 - finish provider pressure/slowdown/recovery telemetry and restart-durability proof;
 - add privacy/retention controls for experiment evidence and message snapshots;
