@@ -38,13 +38,23 @@ function withoutId<T extends { id: string }>(value: T) {
   return rest;
 }
 
-const smtpVerification = {
-  smtp: () => ({
-    verify: async () => true,
-    sendMail: async () => ({ accepted: ["sender@example.com"], messageId: "verify" }),
-    close: () => {},
-  }),
-} as unknown as Dependencies;
+const sesVerification = {
+  ses: {
+    send: async (command: unknown) =>
+      (command as object).constructor.name === "GetAccountCommand"
+        ? {
+            SendingEnabled: true,
+            ProductionAccessEnabled: true,
+            EnforcementStatus: "HEALTHY",
+            SendQuota: {
+              MaxSendRate: 20,
+              Max24HourSend: 10000,
+              SentLast24Hours: 0,
+            },
+          }
+        : { VerifiedForSendingStatus: true },
+  },
+} as Dependencies;
 
 test("explicit experiment transfer encoding reaches transport message and tamper-evident evidence", async () => {
   const user = await createUser(
@@ -53,18 +63,18 @@ test("explicit experiment transfer encoding reaches transport message and tamper
   );
   users.push(user.id);
 
-  const smtp = connection("smtp");
+  const ses = connection("ses");
   const provider = await saveProvider(
     user.id,
     {
-      ...withoutId(smtp),
-      name: "Experiment encoding SMTP",
+      ...withoutId(ses),
+      name: "Experiment encoding SES",
       perSecond: 20,
       perMinute: 600,
       concurrency: 10,
     },
     undefined,
-    smtpVerification,
+    sesVerification,
   );
   assert(provider);
   const sender = await db.senderIdentity.findFirstOrThrow({
