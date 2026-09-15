@@ -10,6 +10,11 @@ function record(value: unknown): Record<string, unknown> | null {
     : null;
 }
 
+function hasHtmlSnapshot(value: unknown) {
+  const message = record(value);
+  return !!message && typeof message.html === "string" && message.html.length > 0;
+}
+
 function hasCidInlineSnapshot(value: unknown) {
   const message = record(value);
   if (!message || typeof message.html !== "string" || !Array.isArray(message.attachments))
@@ -23,6 +28,20 @@ function hasCidInlineSnapshot(value: unknown) {
       html.includes(`cid:${attachment.contentId.toLowerCase()}`)
     );
   });
+}
+
+function contentEvidence(contentMode: string, snapshot: unknown) {
+  if (contentMode === "cid-inline")
+    return {
+      requestedMode: "cid-inline",
+      effectiveMode: hasCidInlineSnapshot(snapshot) ? "cid-inline" : null,
+    };
+  if (contentMode === "html")
+    return {
+      requestedMode: "html",
+      effectiveMode: hasHtmlSnapshot(snapshot) ? "html" : null,
+    };
+  return null;
 }
 
 export async function appendExperimentEvidence(
@@ -54,6 +73,9 @@ export async function appendExperimentEvidence(
     if (pacing || variables) {
       const root = record(payload) ?? {};
       const controls = record(root.experimentControls) ?? {};
+      const content = variables
+        ? contentEvidence(variables.contentMode, campaign?.message)
+        : null;
       payload = {
         ...root,
         experimentControls: {
@@ -69,16 +91,7 @@ export async function appendExperimentEvidence(
                       : variables.transportEncoding,
                   charset: variables.charset,
                 },
-                ...(variables.contentMode === "cid-inline"
-                  ? {
-                      content: {
-                        requestedMode: "cid-inline",
-                        effectiveMode: hasCidInlineSnapshot(campaign?.message)
-                          ? "cid-inline"
-                          : null,
-                      },
-                    }
-                  : {}),
+                ...(content ? { content } : {}),
               }
             : {}),
         },
