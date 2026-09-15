@@ -157,6 +157,17 @@ PR #47 merged at `e486779a1de6ca3ad24cf59980b2f5c39242fb42`. Exact proof head `6
 - Even after a simulated premature operator requeue, the existing fail-closed policy check prevents another delivery attempt from starting; a healthy alternate scoped provider is not used to route around enforcement.
 - The experiment run therefore remains bounded by the same provider-policy state, approved provider scope, hard attempt/recipient ceilings, and ordinary production safety controls.
 
+### Published provider adaptation restart-durability proof — PR #49
+
+PR #49 merged at `60c6177709b7142ff862e7adc53371d5a493ff15`. Exact proof head `6d207dc3b0f65b15a3b934caaca8a351c129594a` passed Quality #228 and merged-main Quality #229 passed fully.
+
+- The milestone adds focused integration proof only; it does not modify production pacing, dispatcher, engine, provider adapters, schema/migrations, renderer, MIME path, or worker.
+- A real temporary provider rejection persists a finished delivery attempt categorized as temporary pressure.
+- After the provider adaptive Redis key and derived cooldown are deliberately removed to model ephemeral/derived state loss, `refreshProviderAdaptation()` rebuilds a slowdown greater than 1 and a future cooldown from the durable recent attempt history.
+- Existing provider pacing telemetry reports the reconstructed slowdown, configured versus lower effective rate, and active cooldown pressure without exposing credentials or recipient data.
+- Removing the adaptive Redis key again and refreshing reconstructs the slowdown again, proving the pressure state can be derived after restart instead of depending on stale cache state.
+- This proof closes the restart-durability gap only; healthy-history gradual recovery still requires its own focused end-to-end proof before the complete pressure → slowdown → recovery loop is claimed.
+
 ### Stop conditions and kill switch
 
 - Every experiment has hard volume/time ceilings.
@@ -238,19 +249,20 @@ Image-first is a supported content format, not an anti-filter bypass. Verified `
 - published CID-inline content-mode binding at `9c4b8d52c08980ded11434f352de3e1eb643e33f`, merged-main Quality #208 green, with documentation checkpoint `99d679262c58cedeb130dd668319bb97d4a4a9dd` / Quality #209 green;
 - published HTML content-evidence binding at `df1669e21b8af95ed0afe8c8894d61d04a9ce5d1`, exact-head Quality #215 green and merged-main Quality #218 green;
 - published run-start approved-envelope reproducibility evidence at `7930c6b07302af2b955784d45a40ed32b4e18321`, exact-head Quality #221 green and merged-main Quality #222 green;
-- published temporary-failover-versus-policy-stop proof at `e486779a1de6ca3ad24cf59980b2f5c39242fb42`, exact-head Quality #224 green and merged-main Quality #225 green.
+- published temporary-failover-versus-policy-stop proof at `e486779a1de6ca3ad24cf59980b2f5c39242fb42`, exact-head Quality #224 green and merged-main Quality #225 green;
+- published provider adaptation restart-durability proof at `60c6177709b7142ff862e7adc53371d5a493ff15`, exact-head Quality #228 green and merged-main Quality #229 green.
 
 ### Current partially implemented / requires proof
 
 - `text`, `hosted-image`, `attachment-only`, and `image-dominant` remain metadata-only and require separate owner-level reconciliation before any implementation;
-- provider adaptive slowdown state is consumed by the dispatcher and temporary/rate-limit cooldown is enforced, but the complete pressure → slowdown → gradual-recovery loop and restart durability still need focused end-to-end proof;
+- provider adaptive slowdown consumption, configured-versus-effective pressure telemetry, temporary/rate-limit cooldown enforcement, and restart reconstruction from durable attempt history are now proven; the remaining provider gap is focused end-to-end proof that healthy history conservatively reduces/clears adaptive slowdown and returns pressure to normal without exceeding configured ceilings;
 - additional effective experiment values may be recorded only where runtime proof exists; the published run-start snapshot proves the approved envelope rather than metadata-only application;
 - privacy/retention controls and final experiment Activity/UX/export polish remain incomplete.
 
 ### Remaining major milestones
 
 - bind no further content mode unless repository truth proves a deterministic existing owner without redesign;
-- finish provider pressure/slowdown/recovery telemetry and restart-durability proof next;
+- finish provider gradual-recovery end-to-end proof next;
 - add privacy/retention controls for experiment evidence/message snapshots;
 - finish experiment Activity/UX for configuration, live evidence, stop/review, and export;
 - maintain CI/security/tenant/race coverage for every new mutation path;
