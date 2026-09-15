@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { db } from "@emailsystem/db";
 import { redis } from "@emailsystem/core/redis";
 import { createUser, login, sessionCookie } from "@emailsystem/core/auth";
+import { experimentRecipientHash } from "@emailsystem/core/experiment-evidence";
 import {
   GET as getProfiles,
   POST as postProfile,
@@ -198,6 +199,55 @@ test("authorized experiment profiles and runs enforce tenant scope, hard bounds 
     new Date(started.expiresAt).getTime() - new Date(started.startedAt).getTime() <=
       900_000,
   );
+
+  const startEvidence = await db.experimentEvidence.findMany({
+    where: { userId: owner.id, runId: run.id },
+    orderBy: { sequence: "asc" },
+  });
+  assert.equal(startEvidence.length, 1);
+  assert.equal(startEvidence[0].kind, "run.started");
+  assert.equal(startEvidence[0].sequence, 1);
+  const startPayload = startEvidence[0].payload as {
+    authorizationRef: string;
+    profileVersion: number;
+    limits: {
+      maxRecipients: number;
+      maxAttempts: number;
+      maxDurationSeconds: number;
+    };
+    window: {
+      approvedStartAt: string | null;
+      startedAt: string;
+      expiresAt: string;
+    };
+    variables: typeof baseProfile.variables;
+    scope: {
+      providerIds: string[];
+      senderIdentityIds: string[];
+      controlledRecipientHashes: string[];
+    };
+  };
+  assert.equal(startPayload.authorizationRef, baseProfile.authorizationRef);
+  assert.equal(startPayload.profileVersion, 1);
+  assert.deepEqual(startPayload.limits, {
+    maxRecipients: 2,
+    maxAttempts: 4,
+    maxDurationSeconds: 900,
+  });
+  assert.equal(startPayload.window.approvedStartAt, null);
+  assert.equal(startPayload.window.startedAt, started.startedAt);
+  assert.equal(startPayload.window.expiresAt, started.expiresAt);
+  assert.deepEqual(startPayload.variables, baseProfile.variables);
+  assert.deepEqual(startPayload.scope.providerIds, [ownerScope.provider.id]);
+  assert.deepEqual(startPayload.scope.senderIdentityIds, [ownerScope.sender.id]);
+  assert.deepEqual(
+    startPayload.scope.controlledRecipientHashes,
+    ["alpha@example.net", "beta@example.net"]
+      .map((email) => experimentRecipientHash(run.id, email))
+      .sort(),
+  );
+  assert(!JSON.stringify(startEvidence).includes("alpha@example.net"));
+  assert(!JSON.stringify(startEvidence).includes("beta@example.net"));
 
   const engagedResponse = await postKillSwitch(
     jsonRequest("/api/experiment-kill-switch", ownerSession.token, {
