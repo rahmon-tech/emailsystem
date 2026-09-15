@@ -7,6 +7,11 @@ export type ErrorCategory =
   | "policy"
   | "sender_configuration"
   | "unknown";
+export type TransportEncoding =
+  | "provider-default"
+  | "quoted-printable"
+  | "base64";
+export type MessageCharset = "utf-8";
 export interface ProviderError {
   category: ErrorCategory;
   message: string;
@@ -31,6 +36,8 @@ export interface ProviderMessage {
   text: string;
   headers: Record<string, string>;
   attachments: Attachment[];
+  transportEncoding?: TransportEncoding;
+  charset?: MessageCharset;
 }
 export interface SendContext {
   attemptId: string;
