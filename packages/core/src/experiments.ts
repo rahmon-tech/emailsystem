@@ -1,5 +1,8 @@
 import { db } from "@emailsystem/db";
-import { supportsExplicitTransportEncoding } from "@emailsystem/providers/capabilities";
+import {
+  supportsExplicitTransportEncoding,
+  supportsInlineAttachmentTransport,
+} from "@emailsystem/providers/capabilities";
 import { AppError } from "./errors";
 import {
   createExperimentProfile as createExperimentProfileBase,
@@ -26,16 +29,19 @@ export async function createExperimentProfile(userId: string, raw: unknown) {
         (providerId): providerId is string => typeof providerId === "string",
       )
     : [];
+  const completeProviderIds =
+    providerIds.length === (candidate.providerIds as unknown[] | undefined)?.length;
+  const needsProviderCapabilities =
+    variables.transportEncoding !== "provider-default" ||
+    variables.contentMode === "cid-inline";
 
-  if (
-    variables.transportEncoding !== "provider-default" &&
-    providerIds.length === (candidate.providerIds as unknown[] | undefined)?.length
-  ) {
+  if (needsProviderCapabilities && completeProviderIds) {
     const providers = await db.providerConnection.findMany({
       where: { userId, id: { in: providerIds }, deletedAt: null },
       select: { id: true, type: true, transport: true },
     });
     if (
+      variables.transportEncoding !== "provider-default" &&
       providers.some(
         (provider) => !supportsExplicitTransportEncoding(provider),
       )
@@ -44,6 +50,17 @@ export async function createExperimentProfile(userId: string, raw: unknown) {
         422,
         "EXPERIMENT_TRANSPORT_ENCODING",
         "Explicit experiment transfer encoding requires raw MIME SMTP or SES providers.",
+      );
+    if (
+      variables.contentMode === "cid-inline" &&
+      providers.some(
+        (provider) => !supportsInlineAttachmentTransport(provider),
+      )
+    )
+      throw new AppError(
+        422,
+        "EXPERIMENT_CONTENT_MODE",
+        "CID-inline experiment content requires providers that support inline CID attachments.",
       );
   }
 
