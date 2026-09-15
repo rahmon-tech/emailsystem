@@ -228,3 +228,96 @@ test("cid-inline experiment reaches transport through existing CID structure and
     effectiveMode: "cid-inline",
   });
 });
+
+test("html experiment content mode records truthful effective evidence from the stored campaign snapshot", async () => {
+  const user = await createUser(
+    `experiment-html-${crypto.randomUUID()}@example.com`,
+    "A strong controlled HTML content password 2026",
+  );
+  users.push(user.id);
+  const fixture = connection("resend");
+  const provider = await saveProvider(
+    user.id,
+    {
+      ...withoutId(fixture),
+      name: "Experiment HTML provider",
+      perSecond: 10,
+      perMinute: 60,
+      concurrency: 5,
+      settings: {
+        ...fixture.settings,
+        fromEmail: "html-sender@html.example.com",
+        domain: "html.example.com",
+      },
+    },
+    undefined,
+    {
+      fetch: async () =>
+        Response.json({ data: [{ name: "html.example.com", status: "verified" }] }),
+    },
+  );
+  assert(provider);
+  const sender = await db.senderIdentity.findFirstOrThrow({
+    where: { userId: user.id, email: "html-sender@html.example.com" },
+  });
+  const list = await importRecipients(
+    user.id,
+    Buffer.from("email\none@example.net\n"),
+    "experiment-html.csv",
+  );
+  const profile = await createExperimentProfile(user.id, {
+    name: "HTML content mode",
+    authorizationRef: `AUTH-${crypto.randomUUID()}`,
+    description: "Proves ordinary stored HTML is the deterministic existing HTML content owner.",
+    providerIds: [provider.id],
+    senderIdentityIds: [sender.id],
+    recipients: ["one@example.net"],
+    maxRecipients: 1,
+    maxAttempts: 1,
+    maxDurationSeconds: 900,
+    variables: {
+      pacingProfile: "smooth",
+      transportEncoding: "provider-default",
+      charset: "utf-8",
+      contentMode: "html",
+    },
+  });
+  const run = await createExperimentRun(user.id, profile.id);
+  await startExperimentRun(user.id, run.id);
+  const campaign = await createCampaign(user.id, {
+    name: "Controlled HTML campaign",
+    importId: list.id,
+    senderIdentityId: sender.id,
+    experimentRunId: run.id,
+    subject: "Controlled HTML",
+    html: "<p>Controlled HTML body</p>",
+    text: "Controlled HTML body",
+    attachments: [],
+    tracking: { enabled: false },
+    startKey: crypto.randomUUID(),
+  });
+  await prepareCampaign(campaign.id);
+  const delivery = await db.delivery.findFirstOrThrow({
+    where: { campaignId: campaign.id, userId: user.id },
+  });
+
+  await processDelivery(delivery.id, async (_connection, message) => {
+    assert.equal(message.html, "<p>Controlled HTML body</p>");
+    return { status: "accepted", providerMessageId: "controlled-html" };
+  });
+
+  const evidence = await db.experimentEvidence.findFirstOrThrow({
+    where: { userId: user.id, runId: run.id, kind: "transport.started" },
+    orderBy: { sequence: "asc" },
+    select: { payload: true },
+  });
+  const payload = evidence.payload as {
+    experimentControls?: {
+      content?: { requestedMode?: string; effectiveMode?: string | null };
+    };
+  };
+  assert.deepEqual(payload.experimentControls?.content, {
+    requestedMode: "html",
+    effectiveMode: "html",
+  });
+});
