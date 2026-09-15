@@ -107,7 +107,7 @@ Evidence/audit records should be append-only or otherwise tamper-evident at the 
 For pacing evidence:
 
 - smooth pacing records the applied profile, configured interval, and effective minimum interval;
-- bounded-burst pacing must record the applied profile, configured window duration, configured burst size, and run-wide occupancy before/after each admitted start.
+- bounded-burst pacing records the applied profile, configured window duration, configured burst size, and run-wide occupancy before/after each admitted start.
 
 ## Privacy and platform-internal obfuscation
 
@@ -153,34 +153,38 @@ Preserve safe formats, bounded size/file counts, meaningful alt/plain-text alter
 
 PR #39 is published on `main` at `c797f5732e7a513f1b646b7458cc42a5929b62e2`.
 
-The corrected TDD red was Quality #178 on `5d1f677b3f3f166a4103dd6f060a445b98cd9f04`, which failed because two transports started inside the configured 60-second interval (`actual 2`, `expected 1`). Implementation/race-proof head `7a6c0f994e50561a8793a8fd1e5135892d6f65d5` passed full Quality #181. Reconciled exact PR head `09bd23ca39f5077fea99a063c8fc03652211558e` passed full Quality #183. Guarded merge produced `c797f5732e7a513f1b646b7458cc42a5929b62e2`, and full merged-main Quality #184 passed for that exact SHA.
+The corrected TDD red was Quality #178 on `5d1f677b3f3f166a4103dd6f060a445b98cd9f04`, which failed because two transports started inside the configured 60-second interval (`actual 2`, `expected 1`). Implementation/race-proof head `7a6c0f994e50561a8793a8fd1e5135892d6f65d5` passed full Quality #181. Reconciled exact PR head `09bd23ca39f5077fea99a063c8fc03652211558e` passed full Quality #183. Guarded merge produced `c797f5732e7a513f1b646b7458cc42a5929b62e2`, full merged-main Quality #184 passed, and the resulting documentation checkpoint `e3eb700b213484dba3f195ea2dbdaacc22366b0d` passed full Quality #185.
 
 The implementation uses Redis server time and atomic Lua permit acquisition, tokenized pre-start reservation/commit/release semantics, the existing campaign safety-wait path, and the existing production dispatcher. Direct race proof verifies one concurrent permit winner and owner-only release of an uncommitted reservation. No schema/migration or second dispatcher/worker path was introduced.
 
+### Verified candidate — PR #40 bounded-burst pacing binding
+
+PR #40 at `9d396319a512591d56ed2f69a283c95b0071c9e1` has passed full Quality #189 but is not yet published on `main`.
+
+The candidate binds `pacingProfile: "bounded-burst"` with a positive `pacingIntervalMs` window and explicit positive `pacingBurstSize` as an additional run-wide transport-start ceiling. The implementation:
+
+- validates the variable contract explicitly, requiring both a positive window and bounded burst size for `bounded-burst` and rejecting burst size on the smooth profile;
+- uses Redis server time plus atomic Lua coordination so workers/providers cannot multiply the run-wide burst by racing or rotating connections;
+- uses tokenized unstarted reservations, commit semantics, and owner-only release, while committed starts remain charged to the active window;
+- writes the Redis-derived next eligible time through the existing campaign safety-wait owner when the burst is full, without consuming an experiment attempt;
+- preserves provider, provider-rate-group, sender-domain, account, campaign, warm-up, adaptive, quota, concurrency, suppression, policy, kill-switch and safety controls as independently authoritative;
+- records `profile`, `windowMs`, `burstSize`, `occupancyBeforeStart`, and `occupancyAfterStart` in tamper-evident `transport.started` evidence;
+- has direct race proof that 24 concurrent callers with burst size 3 admit exactly three, committed slots cannot be released from the window, a non-owner cannot release another worker's unstarted reservation, and the owner can release it cleanly;
+- required no database schema/migration, second delivery engine, second worker path, live recipient, or external provider.
+
+TDD evidence is explicit: Quality #186 failed at PostgreSQL/Redis integration because `pacingBurstSize` was not yet accepted by the strict variable schema; after the model contract was added, Quality #187 failed because all three controlled transports started inside a configured two-start window (`actual 3`, `expected 2`). Full candidate Quality #189 is green on `9d396319a512591d56ed2f69a283c95b0071c9e1`. Publication still requires reconciled exact-head Quality, guarded merge, and merged-main Quality.
+
 ### Partially implemented / requires proof before claiming complete
 
-- `bounded-burst` pacing remains metadata-only in runtime; repository truth also shows the current variable model lacks an explicit burst-size ceiling, so the next slice must add and validate `pacingBurstSize` before binding a run-wide burst window;
 - transfer encoding/UTF-8 charset and content-mode experiment variables remain to be bound into existing rendering/MIME/provider owners where repository truth shows metadata-only behavior;
 - provider adaptive slowdown state is consumed by the dispatcher and temporary/rate-limit cooldown is enforced, but the complete pressure → slowdown → gradual-recovery loop and restart durability still need focused end-to-end proof;
 - eligible-provider failover exists, while dedicated proof must still distinguish temporary unavailability failover from true policy-block fail-closed behavior;
 - remaining effective experiment variables should record their applied values/derived state so runs are reproducible.
 
-### Next bounded-burst contract
-
-The next narrow pacing slice must be red-first and preserve all existing production owners:
-
-- extend experiment variables with positive bounded `pacingBurstSize` for `pacingProfile: "bounded-burst"`;
-- interpret `pacingIntervalMs` as the run-wide burst-window duration and `pacingBurstSize` as the maximum experiment transport starts admitted in that window;
-- coordinate the window atomically in the existing Redis control-plane owner so workers/providers cannot multiply capacity by racing or rotating providers;
-- a full experiment burst window must defer through the existing safety-wait path to the Redis-derived next window without creating/consuming an experiment attempt;
-- production provider/rate-group/sender-domain/account/campaign/warm-up/adaptive/quota/concurrency/suppression/policy/safety controls remain independently authoritative and can only reduce/spread the nominal burst;
-- record profile/window/burst-size/occupancy before-and-after in tamper-evident transport-start evidence;
-- use mock providers and controlled recipients only.
-
 ### Remaining major milestones
 
-- reconcile, test, bind and publish the bounded-burst contract above;
-- bind approved standards-compliant encoding/charset and content-mode variables into existing owners;
+- publish the verified bounded-burst candidate after documentation reconciliation, exact-head Quality, guarded merge, and merged-main Quality;
+- bind approved standards-compliant `transportEncoding`, UTF-8 `charset`, and `contentMode` variables into existing rendering/MIME/provider owners;
 - add focused reproducibility/evidence proof for remaining effective experiment values and explicit temporary-failover-vs-policy-stop behavior;
 - richer provider health/effective-rate/`nextAllowedAt` telemetry in Activity;
 - privacy/retention controls for experiment evidence and message snapshots;
