@@ -2,7 +2,7 @@
 
 ## Verified baseline
 
-Remote `main` is published at PR #43 merge `df1669e21b8af95ed0afe8c8894d61d04a9ce5d1`, whose merged-main Quality #218 passed fully. The exact PR head `42fe527bd7ca9a3d177fc1aeaa12de070552657f` passed final exact-head Quality #215 before the guarded merge. The prior documentation checkpoint `99d679262c58cedeb130dd668319bb97d4a4a9dd` / Quality #209 remains the verified parent baseline from which PR #43 was developed.
+Remote `main` is published at PR #46 merge `7930c6b07302af2b955784d45a40ed32b4e18321`, whose merged-main Quality #222 passed fully. The exact PR head `5453f013515ed0a2e1279676426e416a5541d8aa` passed exact-head Quality #221 before the guarded merge. The prior documentation checkpoint `fd52f71a7eb3fa253178b9c232c25fb9911de36a` / Quality #219 remains the verified parent baseline from which PR #46 was developed.
 
 The repository remains an existing TypeScript/pnpm application with Next.js + MUI web UI, PostgreSQL/Prisma persistence, Redis-backed safety/rate coordination, a worker process, provider adapters, an email renderer, and Docker deployment assets. Preserve this architecture; do not introduce a second campaign, delivery engine, experiment sender, provider-routing path, scheduler, tracking subsystem, test-send path, renderer, or MIME stack.
 
@@ -13,7 +13,7 @@ The verified system on `main` includes:
 - the primary Providers → Blast → Activity product shell;
 - provider configuration/verification, encrypted credentials, sender authorization, recipient imports, immutable campaign snapshots, pre-flight, background dispatch, tracking, Activity, exports, suppressions/unsubscribe, retry/reconciliation, and delivery safety controls;
 - weighted/fair multi-provider routing, provider-specific limits/quotas/concurrency, provider-independent sender-domain pacing, account/domain/campaign ceilings, cooldowns, warm-up/soft-start, complaint/hard-bounce brakes, and fail-closed policy enforcement;
-- authorized experiment profiles/runs with authorization metadata, provider/sender scopes, controlled-recipient allowlists, hard recipient/attempt/duration limits, bounded windows, account kill switch, transport reservation checks, and tamper-evident evidence/export;
+- authorized experiment profiles/runs with authorization metadata, provider/sender scopes, controlled-recipient allowlists, hard recipient/attempt/duration limits, bounded windows, account kill switch, transport reservation checks, tamper-evident evidence/export, and an atomic run-start approved-envelope snapshot using run-scoped recipient hashes;
 - verified experiment run-wide concurrency, smooth-pacing, bounded-burst, CID-inline content-mode, and HTML-content evidence bindings;
 - standards-compliant explicit experiment transfer-encoding binding for SMTP/SES raw MIME with UTF-8 charset and fail-closed incompatible provider scopes;
 - inline-vs-attachment provider message semantics and Content-ID support across supported SMTP/API transports, with fail-closed behavior for unsupported inline transports;
@@ -73,13 +73,31 @@ Published contract:
 - no content transformation, renderer change, provider adapter change, MIME change, campaign schema change, worker change, or new sender path is introduced;
 - `text`, `hosted-image`, `attachment-only`, and `image-dominant` remain metadata-only and must not be reported as effective behavior.
 
+### Run-start reproducibility evidence — PR #46
+
+PR #46 is published at `7930c6b07302af2b955784d45a40ed32b4e18321`. Its exact implementation head `5453f013515ed0a2e1279676426e416a5541d8aa` passed Quality #221, and merged-main Quality #222 passed fully.
+
+TDD evidence:
+
+- test-only `e93770e05e2dc116ef223b9d522d47feae6b0ee7` / Quality #220 produced the intended integration red while the preceding gates stayed green;
+- implementation `5453f013515ed0a2e1279676426e416a5541d8aa` / Quality #221 passed the full Quality pipeline;
+- the merged tree changes only the experiment start/evidence owner plus focused integration proof.
+
+Published contract:
+
+- the successful `READY → RUNNING` transition and the first `run.started` evidence entry are committed in the same database transaction;
+- `run.started` captures authorization reference, profile version, hard recipient/attempt/duration limits, approved start plus actual start/expiry, normalized experiment variables, and sorted provider/sender scope IDs;
+- controlled recipients are represented only by run-scoped hashes in the evidence snapshot; raw controlled-recipient addresses are not persisted there;
+- existing kill-switch, time-window, provider-policy, enabled-provider, and enabled-sender start checks remain authoritative;
+- no schema/migration, renderer, provider adapter, worker, campaign message path, or transport behavior was added or bypassed.
+
 ## Delivery-control-plane follow-on
 
-With PR #43 published, continue from repository truth in dependency order:
+With PR #46 published, continue from repository truth in dependency order:
 
 - do not fabricate semantics for `text`, `hosted-image`, `attachment-only`, or `image-dominant`; bind another content mode only if a deterministic existing owner is proven without redesign;
-- finish remaining effective experiment-value/reproducibility evidence;
-- add explicit temporary-failover-versus-policy-stop proof;
+- additional experiment values may be reported as effective only when runtime proof exists; the run-start snapshot records the approved envelope, not fabricated application of metadata-only values;
+- add explicit temporary-failover-versus-policy-stop proof next;
 - finish provider effective-rate/pressure/recovery telemetry and restart-durability proof;
 - add privacy/retention controls for experiment evidence/message snapshots;
 - finish experiment Activity/UX/export polish;

@@ -114,7 +114,7 @@ PR #41 merged at `09234cf551897598365936a4fe5b214b6852b0fd`. Exact-head Quality 
 PR #42 merged at `9c4b8d52c08980ded11434f352de3e1eb643e33f`. Final exact-head Quality #207 and merged-main Quality #208 passed fully; documentation checkpoint `99d679262c58cedeb130dd668319bb97d4a4a9dd` passed Quality #209.
 
 - `contentMode: "cid-inline"` requires every scoped provider transport to support inline CID attachments; incompatible scopes fail closed at experiment-profile creation.
-- A campaign bound to a CID-inline experiment must contain at least one real inline attachment with a safe Content-ID referenced by the campaign HTML before campaign mutation/preflight proceeds.
+- A campaign bound to a CID-inline experiment must contain at least one real inline attachment with a safe Content-ID referenced by campaign HTML before campaign mutation/preflight proceeds.
 - Existing campaign preflight remains authoritative for CID reference matching, provider eligibility, attachment bounds, sender authorization, suppressions, tracking/reputation, safety, and readiness.
 - Successful `transport.started` evidence reports `requestedMode: "cid-inline"` and `effectiveMode: "cid-inline"` only when the stored immutable campaign snapshot actually proves the CID-inline structure; otherwise effective mode remains null rather than claiming application.
 - The binding reuses existing campaign/Image-first/CID/provider-capability and evidence owners. It adds no experiment-only renderer or conversion.
@@ -133,6 +133,18 @@ PR #43 merged at `df1669e21b8af95ed0afe8c8894d61d04a9ce5d1`. Exact head `42fe527
 - `text`, `hosted-image`, `attachment-only`, and `image-dominant` remain metadata-only.
 - No schema/migration, content transformation, renderer, provider adapter, MIME stack, worker, sender, live recipient, or external-provider behavior is added.
 
+### Published run-start reproducibility evidence contract — PR #46
+
+PR #46 merged at `7930c6b07302af2b955784d45a40ed32b4e18321`. Exact implementation head `5453f013515ed0a2e1279676426e416a5541d8aa` passed Quality #221 and merged-main Quality #222 passed fully.
+
+- Test-only `e93770e05e2dc116ef223b9d522d47feae6b0ee7` / Quality #220 produced the intended integration red while the preceding gates stayed green.
+- A successful `READY → RUNNING` state transition and the first `run.started` chained evidence entry are committed in the same database transaction.
+- `run.started` records the authorization reference, profile version, hard recipient/attempt/duration ceilings, approved start, actual start and expiry, normalized experiment variables, and sorted provider/sender scope IDs.
+- Controlled recipients are represented in the evidence snapshot only by run-scoped hashes; raw controlled-recipient addresses are not persisted there.
+- Existing kill-switch, experiment-window, provider-policy, enabled-provider, and enabled-sender checks remain authoritative before start.
+- This snapshot proves the approved run envelope at start time; it does not convert metadata-only variables into claimed effective runtime behavior.
+- No schema/migration, renderer, provider adapter, worker, campaign message path, live recipient, external provider, or new transport behavior was introduced.
+
 ### Stop conditions and kill switch
 
 - Every experiment has hard volume/time ceilings.
@@ -149,13 +161,14 @@ Evidence/audit records should be append-only or otherwise tamper-evident at the 
 
 Current applied evidence includes:
 
+- run start: authorization reference, profile version, hard limits, approved/actual time window, normalized variables, sorted provider/sender scopes, and run-scoped controlled-recipient hashes without raw controlled-recipient addresses;
 - smooth pacing: profile, configured interval, effective minimum interval;
 - bounded burst: profile, configured window, burst size, occupancy before/after an admitted start;
 - explicit transport encoding: requested encoding, deterministic effective encoding where applicable, UTF-8 charset;
 - CID-inline content mode: requested mode plus effective mode only when the immutable stored campaign structure proves the CID reference and matching inline attachment;
 - HTML content mode: requested/effective `html` only when the immutable snapshot proves the existing HTML + plain-text-alternative structure.
 
-Remaining experiment variables must record effective applied values/derived state only when runtime proof exists; do not report metadata-only variables as effective behavior.
+Additional experiment values must record effective applied values/derived state only when runtime proof exists; do not report metadata-only variables as effective behavior.
 
 ## Privacy and platform-internal obfuscation
 
@@ -211,21 +224,21 @@ Image-first is a supported content format, not an anti-filter bypass. Verified `
 - verified experiment bounded-burst pacing binding;
 - published explicit transport-encoding + UTF-8 binding at `09234cf551897598365936a4fe5b214b6852b0fd`, merged-main Quality #202 green, with documentation checkpoint `a78414484f9e93a5ea334227b99a7187fa98f49a` / Quality #203 green;
 - published CID-inline content-mode binding at `9c4b8d52c08980ded11434f352de3e1eb643e33f`, merged-main Quality #208 green, with documentation checkpoint `99d679262c58cedeb130dd668319bb97d4a4a9dd` / Quality #209 green;
-- published HTML content-evidence binding at `df1669e21b8af95ed0afe8c8894d61d04a9ce5d1`, exact-head Quality #215 green and merged-main Quality #218 green.
+- published HTML content-evidence binding at `df1669e21b8af95ed0afe8c8894d61d04a9ce5d1`, exact-head Quality #215 green and merged-main Quality #218 green;
+- published run-start approved-envelope reproducibility evidence at `7930c6b07302af2b955784d45a40ed32b4e18321`, exact-head Quality #221 green and merged-main Quality #222 green.
 
 ### Current partially implemented / requires proof
 
 - `text`, `hosted-image`, `attachment-only`, and `image-dominant` remain metadata-only and require separate owner-level reconciliation before any implementation;
 - provider adaptive slowdown state is consumed by the dispatcher and temporary/rate-limit cooldown is enforced, but the complete pressure → slowdown → gradual-recovery loop and restart durability still need focused end-to-end proof;
 - eligible-provider failover exists, while dedicated proof must distinguish temporary-unavailability failover from policy-block fail-closed behavior;
-- remaining effective experiment values must record applied values/derived state so runs are reproducible;
+- additional effective experiment values may be recorded only where runtime proof exists; the published run-start snapshot proves the approved envelope rather than metadata-only application;
 - privacy/retention controls and final experiment Activity/UX/export polish remain incomplete.
 
 ### Remaining major milestones
 
 - bind no further content mode unless repository truth proves a deterministic existing owner without redesign;
-- finish remaining reproducibility/effective-value evidence;
-- add explicit temporary-failover-versus-policy-stop proof;
+- add explicit temporary-failover-versus-policy-stop proof next;
 - finish provider pressure/slowdown/recovery telemetry and restart-durability proof;
 - add privacy/retention controls for experiment evidence/message snapshots;
 - finish experiment Activity/UX for configuration, live evidence, stop/review, and export;
