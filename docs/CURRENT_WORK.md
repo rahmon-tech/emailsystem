@@ -2,7 +2,7 @@
 
 ## Verified baseline
 
-Remote `main` is verified at documentation checkpoint `99d679262c58cedeb130dd668319bb97d4a4a9dd`, whose Quality #209 passed fully. Its parent is published PR #42 merge `9c4b8d52c08980ded11434f352de3e1eb643e33f`, whose merged-main Quality #208 passed fully.
+Remote `main` is published at PR #43 merge `df1669e21b8af95ed0afe8c8894d61d04a9ce5d1`, whose merged-main Quality #218 passed fully. The exact PR head `42fe527bd7ca9a3d177fc1aeaa12de070552657f` passed final exact-head Quality #215 before the guarded merge. The prior documentation checkpoint `99d679262c58cedeb130dd668319bb97d4a4a9dd` / Quality #209 remains the verified parent baseline from which PR #43 was developed.
 
 The repository remains an existing TypeScript/pnpm application with Next.js + MUI web UI, PostgreSQL/Prisma persistence, Redis-backed safety/rate coordination, a worker process, provider adapters, an email renderer, and Docker deployment assets. Preserve this architecture; do not introduce a second campaign, delivery engine, experiment sender, provider-routing path, scheduler, tracking subsystem, test-send path, renderer, or MIME stack.
 
@@ -14,7 +14,7 @@ The verified system on `main` includes:
 - provider configuration/verification, encrypted credentials, sender authorization, recipient imports, immutable campaign snapshots, pre-flight, background dispatch, tracking, Activity, exports, suppressions/unsubscribe, retry/reconciliation, and delivery safety controls;
 - weighted/fair multi-provider routing, provider-specific limits/quotas/concurrency, provider-independent sender-domain pacing, account/domain/campaign ceilings, cooldowns, warm-up/soft-start, complaint/hard-bounce brakes, and fail-closed policy enforcement;
 - authorized experiment profiles/runs with authorization metadata, provider/sender scopes, controlled-recipient allowlists, hard recipient/attempt/duration limits, bounded windows, account kill switch, transport reservation checks, and tamper-evident evidence/export;
-- verified experiment run-wide concurrency, smooth-pacing, bounded-burst, and CID-inline content-mode bindings;
+- verified experiment run-wide concurrency, smooth-pacing, bounded-burst, CID-inline content-mode, and HTML-content evidence bindings;
 - standards-compliant explicit experiment transfer-encoding binding for SMTP/SES raw MIME with UTF-8 charset and fail-closed incompatible provider scopes;
 - inline-vs-attachment provider message semantics and Content-ID support across supported SMTP/API transports, with fail-closed behavior for unsupported inline transports;
 - the authenticated `/blast/image` Image-first composer using the existing campaign/delivery architecture, including primary-image lifecycle, ordinary attachments, test-message, CC/BCC, scheduling, tags/tracking, inline-capability visibility, alt-text replacement fidelity, and the optional primary-image HTTP(S) destination link.
@@ -54,11 +54,11 @@ Published contract:
 - a campaign bound to a CID-inline experiment must contain at least one real inline attachment with a safe Content-ID referenced by campaign HTML before campaign mutation/preflight proceeds;
 - existing campaign preflight remains authoritative for CID matching, provider eligibility, attachment bounds, sender authorization, suppressions, tracking/reputation, safety, and readiness;
 - successful `transport.started` evidence records `{ requestedMode: "cid-inline", effectiveMode: "cid-inline" }` only when the immutable stored campaign snapshot proves the structure;
-- no schema/migration, second renderer/MIME stack, provider adapter, worker replacement, live recipient, or external-provider delivery was introduced.
+- no schema/migration, second renderer/MIME stack, provider adapter, worker replacement, live recipient, or external provider was introduced.
 
-## Current milestone — HTML content evidence candidate
+### HTML content evidence — PR #43
 
-PR #43 is the canonical bounded HTML evidence milestone from exact verified parent `99d679262c58cedeb130dd668319bb97d4a4a9dd`. It does **not** create an HTML-only transport mode or alter rendering. Repository truth already defines the ordinary production message as normalized HTML plus a plain-text alternative.
+PR #43 is published at `df1669e21b8af95ed0afe8c8894d61d04a9ce5d1`. Its exact head `42fe527bd7ca9a3d177fc1aeaa12de070552657f` passed final Quality #215, and merged-main Quality #218 passed fully.
 
 TDD evidence:
 
@@ -66,18 +66,16 @@ TDD evidence:
 - implementation `a65772e733eb967b3d667a5bfb86a37a656cea75` / Quality #211 passed the full Quality pipeline;
 - the implementation changes only the experiment evidence owner and preserves the existing campaign/provider message path.
 
-Verified candidate contract:
+Published contract:
 
 - `contentMode: "html"` maps to the existing ordinary production message structure: non-empty stored HTML plus a non-empty plain-text alternative;
 - `transport.started` may report `{ requestedMode: "html", effectiveMode: "html" }` only when the immutable campaign snapshot proves both components;
 - no content transformation, renderer change, provider adapter change, MIME change, campaign schema change, worker change, or new sender path is introduced;
 - `text`, `hosted-image`, `attachment-only`, and `image-dominant` remain metadata-only and must not be reported as effective behavior.
 
-PR #43 is a verified candidate, not yet published. It still requires reconciled exact-head Quality, guarded merge, merged-main Quality, and a post-merge checkpoint if repository memory needs advancement.
-
 ## Delivery-control-plane follow-on
 
-After PR #43 is published, continue from repository truth in dependency order:
+With PR #43 published, continue from repository truth in dependency order:
 
 - do not fabricate semantics for `text`, `hosted-image`, `attachment-only`, or `image-dominant`; bind another content mode only if a deterministic existing owner is proven without redesign;
 - finish remaining effective experiment-value/reproducibility evidence;

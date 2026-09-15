@@ -121,9 +121,9 @@ PR #42 merged at `9c4b8d52c08980ded11434f352de3e1eb643e33f`. Final exact-head Qu
 - All ordinary production pacing/rate/quota/concurrency, sender/recipient scope, suppression, policy, hard experiment ceilings, and kill-switch controls remain authoritative.
 - No schema/migration, second delivery engine, provider adapter, second MIME stack, worker replacement, live recipient, or external provider was introduced.
 
-### Verified HTML content evidence candidate — PR #43
+### Published HTML content evidence contract — PR #43
 
-PR #43 is a verified candidate, not yet published. Exact verified parent is `99d679262c58cedeb130dd668319bb97d4a4a9dd` / Quality #209.
+PR #43 merged at `df1669e21b8af95ed0afe8c8894d61d04a9ce5d1`. Exact head `42fe527bd7ca9a3d177fc1aeaa12de070552657f` passed final Quality #215 and merged-main Quality #218 passed fully.
 
 - The slice does not create an HTML-only transport or alter rendering; it binds experiment reproducibility evidence to the existing ordinary production message structure.
 - Test-only `fe8b5413fdda553c638fa689ebbc557b91f2cf6e` / Quality #210 produced the intended integration red.
@@ -153,7 +153,7 @@ Current applied evidence includes:
 - bounded burst: profile, configured window, burst size, occupancy before/after an admitted start;
 - explicit transport encoding: requested encoding, deterministic effective encoding where applicable, UTF-8 charset;
 - CID-inline content mode: requested mode plus effective mode only when the immutable stored campaign structure proves the CID reference and matching inline attachment;
-- verified HTML candidate: requested/effective `html` only when the immutable snapshot proves the existing HTML + plain-text-alternative structure.
+- HTML content mode: requested/effective `html` only when the immutable snapshot proves the existing HTML + plain-text-alternative structure.
 
 Remaining experiment variables must record effective applied values/derived state only when runtime proof exists; do not report metadata-only variables as effective behavior.
 
@@ -180,9 +180,9 @@ Experiment `contentMode` values are `html`, `text`, `cid-inline`, `hosted-image`
 
 `cid-inline` is published through PR #42 and merged-main Quality #208. It is runtime-bound because campaign attachment validation, CID reference matching, provider capability filtering, Image-first structure, and supported transport semantics already existed and could be reused without a new renderer or conversion path.
 
-### Verified candidate — `html`
+### Published second slice — `html`
 
-PR #43 binds only evidence for the existing ordinary HTML message structure. It does not introduce HTML-only sending. Effective `html` evidence requires the stored immutable message to contain non-empty HTML plus its non-empty plain-text alternative.
+PR #43 publishes evidence binding for the existing ordinary HTML message structure; merged-main Quality #218 passed fully. It does not introduce HTML-only sending. Effective `html` evidence requires the stored immutable message to contain non-empty HTML plus its non-empty plain-text alternative.
 
 Do not treat the remaining modes as implemented. In particular, do not pretend `text` is already text-only: `ProviderMessage` currently carries both HTML and text and API adapters ordinarily send both. Likewise do not fabricate hosted-image, attachment-only, or image-dominant transformations. If no deterministic owner exists without redesign, advance to the next control-plane dependency rather than inventing semantics.
 
@@ -210,11 +210,11 @@ Image-first is a supported content format, not an anti-filter bypass. Verified `
 - verified experiment smooth-pacing binding;
 - verified experiment bounded-burst pacing binding;
 - published explicit transport-encoding + UTF-8 binding at `09234cf551897598365936a4fe5b214b6852b0fd`, merged-main Quality #202 green, with documentation checkpoint `a78414484f9e93a5ea334227b99a7187fa98f49a` / Quality #203 green;
-- published CID-inline content-mode binding at `9c4b8d52c08980ded11434f352de3e1eb643e33f`, merged-main Quality #208 green, with documentation checkpoint `99d679262c58cedeb130dd668319bb97d4a4a9dd` / Quality #209 green.
+- published CID-inline content-mode binding at `9c4b8d52c08980ded11434f352de3e1eb643e33f`, merged-main Quality #208 green, with documentation checkpoint `99d679262c58cedeb130dd668319bb97d4a4a9dd` / Quality #209 green;
+- published HTML content-evidence binding at `df1669e21b8af95ed0afe8c8894d61d04a9ce5d1`, exact-head Quality #215 green and merged-main Quality #218 green.
 
 ### Current partially implemented / requires proof
 
-- PR #43 HTML evidence is a verified candidate pending exact-head documentation Quality and publication;
 - `text`, `hosted-image`, `attachment-only`, and `image-dominant` remain metadata-only and require separate owner-level reconciliation before any implementation;
 - provider adaptive slowdown state is consumed by the dispatcher and temporary/rate-limit cooldown is enforced, but the complete pressure → slowdown → gradual-recovery loop and restart durability still need focused end-to-end proof;
 - eligible-provider failover exists, while dedicated proof must distinguish temporary-unavailability failover from policy-block fail-closed behavior;
@@ -223,7 +223,6 @@ Image-first is a supported content format, not an anti-filter bypass. Verified `
 
 ### Remaining major milestones
 
-- publish PR #43 through exact-head and merged-main Quality;
 - bind no further content mode unless repository truth proves a deterministic existing owner without redesign;
 - finish remaining reproducibility/effective-value evidence;
 - add explicit temporary-failover-versus-policy-stop proof;
