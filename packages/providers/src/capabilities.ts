@@ -16,3 +16,10 @@ export function supportsInlineAttachmentTransport(connection: {
     inlineApiProviders.has(connection.type)
   );
 }
+
+export function supportsExplicitTransportEncoding(connection: {
+  type: string;
+  transport: string;
+}) {
+  return connection.transport === "smtp" || connection.type === "ses";
+}
