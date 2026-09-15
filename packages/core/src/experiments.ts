@@ -10,6 +10,10 @@ import {
   reserveExperimentTransport as reserveExperimentTransportBase,
 } from "./experiments-base";
 import {
+  appendExperimentEvidence,
+  experimentRecipientHash,
+} from "./experiment-evidence-base";
+import {
   acquireExperimentBurstPacing,
   commitExperimentBurstPacing,
   releaseExperimentBurstPacing,
@@ -17,6 +21,28 @@ import {
 import { waitForSafety } from "./safety";
 
 export * from "./experiments-base";
+
+const runSummarySelect = {
+  id: true,
+  profileId: true,
+  profileVersion: true,
+  authorizationRef: true,
+  state: true,
+  maxRecipients: true,
+  maxAttempts: true,
+  maxDurationSeconds: true,
+  recipientsUsed: true,
+  attemptsUsed: true,
+  startsAt: true,
+  expiresAt: true,
+  startedAt: true,
+  stoppedAt: true,
+  killSwitchAt: true,
+  stopReason: true,
+  createdAt: true,
+  updatedAt: true,
+  profile: { select: { name: true } },
+} as const;
 
 export async function createExperimentProfile(userId: string, raw: unknown) {
   const candidate =
@@ -65,6 +91,167 @@ export async function createExperimentProfile(userId: string, raw: unknown) {
   }
 
   return createExperimentProfileBase(userId, raw);
+}
+
+export async function startExperimentRun(userId: string, runId: string) {
+  const now = new Date();
+  const [run, user] = await Promise.all([
+    db.experimentRun.findFirst({
+      where: { id: runId, userId },
+      include: {
+        profile: {
+          select: {
+            startAt: true,
+            endAt: true,
+            variables: true,
+            providerScopes: {
+              select: {
+                providerId: true,
+                provider: {
+                  select: {
+                    enabled: true,
+                    health: true,
+                    deletedAt: true,
+                  },
+                },
+              },
+            },
+            senderScopes: {
+              select: {
+                senderIdentityId: true,
+                senderIdentity: { select: { enabled: true } },
+              },
+            },
+            recipients: { select: { email: true } },
+          },
+        },
+      },
+    }),
+    db.user.findUnique({
+      where: { id: userId },
+      select: { experimentKillSwitchAt: true },
+    }),
+  ]);
+  if (!run) throw new AppError(404, "NOT_FOUND", "Experiment run not found.");
+  if (run.state === "RUNNING")
+    return db.experimentRun.findFirstOrThrow({
+      where: { id: runId, userId },
+      select: runSummarySelect,
+    });
+  if (run.state !== "READY")
+    throw new AppError(409, "EXPERIMENT_STATE", "This run cannot be started.");
+  if (user?.experimentKillSwitchAt)
+    throw new AppError(
+      409,
+      "EXPERIMENT_KILL_SWITCH",
+      "Experiment transport is disabled by the account kill switch.",
+    );
+  if (run.profile.startAt && now < run.profile.startAt)
+    throw new AppError(
+      409,
+      "EXPERIMENT_WINDOW",
+      "This experiment is not inside its approved start window yet.",
+    );
+  if (run.profile.endAt && now >= run.profile.endAt)
+    throw new AppError(
+      409,
+      "EXPERIMENT_WINDOW",
+      "This experiment is outside its approved time window.",
+    );
+  if (
+    run.profile.providerScopes.some(
+      ({ provider }) => provider.health === "POLICY_BLOCKED",
+    )
+  )
+    throw new AppError(
+      409,
+      "EXPERIMENT_POLICY_BLOCK",
+      "A provider in this experiment scope requires policy review.",
+    );
+  if (
+    !run.profile.providerScopes.some(
+      ({ provider }) => provider.enabled && !provider.deletedAt,
+    )
+  )
+    throw new AppError(
+      409,
+      "EXPERIMENT_PROVIDER_SCOPE",
+      "No enabled provider is available in this experiment scope.",
+    );
+  if (
+    !run.profile.senderScopes.some(({ senderIdentity }) => senderIdentity.enabled)
+  )
+    throw new AppError(
+      409,
+      "EXPERIMENT_SENDER_SCOPE",
+      "No enabled sender is available in this experiment scope.",
+    );
+
+  const durationDeadline = new Date(
+    now.getTime() + run.maxDurationSeconds * 1000,
+  );
+  const expiresAt =
+    run.profile.endAt && run.profile.endAt < durationDeadline
+      ? run.profile.endAt
+      : durationDeadline;
+  const variables = experimentVariables.parse(run.profile.variables);
+
+  return db.$transaction(async (tx) => {
+    const updated = await tx.experimentRun.updateMany({
+      where: { id: runId, userId, state: "READY" },
+      data: { state: "RUNNING", startedAt: now, expiresAt },
+    });
+    if (!updated.count)
+      throw new AppError(
+        409,
+        "EXPERIMENT_STATE",
+        "Experiment run state changed before it could be started.",
+      );
+
+    await appendExperimentEvidence(tx, {
+      userId,
+      runId,
+      kind: "run.started",
+      createdAt: now,
+      payload: {
+        authorizationRef: run.authorizationRef,
+        profileVersion: run.profileVersion,
+        limits: {
+          maxRecipients: run.maxRecipients,
+          maxAttempts: run.maxAttempts,
+          maxDurationSeconds: run.maxDurationSeconds,
+        },
+        window: {
+          approvedStartAt: run.startsAt,
+          startedAt: now,
+          expiresAt,
+        },
+        variables,
+        scope: {
+          providerIds: run.profile.providerScopes
+            .map(({ providerId }) => providerId)
+            .sort(),
+          senderIdentityIds: run.profile.senderScopes
+            .map(({ senderIdentityId }) => senderIdentityId)
+            .sort(),
+          controlledRecipientHashes: run.profile.recipients
+            .map(({ email }) => experimentRecipientHash(runId, email))
+            .sort(),
+        },
+      },
+    });
+    await tx.auditEvent.create({
+      data: {
+        userId,
+        action: "experiment.run.started",
+        resourceId: runId,
+      },
+    });
+    return tx.experimentRun.findFirstOrThrow({
+      where: { id: runId, userId },
+      select: runSummarySelect,
+    });
+  });
 }
 
 export async function reserveExperimentTransport(
