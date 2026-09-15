@@ -145,6 +145,18 @@ PR #46 merged at `7930c6b07302af2b955784d45a40ed32b4e18321`. Exact implementatio
 - This snapshot proves the approved run envelope at start time; it does not convert metadata-only variables into claimed effective runtime behavior.
 - No schema/migration, renderer, provider adapter, worker, campaign message path, live recipient, external provider, or new transport behavior was introduced.
 
+### Published temporary failover vs policy-stop proof — PR #47
+
+PR #47 merged at `e486779a1de6ca3ad24cf59980b2f5c39242fb42`. Exact proof head `6e5d5612a73ab0888540046afc13f88356f62684` passed Quality #224 and merged-main Quality #225 passed fully.
+
+- The milestone adds focused integration proof only; it does not modify the production dispatcher, engine, provider adapters, schema/migrations, renderer, MIME path, or worker.
+- A real temporary rejection defers the controlled delivery, sets a future cooldown on the selected provider, and leaves the campaign unpaused.
+- When that delivery becomes due again, existing eligible-provider selection may route the retry through a different healthy, sender-authorized provider already inside the experiment provider scope.
+- The retry consumes another experiment attempt but does not consume a second recipient slot for the same controlled address.
+- A real policy rejection marks the selected provider `POLICY_BLOCKED`, disables it, and pauses the campaign.
+- Even after a simulated premature operator requeue, the existing fail-closed policy check prevents another delivery attempt from starting; a healthy alternate scoped provider is not used to route around enforcement.
+- The experiment run therefore remains bounded by the same provider-policy state, approved provider scope, hard attempt/recipient ceilings, and ordinary production safety controls.
+
 ### Stop conditions and kill switch
 
 - Every experiment has hard volume/time ceilings.
@@ -225,21 +237,20 @@ Image-first is a supported content format, not an anti-filter bypass. Verified `
 - published explicit transport-encoding + UTF-8 binding at `09234cf551897598365936a4fe5b214b6852b0fd`, merged-main Quality #202 green, with documentation checkpoint `a78414484f9e93a5ea334227b99a7187fa98f49a` / Quality #203 green;
 - published CID-inline content-mode binding at `9c4b8d52c08980ded11434f352de3e1eb643e33f`, merged-main Quality #208 green, with documentation checkpoint `99d679262c58cedeb130dd668319bb97d4a4a9dd` / Quality #209 green;
 - published HTML content-evidence binding at `df1669e21b8af95ed0afe8c8894d61d04a9ce5d1`, exact-head Quality #215 green and merged-main Quality #218 green;
-- published run-start approved-envelope reproducibility evidence at `7930c6b07302af2b955784d45a40ed32b4e18321`, exact-head Quality #221 green and merged-main Quality #222 green.
+- published run-start approved-envelope reproducibility evidence at `7930c6b07302af2b955784d45a40ed32b4e18321`, exact-head Quality #221 green and merged-main Quality #222 green;
+- published temporary-failover-versus-policy-stop proof at `e486779a1de6ca3ad24cf59980b2f5c39242fb42`, exact-head Quality #224 green and merged-main Quality #225 green.
 
 ### Current partially implemented / requires proof
 
 - `text`, `hosted-image`, `attachment-only`, and `image-dominant` remain metadata-only and require separate owner-level reconciliation before any implementation;
 - provider adaptive slowdown state is consumed by the dispatcher and temporary/rate-limit cooldown is enforced, but the complete pressure → slowdown → gradual-recovery loop and restart durability still need focused end-to-end proof;
-- eligible-provider failover exists, while dedicated proof must distinguish temporary-unavailability failover from policy-block fail-closed behavior;
 - additional effective experiment values may be recorded only where runtime proof exists; the published run-start snapshot proves the approved envelope rather than metadata-only application;
 - privacy/retention controls and final experiment Activity/UX/export polish remain incomplete.
 
 ### Remaining major milestones
 
 - bind no further content mode unless repository truth proves a deterministic existing owner without redesign;
-- add explicit temporary-failover-versus-policy-stop proof next;
-- finish provider pressure/slowdown/recovery telemetry and restart-durability proof;
+- finish provider pressure/slowdown/recovery telemetry and restart-durability proof next;
 - add privacy/retention controls for experiment evidence/message snapshots;
 - finish experiment Activity/UX for configuration, live evidence, stop/review, and export;
 - maintain CI/security/tenant/race coverage for every new mutation path;
