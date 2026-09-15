@@ -68,6 +68,19 @@ function validateInlineAttachments(c: Connection, m: ProviderMessage) {
     seen.add(attachment.contentId);
   }
 }
+function validateTransportEncoding(c: Connection, m: ProviderMessage) {
+  if (m.charset && m.charset !== "utf-8")
+    throw new Error("Only UTF-8 message charset is supported.");
+  if (
+    m.transportEncoding &&
+    m.transportEncoding !== "provider-default" &&
+    c.transport !== "smtp" &&
+    c.type !== "ses"
+  )
+    throw new Error(
+      "Explicit transfer encoding requires a raw MIME SMTP or SES transport.",
+    );
+}
 export function normalizeError(
   status: number | undefined,
   detail = "",
@@ -174,6 +187,7 @@ export function buildRequest(
       "Non-delivery test mode is unavailable for this connection",
     );
   validateInlineAttachments(c, m);
+  validateTransportEncoding(c, m);
   const url = endpoints(c).sendUrl;
   if (!url) throw new Error("Provider uses SDK or SMTP");
   const headers = { ...auth(c), "Content-Type": "application/json" };
@@ -521,6 +535,7 @@ export function buildSmtpOptions(
 }
 function mailOptions(m: ProviderMessage, ctx: SendContext, c: Connection) {
   validateInlineAttachments(c, m);
+  validateTransportEncoding(c, m);
   return {
     from: { address: m.from, name: m.fromName },
     to: m.to,
@@ -530,6 +545,9 @@ function mailOptions(m: ProviderMessage, ctx: SendContext, c: Connection) {
     subject: m.subject,
     html: m.html,
     text: m.text,
+    ...(m.transportEncoding && m.transportEncoding !== "provider-default"
+      ? { encoding: m.transportEncoding }
+      : {}),
     messageId: `<${ctx.attemptId}@${m.from.split("@")[1]}>`,
     headers: {
       ...m.headers,

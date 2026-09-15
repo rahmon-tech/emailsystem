@@ -1,4 +1,8 @@
+import { db } from "@emailsystem/db";
+import { supportsExplicitTransportEncoding } from "@emailsystem/providers/capabilities";
+import { AppError } from "./errors";
 import {
+  createExperimentProfile as createExperimentProfileBase,
   experimentVariables,
   reserveExperimentTransport as reserveExperimentTransportBase,
 } from "./experiments-base";
@@ -10,6 +14,41 @@ import {
 import { waitForSafety } from "./safety";
 
 export * from "./experiments-base";
+
+export async function createExperimentProfile(userId: string, raw: unknown) {
+  const candidate =
+    raw !== null && typeof raw === "object" && !Array.isArray(raw)
+      ? (raw as Record<string, unknown>)
+      : {};
+  const variables = experimentVariables.parse(candidate.variables ?? {});
+  const providerIds = Array.isArray(candidate.providerIds)
+    ? candidate.providerIds.filter(
+        (providerId): providerId is string => typeof providerId === "string",
+      )
+    : [];
+
+  if (
+    variables.transportEncoding !== "provider-default" &&
+    providerIds.length === (candidate.providerIds as unknown[] | undefined)?.length
+  ) {
+    const providers = await db.providerConnection.findMany({
+      where: { userId, id: { in: providerIds }, deletedAt: null },
+      select: { id: true, type: true, transport: true },
+    });
+    if (
+      providers.some(
+        (provider) => !supportsExplicitTransportEncoding(provider),
+      )
+    )
+      throw new AppError(
+        422,
+        "EXPERIMENT_TRANSPORT_ENCODING",
+        "Explicit experiment transfer encoding requires raw MIME SMTP or SES providers.",
+      );
+  }
+
+  return createExperimentProfileBase(userId, raw);
+}
 
 export async function reserveExperimentTransport(
   tx: Parameters<typeof reserveExperimentTransportBase>[0],

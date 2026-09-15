@@ -13,6 +13,7 @@
     "allowJs": false,
     "isolatedModules": true,
     "paths": {
+      "@emailsystem/core/campaigns": ["./packages/core/src/campaigns-experiment.ts"],
       "@emailsystem/core/*": ["./packages/core/src/*"],
       "@emailsystem/db": ["./packages/db/src/index.ts"],
       "@emailsystem/providers": ["./packages/providers/src/index.ts"],

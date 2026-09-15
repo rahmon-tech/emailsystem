@@ -1,5 +1,6 @@
 import { appendExperimentEvidence as appendExperimentEvidenceBase } from "./experiment-evidence-base";
 import { readExperimentBurstPacingEvidence } from "./experiment-burst-pacing";
+import { experimentVariables } from "./experiments-base";
 
 export * from "./experiment-evidence-base";
 
@@ -15,19 +16,40 @@ export async function appendExperimentEvidence(
 ): ReturnType<typeof appendExperimentEvidenceBase> {
   let payload = input.payload;
   if (input.kind === "transport.started" && input.runId && input.attemptId) {
-    const pacing = await readExperimentBurstPacingEvidence(
-      input.userId,
-      input.runId,
-      input.attemptId,
-    );
-    if (pacing) {
+    const [pacing, run] = await Promise.all([
+      readExperimentBurstPacingEvidence(
+        input.userId,
+        input.runId,
+        input.attemptId,
+      ),
+      tx.experimentRun.findFirst({
+        where: { id: input.runId, userId: input.userId },
+        select: { profile: { select: { variables: true } } },
+      }),
+    ]);
+    const variables = run
+      ? experimentVariables.parse(run.profile.variables)
+      : null;
+    if (pacing || variables) {
       const root = record(payload) ?? {};
       const controls = record(root.experimentControls) ?? {};
       payload = {
         ...root,
         experimentControls: {
           ...controls,
-          pacing,
+          ...(pacing ? { pacing } : {}),
+          ...(variables
+            ? {
+                encoding: {
+                  requestedTransportEncoding: variables.transportEncoding,
+                  effectiveTransportEncoding:
+                    variables.transportEncoding === "provider-default"
+                      ? null
+                      : variables.transportEncoding,
+                  charset: variables.charset,
+                },
+              }
+            : {}),
         },
       };
     }
