@@ -8,10 +8,7 @@ import { connection } from "../fixtures";
 const email = "mobile-session@example.com";
 const password = "Mobile-session-regression-2026";
 
-test("iPhone Blast stays centered and session survives hard reload", async ({
-  page,
-  context,
-}) => {
+async function ensureMobileUser() {
   const existing = await db.user.findUnique({
     where: { email },
     select: { id: true, email: true },
@@ -21,14 +18,25 @@ test("iPhone Blast stays centered and session survives hard reload", async ({
     const { id: _id, ...input } = connection("mock");
     await saveProvider(user.id, { ...input, name: "Mobile layout mock" });
   }
+  return user;
+}
 
-  await page.setViewportSize({ width: 390, height: 844 });
+async function signIn(page: Parameters<typeof test>[0] extends never ? never : any) {
   await page.goto(appPath("/login"));
   await page.getByLabel("Email address").fill(email);
   await page.getByLabel("Password").fill(password);
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await expect(page).toHaveURL(/\/blast$/);
   await expect(page.getByRole("heading", { name: "Blast" })).toBeVisible();
+}
+
+test("iPhone Blast stays centered and session survives hard reload", async ({
+  page,
+  context,
+}) => {
+  await ensureMobileUser();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await signIn(page);
 
   const authCookie = (await context.cookies()).find(
     (cookie) => cookie.name === sessionCookie,
@@ -73,4 +81,54 @@ test("iPhone Blast stays centered and session survives hard reload", async ({
     expect(box!.x + box!.width).toBeLessThanOrEqual(375);
     expect(Math.abs(box!.x + box!.width / 2 - 195)).toBeLessThanOrEqual(3);
   }
+});
+
+test.describe("Blast touch focus stability", () => {
+  test.use({
+    viewport: { width: 932, height: 430 },
+    screen: { width: 932, height: 430 },
+    hasTouch: true,
+    isMobile: true,
+    deviceScaleFactor: 3,
+  });
+
+  test("landscape touch fields do not trigger Safari-style focus zoom", async ({
+    page,
+  }) => {
+    await ensureMobileUser();
+    await signIn(page);
+
+    expect(
+      await page.evaluate(() => window.matchMedia("(pointer: coarse)").matches),
+    ).toBe(true);
+
+    const input = page.getByLabel("Campaign name");
+    await expect(input).toBeVisible();
+
+    const before = await page.evaluate(() => ({
+      viewport: window.innerWidth,
+      scrollWidth: document.documentElement.scrollWidth,
+      mainWidth: document.querySelector("main")?.getBoundingClientRect().width ?? -1,
+    }));
+
+    // iOS Safari automatically zooms focused form controls below 16px. The
+    // landscape viewport is wider than MUI's `sm` breakpoint, so this proves
+    // touch-device protection rather than a narrow-screen-only workaround.
+    expect(await input.evaluate((el) => getComputedStyle(el).fontSize)).toBe(
+      "16px",
+    );
+
+    await input.focus();
+    await expect(input).toBeFocused();
+
+    const after = await page.evaluate(() => ({
+      viewport: window.innerWidth,
+      scrollWidth: document.documentElement.scrollWidth,
+      mainWidth: document.querySelector("main")?.getBoundingClientRect().width ?? -1,
+    }));
+
+    expect(after.scrollWidth).toBeLessThanOrEqual(after.viewport + 1);
+    expect(after.viewport).toBe(before.viewport);
+    expect(Math.abs(after.mainWidth - before.mainWidth)).toBeLessThanOrEqual(1);
+  });
 });
