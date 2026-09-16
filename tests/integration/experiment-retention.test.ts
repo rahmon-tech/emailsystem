@@ -257,6 +257,22 @@ test("retention purges whole terminal evidence ledgers and sensitive message con
   assert.equal(retainedExport.integrity.available, false);
   assert(!JSON.stringify(retainedExport).includes("controlled@example.net"));
 
+  const lateEvidence = await db.$transaction((tx) =>
+    appendExperimentEvidence(tx, {
+      userId: user.id,
+      runId: terminalRun.id,
+      kind: "transport.outcome",
+      campaignId: terminalCampaign.id,
+      createdAt: new Date(now.getTime() + 1_000),
+      payload: { proof: "late-after-purge" },
+    }),
+  );
+  assert.equal(lateEvidence, null);
+  assert.equal(
+    await db.experimentEvidence.count({ where: { runId: terminalRun.id } }),
+    0,
+  );
+
   const second = await retainExperimentData(now, {
     evidenceDays: 30,
     messageDays: 7,
