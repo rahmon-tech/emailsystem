@@ -84,7 +84,15 @@ test("Activity shows bounded experiment status and tenant-safe evidence export",
     await page.goto(appPath("/login"));
     await page.getByLabel("Email address").fill(email);
     await page.getByLabel("Password").fill(password);
-    await page.getByRole("button", { name: "Sign in", exact: true }).click();
+    const [loginResponse] = await Promise.all([
+      page.waitForResponse(
+        (response) =>
+          response.url().endsWith(appPath("/api/auth/login")) &&
+          response.request().method() === "POST",
+      ),
+      page.getByRole("button", { name: "Sign in", exact: true }).click(),
+    ]);
+    expect(loginResponse.status()).toBe(200);
     await page.goto(appPath(`/activity?campaignId=${campaign.id}`));
 
     const card = page.getByRole("region", { name: "Authorized experiment" });
