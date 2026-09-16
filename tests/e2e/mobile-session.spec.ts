@@ -15,7 +15,8 @@ async function ensureMobileUser() {
   });
   const user = existing ?? (await createUser(email, password));
   if (!(await db.providerConnection.count({ where: { userId: user.id } }))) {
-    const { id: _id, ...input } = connection("mock");
+    const { id: fixtureId, ...input } = connection("mock");
+    void fixtureId;
     await saveProvider(user.id, { ...input, name: "Mobile layout mock" });
   }
   return user;
@@ -86,7 +87,6 @@ test("iPhone Blast stays centered and session survives hard reload", async ({
 test.describe("Blast touch focus stability", () => {
   test.use({
     viewport: { width: 932, height: 430 },
-    screen: { width: 932, height: 430 },
     hasTouch: true,
     isMobile: true,
     deviceScaleFactor: 3,
