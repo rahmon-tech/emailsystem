@@ -13,6 +13,7 @@
 - Upload sizes, XLSX expanded size/ZIP ratio, entry counts, row counts, attachment count and total bytes are bounded. Imports operate in batches.
 - Webhooks use native signatures or explicit HTTPS credentials depending on provider. Raw payloads, provider keys and provider error bodies are never logged. Activity and audit store safe text and identifiers.
 - CSV exports quote cells and prefix spreadsheet formula markers. Unsubscribe tokens are random and signed; GET only displays confirmation and POST performs suppression.
+- Supply-chain checks preserve the pnpm 24-hour minimum release age and explicit build-script allowlist, use Dependabot for pnpm/GitHub Actions/production-Dockerfile update visibility, and fail Quality on high/critical production dependency advisories. Temporary transitive overrides are scoped to the affected dependency edges and should be removed once upstream releases make them unnecessary.
 
 ## Sending safety
 
@@ -38,7 +39,7 @@ The Compose bridge allows outbound internet access for providers. PostgreSQL and
 
 ## Review evidence
 
-Automated checks include encrypted credential tampering/AAD binding, password hashing, unsubscribe forgery, formula injection, HTML isolation, signature/replay checks, bounded retry rules, tenant boundaries and concurrent lifecycle tests. Review GitHub Actions and CURRENT_WORK for the actual executed gates. Automated mocks do not establish live-provider permissions or deployment security for an unseen VPS.
+Automated checks include the production high/critical dependency audit, encrypted credential tampering/AAD binding, password hashing, unsubscribe forgery, formula injection, HTML isolation, signature/replay checks, bounded retry rules, tenant boundaries and concurrent lifecycle tests. Dependency update automation does not replace review: proposed upgrades must still pass the full Quality pipeline. Review GitHub Actions and CURRENT_WORK for the actual executed gates. Automated mocks do not establish live-provider permissions or deployment security for an unseen VPS.
 
 # Tracking privacy and HTML acceptance
 
