@@ -15,6 +15,7 @@ import { reconcileEvents, ingestEvent } from "@emailsystem/core/events";
 import { unclaimedStates } from "@emailsystem/core/domain";
 import { log } from "@emailsystem/core/errors";
 import { retainTracking } from "@emailsystem/core/tracking";
+import { retainExperimentData } from "@emailsystem/core/experiment-retention";
 import { refreshProviderAdaptation } from "@emailsystem/core/provider-adaptation";
 const cfg = config();
 const connection = new Redis(cfg.REDIS_URL, { maxRetriesPerRequest: null });
@@ -137,6 +138,10 @@ async function pump() {
       }
       if (iteration++ % 1800 === 0) {
         await retainTracking();
+        await retainExperimentData(new Date(), {
+          evidenceDays: cfg.EXPERIMENT_EVIDENCE_RETENTION_DAYS,
+          messageDays: cfg.EXPERIMENT_MESSAGE_RETENTION_DAYS,
+        });
         const date = new Date(
           Date.now() - cfg.ACTIVITY_RETENTION_DAYS * 86400000,
         );

@@ -89,6 +89,15 @@ export async function appendExperimentEvidence(
   });
   if (!run)
     throw new AppError(404, "EXPERIMENT_RUN", "Experiment run not found.");
+  const purged = await tx.auditEvent.findFirst({
+    where: {
+      userId: input.userId,
+      action: "experiment.evidence.purged",
+      resourceId: input.runId,
+    },
+    select: { id: true },
+  });
+  if (purged) return null;
   const last = await tx.experimentEvidence.findFirst({
     where: { userId: input.userId, runId: input.runId },
     orderBy: { sequence: "desc" },
@@ -218,24 +227,47 @@ export async function exportExperimentEvidence(userId: string, runId: string) {
     },
   });
   if (!run) throw new AppError(404, "NOT_FOUND", "Experiment run not found.");
-  const entries = await db.experimentEvidence.findMany({
-    where: { userId, runId },
-    orderBy: { sequence: "asc" },
-    select: {
-      id: true,
-      runId: true,
-      sequence: true,
-      kind: true,
-      attemptId: true,
-      providerId: true,
-      campaignId: true,
-      payload: true,
-      previousHash: true,
-      hash: true,
-      createdAt: true,
-    },
+  const { entries, evidencePurge } = await db.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM "ExperimentRun" WHERE id=${runId} AND "userId"=${userId} FOR SHARE`;
+    const evidencePurge = await tx.auditEvent.findFirst({
+      where: {
+        userId,
+        action: "experiment.evidence.purged",
+        resourceId: runId,
+      },
+      orderBy: { createdAt: "desc" },
+      select: { createdAt: true },
+    });
+    const entries = evidencePurge
+      ? []
+      : await tx.experimentEvidence.findMany({
+          where: { userId, runId },
+          orderBy: { sequence: "asc" },
+          select: {
+            id: true,
+            runId: true,
+            sequence: true,
+            kind: true,
+            attemptId: true,
+            providerId: true,
+            campaignId: true,
+            payload: true,
+            previousHash: true,
+            hash: true,
+            createdAt: true,
+          },
+        });
+    return { entries, evidencePurge };
   });
-  const integrity = verifyExperimentEvidenceEntries(entries);
+  const integrity = evidencePurge
+    ? {
+        available: false,
+        valid: false,
+        count: 0,
+        verifiedThrough: 0,
+        headHash: null,
+      }
+    : { available: true, ...verifyExperimentEvidenceEntries(entries) };
   return {
     format: HASH_VERSION,
     exportedAt: new Date(),
@@ -269,6 +301,12 @@ export async function exportExperimentEvidence(userId: string, runId: string) {
         controlledRecipients: run.profile.recipients.map(({ email }) =>
           experimentRecipientHash(run.id, email),
         ),
+      },
+    },
+    retention: {
+      evidence: {
+        status: evidencePurge ? ("purged" as const) : ("retained" as const),
+        purgedAt: evidencePurge?.createdAt ?? null,
       },
     },
     integrity: {

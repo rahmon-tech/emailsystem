@@ -17,6 +17,18 @@ const schema = z.object({
   ACTIVITY_RETENTION_DAYS: z.coerce.number().int().min(7).default(90),
   ATTEMPT_RETENTION_DAYS: z.coerce.number().int().min(30).default(365),
   WEBHOOK_RETENTION_DAYS: z.coerce.number().int().min(7).default(30),
+  EXPERIMENT_EVIDENCE_RETENTION_DAYS: z.coerce
+    .number()
+    .int()
+    .min(30)
+    .max(3650)
+    .default(365),
+  EXPERIMENT_MESSAGE_RETENTION_DAYS: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(365)
+    .default(30),
   CLICK_ANALYTICS_RETENTION_DAYS: z.coerce
     .number()
     .int()
