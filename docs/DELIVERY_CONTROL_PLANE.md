@@ -166,7 +166,18 @@ PR #49 merged at `60c6177709b7142ff862e7adc53371d5a493ff15`. Exact proof head `6
 - After the provider adaptive Redis key and derived cooldown are deliberately removed to model ephemeral/derived state loss, `refreshProviderAdaptation()` rebuilds a slowdown greater than 1 and a future cooldown from the durable recent attempt history.
 - Existing provider pacing telemetry reports the reconstructed slowdown, configured versus lower effective rate, and active cooldown pressure without exposing credentials or recipient data.
 - Removing the adaptive Redis key again and refreshing reconstructs the slowdown again, proving the pressure state can be derived after restart instead of depending on stale cache state.
-- This proof closes the restart-durability gap only; healthy-history gradual recovery still requires its own focused end-to-end proof before the complete pressure → slowdown → recovery loop is claimed.
+- This proof closes the restart-durability gap; the healthy-history gradual-recovery boundary is published separately in PR #50.
+
+### Published provider adaptation gradual-recovery proof — PR #50
+
+PR #50 merged at `2e2f852da2f29afe68a474d95e3a7205b750aba9`. Exact proof head `4444c5523b638078968916add9ffff3882ad6736` passed Quality #231 and merged-main Quality #232 passed fully.
+
+- The milestone adds focused integration proof only; it does not modify production pacing, dispatcher, engine, provider adapters, schema/migrations, renderer, MIME path, or worker.
+- One real temporary provider rejection establishes durable transient pressure and an adaptive slowdown greater than 1.
+- Newer healthy durable attempts conservatively dilute that pressure so the derived slowdown decreases while remaining above 1 during partial recovery.
+- Once twenty newer healthy attempts displace the transient sample from the bounded recent-attempt window, `refreshProviderAdaptation()` removes the adaptive slowdown key.
+- Existing provider pacing telemetry moves from `slowed` pressure and a reduced effective per-minute rate back to `normal`, with effective throughput equal to—but never above—the configured per-minute ceiling.
+- Together with PR #49, this closes the focused pressure → slowdown → restart reconstruction → gradual recovery proof loop for the existing adaptation owner.
 
 ### Stop conditions and kill switch
 
@@ -234,6 +245,7 @@ Image-first is a supported content format, not an anti-filter bypass. Verified `
 - provider-independent sender-domain smooth pacing plus explicit account/domain/campaign ceilings;
 - domain soft-start/warm-up profiles that cannot exceed configured ceilings;
 - provider cooldown/retry scheduling from temporary/rate-limit outcomes;
+- provider adaptive slowdown, configured-versus-effective pressure telemetry, restart reconstruction from durable attempt history, and gradual healthy-history recovery back to normal without exceeding configured ceilings;
 - truthful provider-acceptance versus delivery presentation;
 - observed campaign pacing/ETA telemetry based on real transport starts;
 - safety budgets, suppression, sender authorization, complaint/hard-bounce brakes, and fail-closed provider policy state;
@@ -250,20 +262,19 @@ Image-first is a supported content format, not an anti-filter bypass. Verified `
 - published HTML content-evidence binding at `df1669e21b8af95ed0afe8c8894d61d04a9ce5d1`, exact-head Quality #215 green and merged-main Quality #218 green;
 - published run-start approved-envelope reproducibility evidence at `7930c6b07302af2b955784d45a40ed32b4e18321`, exact-head Quality #221 green and merged-main Quality #222 green;
 - published temporary-failover-versus-policy-stop proof at `e486779a1de6ca3ad24cf59980b2f5c39242fb42`, exact-head Quality #224 green and merged-main Quality #225 green;
-- published provider adaptation restart-durability proof at `60c6177709b7142ff862e7adc53371d5a493ff15`, exact-head Quality #228 green and merged-main Quality #229 green.
+- published provider adaptation restart-durability proof at `60c6177709b7142ff862e7adc53371d5a493ff15`, exact-head Quality #228 green and merged-main Quality #229 green;
+- published provider adaptation gradual-recovery proof at `2e2f852da2f29afe68a474d95e3a7205b750aba9`, exact-head Quality #231 green and merged-main Quality #232 green.
 
 ### Current partially implemented / requires proof
 
 - `text`, `hosted-image`, `attachment-only`, and `image-dominant` remain metadata-only and require separate owner-level reconciliation before any implementation;
-- provider adaptive slowdown consumption, configured-versus-effective pressure telemetry, temporary/rate-limit cooldown enforcement, and restart reconstruction from durable attempt history are now proven; the remaining provider gap is focused end-to-end proof that healthy history conservatively reduces/clears adaptive slowdown and returns pressure to normal without exceeding configured ceilings;
 - additional effective experiment values may be recorded only where runtime proof exists; the published run-start snapshot proves the approved envelope rather than metadata-only application;
 - privacy/retention controls and final experiment Activity/UX/export polish remain incomplete.
 
 ### Remaining major milestones
 
 - bind no further content mode unless repository truth proves a deterministic existing owner without redesign;
-- finish provider gradual-recovery end-to-end proof next;
-- add privacy/retention controls for experiment evidence/message snapshots;
+- add privacy/retention controls for experiment evidence/message snapshots next;
 - finish experiment Activity/UX for configuration, live evidence, stop/review, and export;
 - maintain CI/security/tenant/race coverage for every new mutation path;
 - complete final production hardening and VPS reconciliation only after repository Quality is green.
