@@ -78,6 +78,18 @@ iframe {
 ::selection {
   background: var(--selection);
 }
+
+/* iOS Safari zooms focused form controls below 16px. A phone in landscape can
+   be wider than the normal mobile breakpoint, so key this safeguard to a true
+   touch-style pointer as well as keeping the existing narrow-screen theme rule.
+   Do not disable browser/user zoom: preserve accessibility and prevent the
+   focus-triggered zoom at the control itself. */
+@media (hover: none) and (pointer: coarse) {
+  .MuiInputBase-root .MuiInputBase-input {
+    font-size: 16px;
+  }
+}
+
 @media (max-width: 599px) {
   .tiptap {
     padding: 16px;
