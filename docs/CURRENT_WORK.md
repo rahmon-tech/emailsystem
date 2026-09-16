@@ -137,7 +137,7 @@ With PR #50 published, continue from repository truth in dependency order:
 - do not fabricate semantics for `text`, `hosted-image`, `attachment-only`, or `image-dominant`; bind another content mode only if a deterministic existing owner is proven without redesign;
 - additional experiment values may be reported as effective only when runtime proof exists; the run-start snapshot records the approved envelope, not fabricated application of metadata-only values;
 - add privacy/retention controls for experiment evidence/message snapshots next;
-- finish experiment Activity/UX/export polish;
+- finish experiment Activity/UX/export polish; during that pass, reproduce and fix the Blast-page text-field focus regression where tapping/focusing the field causes a visible wobble/zoom-out, preserving normal mobile accessibility and page layout;
 - run final security, tenant-isolation, concurrency, performance, provider-resilience, deployment-readiness, and VPS reconciliation before claiming final production installation.
 
 ## Product boundaries
