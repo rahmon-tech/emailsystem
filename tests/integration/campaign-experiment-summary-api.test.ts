@@ -11,7 +11,16 @@ import { GET } from "../../apps/web/app/api/campaigns/[id]/experiment/route.ts";
 const users: string[] = [];
 
 after(async () => {
-  await db.user.deleteMany({ where: { id: { in: users } } });
+  for (const userId of users) {
+    const keys = await redis.keys(`dispatch:${userId}:*`);
+    if (keys.length) await redis.del(...keys);
+  }
+  if (users.length) {
+    await db.campaign.deleteMany({ where: { userId: { in: users } } });
+    await db.experimentRun.deleteMany({ where: { userId: { in: users } } });
+    await db.experimentProfile.deleteMany({ where: { userId: { in: users } } });
+    await db.user.deleteMany({ where: { id: { in: users } } });
+  }
   await db.$disconnect();
   await redis.quit();
 });
