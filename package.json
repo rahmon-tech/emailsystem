@@ -18,6 +18,8 @@
     "test:e2e": "playwright test",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate deploy",
+    "bootstrap:native": "node --import tsx scripts/native-bootstrap.ts",
+    "bootstrap:native:check": "node --import tsx scripts/native-bootstrap.ts --check-only",
     "user:create": "node --import tsx scripts/create-user.ts",
     "providers:bootstrap": "node --import tsx scripts/providers-bootstrap.ts",
     "secrets:scan": "node --import tsx scripts/secret-scan.ts",
