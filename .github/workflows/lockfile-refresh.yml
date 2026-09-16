@@ -1,0 +1,22 @@
+name: Refresh security lockfile
+on:
+  push:
+    branches: [chore/supply-chain-ci-hygiene]
+permissions:
+  contents: read
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.19.0"
+          cache: pnpm
+      - run: pnpm install --lockfile-only
+      - uses: actions/upload-artifact@v4
+        with:
+          name: security-lockfile
+          path: pnpm-lock.yaml
+          retention-days: 1
