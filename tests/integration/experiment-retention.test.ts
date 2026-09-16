@@ -40,7 +40,7 @@ test("retention purges whole terminal evidence ledgers and sensitive message con
       maxAttempts: 20,
       maxDurationSeconds: 3600,
       recipients: {
-        create: [{ userId: user.id, email: "controlled@example.net" }],
+        create: [{ email: "controlled@example.net" }],
       },
     },
   });
