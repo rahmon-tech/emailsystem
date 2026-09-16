@@ -24,7 +24,7 @@ Complaint/hard-bounce thresholds can pause an account or campaign after a meanin
 
 ## Requirements
 
-Node 24.19+, pnpm 11.19, PostgreSQL 17, Redis 7.4. Docker Engine with the Compose plugin is recommended for a VPS. TypeScript 6 and ESLint 9 are pinned for compatibility with the current Next.js lint integration; the application uses Next.js 16, React 19, MUI 9 and Prisma 7.
+Node 24.19+, pnpm 11.19, PostgreSQL 17, Redis 7.4. Docker Engine with the Compose plugin is recommended for a dedicated VPS, but the repository also supports a native/systemd runtime. TypeScript 6 and ESLint 9 are pinned for compatibility with the current Next.js lint integration; the application uses Next.js 16, React 19, MUI 9 and Prisma 7.
 
 ## Local development
 
@@ -38,7 +38,8 @@ cp .env.example .env
 openssl rand -hex 32
 openssl rand -hex 32
 docker compose -f compose.dev.yaml up -d
-pnpm db:generate
+pnpm bootstrap:native
+# First use of a new empty database only:
 pnpm db:migrate
 pnpm user:create
 pnpm dev
@@ -46,11 +47,15 @@ pnpm dev
 pnpm worker
 ```
 
+`pnpm bootstrap:native` performs read-only PostgreSQL/Redis checks and validates the runtime environment before generating Prisma. It never applies SQL migrations. If PostgreSQL and Redis are already installed natively, configure their host-reachable URLs in `.env` and skip the development Compose command.
+
 Set `ALLOW_MOCK_PROVIDER=true` to expose the explicitly labeled development adapter. It is absent from a normal installation. It sends no real email. A fresh account contains no providers, recipients or campaigns.
 
 ## VPS installation
 
-See [deployment instructions](docs/DEPLOYMENT.md), including first-user creation, secure provider bootstrap, upgrades, health checks and backups. Provider bootstrap values live only in a mode-0600 git-ignored local file and are encrypted into PostgreSQL; they are never browser or repository content.
+See [deployment instructions](docs/DEPLOYMENT.md) for Docker Compose and shared-host guidance. Existing hosts that run the web/worker processes directly under systemd should use the [native runtime guide](docs/NATIVE_RUNTIME.md). Provider bootstrap values live only in a mode-0600 git-ignored local file and are encrypted into PostgreSQL; they are never browser or repository content.
+
+For native production builds, `pnpm build:native` packages the current `.next/static` and public assets beside the generated Next.js standalone server so the browser and server always come from the same build.
 
 ## Verification
 
@@ -78,5 +83,6 @@ Implementation and verification status are recorded in [CURRENT_WORK](docs/CURRE
 - [Provider configuration and webhook setup](docs/PROVIDERS.md)
 - [Security and operational limits](docs/SECURITY.md)
 - [Deployment, migration, backup and restore](docs/DEPLOYMENT.md)
+- [Native / systemd runtime](docs/NATIVE_RUNTIME.md)
 - [Original engineering directive](docs/MASTER_DIRECTIVE.md)
 - [Provider catalog addendum](docs/PROVIDER_CATALOG_ADDENDUM.md)
