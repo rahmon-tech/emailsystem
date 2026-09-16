@@ -245,11 +245,17 @@ test("retention purges whole terminal evidence ledgers and sensitive message con
   );
 
   const exported = await exportExperimentEvidence(user.id, terminalRun.id);
-  assert.equal(exported.entries.length, 0);
-  assert.equal(exported.retention.evidence.status, "purged");
-  assert(exported.retention.evidence.purgedAt instanceof Date);
-  assert.equal(exported.integrity.available, false);
-  assert(!JSON.stringify(exported).includes("controlled@example.net"));
+  const retainedExport = exported as typeof exported & {
+    retention: {
+      evidence: { status: "retained" | "purged"; purgedAt: Date | null };
+    };
+    integrity: typeof exported.integrity & { available: boolean };
+  };
+  assert.equal(retainedExport.entries.length, 0);
+  assert.equal(retainedExport.retention.evidence.status, "purged");
+  assert(retainedExport.retention.evidence.purgedAt instanceof Date);
+  assert.equal(retainedExport.integrity.available, false);
+  assert(!JSON.stringify(retainedExport).includes("controlled@example.net"));
 
   const second = await retainExperimentData(now, {
     evidenceDays: 30,
