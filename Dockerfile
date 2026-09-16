@@ -1,4 +1,4 @@
-FROM node:24.19.0-bookworm-slim AS base
+FROM node:26.8-bookworm-slim AS base
 RUN apt-get update && apt-get install -y --no-install-recommends openssl ca-certificates && rm -rf /var/lib/apt/lists/*
 RUN corepack enable && corepack prepare pnpm@11.19.0 --activate
 WORKDIR /app
@@ -27,7 +27,7 @@ COPY apps/worker/package.json apps/worker/package.json
 RUN pnpm install --frozen-lockfile --prod \
     && pnpm add --prod --save-prod --ignore-workspace-root-check tsx@4.23.13
 
-FROM node:24.19.0-bookworm-slim AS runtime
+FROM node:26.8-bookworm-slim AS runtime
 RUN apt-get update && apt-get install -y --no-install-recommends openssl ca-certificates && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 HOSTNAME=0.0.0.0 PORT=3000
