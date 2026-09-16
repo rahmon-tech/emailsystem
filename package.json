@@ -11,6 +11,7 @@
     "dev": "pnpm --filter @emailsystem/web dev",
     "worker": "node --import tsx apps/worker/main.ts",
     "build": "pnpm db:generate && pnpm --filter @emailsystem/web build",
+    "build:native": "pnpm build && node --import tsx scripts/prepare-standalone.ts",
     "typecheck": "tsc --noEmit",
     "lint": "eslint apps packages tests scripts",
     "test": "node --import tsx --test tests/*.test.ts",
