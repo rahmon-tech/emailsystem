@@ -5,8 +5,8 @@ settings:
   excludeLinksFromLockfile: false
 
 overrides:
-  deepmerge-ts: 8.0.1
-  mysql2: 3.22.0
+  '@prisma/config>deepmerge-ts': 8.0.1
+  prisma>mysql2: 3.22.0
 
 importers:
 
