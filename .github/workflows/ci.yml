@@ -10,6 +10,7 @@ concurrency:
   cancel-in-progress: true
 jobs:
   verify:
+    name: Full Quality verification
     runs-on: ubuntu-latest
     timeout-minutes: 30
     services:
@@ -38,11 +39,14 @@ jobs:
       NEXT_TELEMETRY_DISABLED: "1"
       NODE_ENV: test
     steps:
-      - uses: actions/checkout@v4
+      - name: Check out repository
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
         with:
           node-version: "24.19.0"
           cache: pnpm
@@ -54,25 +58,37 @@ jobs:
           echo "::add-mask::$encryption_key"
           echo "SESSION_SECRET=$session_key" >> "$GITHUB_ENV"
           echo "CREDENTIAL_ENCRYPTION_KEY=$encryption_key" >> "$GITHUB_ENV"
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm db:generate
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Audit production dependencies (high and critical)
+        run: pnpm audit:prod
+      - name: Generate Prisma client
+        run: pnpm db:generate
       - name: Apply migrations to fresh PostgreSQL
         run: pnpm db:migrate
       - name: Verify migration matches schema
         run: pnpm exec prisma migrate diff --from-config-datasource --to-schema packages/db/schema.prisma --exit-code
       - name: Rehearse upgrade from verified provider milestone
         run: node --import tsx scripts/verify-safety-upgrade.ts
-      - run: pnpm lint
-      - run: pnpm secrets:scan
-      - run: pnpm typecheck
-      - run: pnpm test
-      - run: pnpm test:integration
-      - run: pnpm build
+      - name: Lint source
+        run: pnpm lint
+      - name: Scan repository for secrets
+        run: pnpm secrets:scan
+      - name: Typecheck TypeScript
+        run: pnpm typecheck
+      - name: Run unit tests
+        run: pnpm test
+      - name: Run integration tests
+        run: pnpm test:integration
+      - name: Build production web application
+        run: pnpm build
         id: web_build
         env:
           NODE_ENV: production
-      - run: pnpm exec playwright install --with-deps chromium
-      - run: pnpm test:e2e
+      - name: Install Playwright Chromium
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Run browser E2E tests
+        run: pnpm test:e2e
         env:
           NODE_ENV: production
       - name: Emit screenshots for visual review
@@ -111,7 +127,8 @@ jobs:
         run: |
           mkdir -p test-results/server-logs
           cp /tmp/emailsystem-e2e-*.log test-results/server-logs/ 2>/dev/null || true
-      - uses: actions/upload-artifact@v4
+      - name: Upload browser verification artifact
+        uses: actions/upload-artifact@v4
         if: always()
         with:
           name: browser-verification

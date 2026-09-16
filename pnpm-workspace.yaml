@@ -2,6 +2,12 @@ packages:
   - apps/*
   - packages/*
 minimumReleaseAge: 1440
+# Prisma 7.10.0 still resolves two high-severity vulnerable transitive versions;
+# keep these edges pinned to patched releases until upstream no longer needs overrides.
+overrides:
+  '@prisma/config>deepmerge-ts': 8.0.2
+  'html-to-text>deepmerge-ts': 8.0.2
+  'prisma>mysql2': 3.22.0
 allowBuilds:
   '@prisma/engines': true
   prisma: true
