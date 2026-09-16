@@ -111,10 +111,9 @@ test("Activity shows bounded experiment status and tenant-safe evidence export",
       animations: "disabled",
     });
   } finally {
-    await db.campaign.updateMany({
-      where: { userId: user.id },
-      data: { experimentRunId: null },
-    });
+    await db.campaign.deleteMany({ where: { userId: user.id } });
+    await db.experimentRun.deleteMany({ where: { userId: user.id } });
+    await db.experimentProfile.deleteMany({ where: { userId: user.id } });
     await db.user.deleteMany({ where: { id: user.id } });
   }
 });
