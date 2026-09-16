@@ -2,7 +2,7 @@
 
 ## Verified baseline
 
-Remote `main` is published at PR #51 merge `86fd1d44d68426a145c472418b9ebcb0ec635ede`, whose merged-main Quality #245 passed fully. The exact verified PR head `8840cbfb808e009cd9e99d68567be2ecb0597a6a` passed exact-head Quality #244 before the guarded merge. The prior documentation checkpoint `4dd4bd9abc7cec4fc5b56728e8fa9e494afbb682` / Quality #233 remains the verified parent baseline from which PR #51 was developed.
+Remote `main` is published at PR #52 merge `38f328dc6d56d710c6d3cabe952daf72912ea69f`, whose merged-main Quality #263 passed fully. The exact verified PR head `ebebc7a19c4b30d961da2a019dd0380dd1711298` passed exact-head Quality #262 before the guarded merge. The prior documentation checkpoint `1eff4d2551470bb6a4c0fffd1857ee11cf8f1acb` passed Quality #246 and remains the verified retention checkpoint from which PR #52 was developed.
 
 The repository remains an existing TypeScript/pnpm application with Next.js + MUI web UI, PostgreSQL/Prisma persistence, Redis-backed safety/rate coordination, a worker process, provider adapters, an email renderer, and Docker deployment assets. Preserve this architecture; do not introduce a second campaign, delivery engine, experiment sender, provider-routing path, scheduler, tracking subsystem, test-send path, renderer, or MIME stack.
 
@@ -17,6 +17,7 @@ The verified system on `main` includes:
 - authorized experiment profiles/runs with authorization metadata, provider/sender scopes, controlled-recipient allowlists, hard recipient/attempt/duration limits, bounded windows, account kill switch, transport reservation checks, tamper-evident evidence/export, and an atomic run-start approved-envelope snapshot using run-scoped recipient hashes;
 - verified experiment run-wide concurrency, smooth-pacing, bounded-burst, CID-inline content-mode, HTML-content evidence bindings, and explicit temporary-failover-versus-policy-stop behavior;
 - bounded experiment privacy retention: whole terminal evidence ledgers expire without breaking chains, sensitive terminal campaign message snapshots are scrubbed separately, active runs remain protected, purge markers are audited/idempotent, post-purge evidence cannot regrow as a partial chain, and exports report evidence retention truthfully;
+- supply-chain/CI hygiene with automated dependency-update coverage, high/critical production dependency auditing, readable Quality gates, preserved minimum-release-age/build-script controls, and patched Prisma transitive security resolutions;
 - standards-compliant explicit experiment transfer-encoding binding for SMTP/SES raw MIME with UTF-8 charset and fail-closed incompatible provider scopes;
 - inline-vs-attachment provider message semantics and Content-ID support across supported SMTP/API transports, with fail-closed behavior for unsupported inline transports;
 - the authenticated `/blast/image` Image-first composer using the existing campaign/delivery architecture, including primary-image lifecycle, ordinary attachments, test-message, CC/BCC, scheduling, tags/tracking, inline-capability visibility, alt-text replacement fidelity, and the optional primary-image HTTP(S) destination link.
@@ -147,15 +148,31 @@ Published contract:
 - bounded selection avoids repeatedly rediscovering already-scrubbed campaigns so old eligible snapshots cannot starve later cleanup batches;
 - no schema/migration, provider adapter, renderer/MIME path, delivery routing, pacing, recipient-scope, or transport behavior changed.
 
+### Supply-chain and CI hygiene — PR #52
+
+PR #52 is published at `38f328dc6d56d710c6d3cabe952daf72912ea69f`. Its exact verified head `ebebc7a19c4b30d961da2a019dd0380dd1711298` passed full Quality #262, and merged-main Quality #263 passed fully.
+
+Published contract:
+
+- Dependabot covers pnpm manifests, GitHub Actions, and the production Dockerfile without changing application behavior;
+- Quality now fails on high/critical production dependency advisories through the reusable production audit command instead of merely reporting them;
+- the new audit exposed real Prisma transitive advisories and the repository resolves Prisma's `deepmerge-ts` edge to 8.0.2 and `mysql2` edge to 3.22.0; the existing safe `html-to-text` 8.0.2 resolution is preserved;
+- existing 24-hour minimum package release age and explicit pnpm build-script allowlist remain authoritative;
+- Quality steps now have explicit readable names while migrations, drift/upgrade rehearsal, lint, secret scanning, typecheck, unit/integration, build, E2E, screenshots, and production-container validation remain intact;
+- no schema/migration, provider/delivery path, campaign behavior, recipient scope, renderer/MIME behavior, or product UI changed.
+
 ## Delivery-control-plane follow-on
 
-With PR #51 published, continue from repository truth in dependency order:
+With PR #52 published, continue from repository truth in dependency order:
 
-- do not fabricate semantics for `text`, `hosted-image`, `attachment-only`, or `image-dominant`; bind another content mode only if a deterministic existing owner is proven without redesign;
-- additional experiment values may be reported as effective only when runtime proof exists; the run-start snapshot records the approved envelope, not fabricated application of metadata-only values;
-- improve repository supply-chain/CI hygiene next: dependency-update automation, dependency-audit gating, and clearer Quality step naming without weakening existing gates;
-- finish experiment Activity/UX/export polish; during that pass, reproduce and fix the Blast-page text-field focus regression where tapping/focusing the field causes a visible wobble/zoom-out, preserving normal mobile accessibility and page layout;
-- run final security, tenant-isolation, concurrency, performance, provider-resilience, deployment-readiness, and VPS reconciliation before claiming final production installation.
+- finish experiment Activity/UX/export polish next; begin by reproducing and fixing the Blast-page text-field focus regression where tapping/focusing the field causes a visible wobble/zoom-out, preserving normal mobile accessibility and page layout;
+- progressively decompose oversized UI modules only where that improves ownership/testability during the UX pass; do not split files merely to satisfy a line-count score;
+- improve production observability after the UX slice with structured levels, safe correlation identifiers, error serialization, and redaction while preserving existing tenant/privacy boundaries;
+- improve fresh-clone/bootstrap ergonomics without removing the existing non-Docker application workflow;
+- refactor core/provider oversized modules only behind characterization tests and stable behavior boundaries;
+- establish useful coverage visibility for critical business logic rather than arbitrary global percentage targets;
+- run final security, tenant-isolation, concurrency, performance, provider-resilience, deployment-readiness, and VPS reconciliation before claiming final production installation;
+- do not fabricate semantics for `text`, `hosted-image`, `attachment-only`, or `image-dominant`; bind another content mode only if a deterministic existing owner is proven without redesign, and report experiment values as effective only when runtime proof exists.
 
 ## Product boundaries
 
