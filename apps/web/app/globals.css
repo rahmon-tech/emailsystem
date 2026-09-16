@@ -85,8 +85,8 @@ iframe {
    Do not disable browser/user zoom: preserve accessibility and prevent the
    focus-triggered zoom at the control itself. */
 @media (hover: none) and (pointer: coarse) {
-  .MuiInputBase-input {
-    font-size: 16px !important;
+  .MuiInputBase-root .MuiInputBase-input {
+    font-size: 16px;
   }
 }
 
