@@ -2,7 +2,7 @@
 
 ## Verified baseline
 
-Remote `main` is published at PR #50 merge `2e2f852da2f29afe68a474d95e3a7205b750aba9`, whose merged-main Quality #232 passed fully. The exact proof head `4444c5523b638078968916add9ffff3882ad6736` passed exact-head Quality #231 before the guarded merge. The prior documentation checkpoint `f6ce108c27430429befdca5db5db001ede539173` / Quality #230 remains the verified parent baseline from which PR #50 was developed.
+Remote `main` is published at PR #51 merge `86fd1d44d68426a145c472418b9ebcb0ec635ede`, whose merged-main Quality #245 passed fully. The exact verified PR head `8840cbfb808e009cd9e99d68567be2ecb0597a6a` passed exact-head Quality #244 before the guarded merge. The prior documentation checkpoint `4dd4bd9abc7cec4fc5b56728e8fa9e494afbb682` / Quality #233 remains the verified parent baseline from which PR #51 was developed.
 
 The repository remains an existing TypeScript/pnpm application with Next.js + MUI web UI, PostgreSQL/Prisma persistence, Redis-backed safety/rate coordination, a worker process, provider adapters, an email renderer, and Docker deployment assets. Preserve this architecture; do not introduce a second campaign, delivery engine, experiment sender, provider-routing path, scheduler, tracking subsystem, test-send path, renderer, or MIME stack.
 
@@ -16,6 +16,7 @@ The verified system on `main` includes:
 - provider adaptive slowdown consumption, configured-versus-effective pacing telemetry, cooldown/pressure presentation, restart reconstruction from durable delivery-attempt history, and verified gradual healthy-history recovery back toward normal without exceeding configured ceilings;
 - authorized experiment profiles/runs with authorization metadata, provider/sender scopes, controlled-recipient allowlists, hard recipient/attempt/duration limits, bounded windows, account kill switch, transport reservation checks, tamper-evident evidence/export, and an atomic run-start approved-envelope snapshot using run-scoped recipient hashes;
 - verified experiment run-wide concurrency, smooth-pacing, bounded-burst, CID-inline content-mode, HTML-content evidence bindings, and explicit temporary-failover-versus-policy-stop behavior;
+- bounded experiment privacy retention: whole terminal evidence ledgers expire without breaking chains, sensitive terminal campaign message snapshots are scrubbed separately, active runs remain protected, purge markers are audited/idempotent, post-purge evidence cannot regrow as a partial chain, and exports report evidence retention truthfully;
 - standards-compliant explicit experiment transfer-encoding binding for SMTP/SES raw MIME with UTF-8 charset and fail-closed incompatible provider scopes;
 - inline-vs-attachment provider message semantics and Content-ID support across supported SMTP/API transports, with fail-closed behavior for unsupported inline transports;
 - the authenticated `/blast/image` Image-first composer using the existing campaign/delivery architecture, including primary-image lifecycle, ordinary attachments, test-message, CC/BCC, scheduling, tags/tracking, inline-capability visibility, alt-text replacement fidelity, and the optional primary-image HTTP(S) destination link.
@@ -130,13 +131,29 @@ Proof contract:
 - provider pacing telemetry moves from `slowed` pressure and a reduced effective per-minute rate back to `normal`, with the effective rate equal to—but never above—the configured ceiling;
 - the milestone adds focused integration proof only: no production source, schema/migration, provider adapter, renderer, MIME path, worker, or routing implementation changed.
 
+### Experiment evidence and message retention — PR #51
+
+PR #51 is published at `86fd1d44d68426a145c472418b9ebcb0ec635ede`. Its exact verified head `8840cbfb808e009cd9e99d68567be2ecb0597a6a` passed full Quality #244, and merged-main Quality #245 passed fully.
+
+Published contract:
+
+- terminal experiment evidence is retained as an all-or-nothing ledger: once the configured evidence window expires, the whole run ledger is purged instead of deleting individual entries and invalidating the remaining chain;
+- terminal campaign message snapshots have a separate shorter retention window and are scrubbed of subject/body, copies, headers, attachments, tags, reply address, display name, tracking URL, and snapshot hash while retaining only minimal sender/tracking-state metadata plus an explicit purge marker;
+- `RUNNING` and other non-terminal runs remain untouched even when old;
+- evidence and message purge operations use database locks, re-check eligibility inside the transaction, create auditable purge markers, and are idempotent;
+- after an evidence purge marker exists, late evidence append attempts are ignored so a new partial `GENESIS` chain cannot silently regrow;
+- evidence export serializes against the run lock and truthfully reports retained versus purged evidence; integrity is marked unavailable rather than claiming an empty purged ledger is valid;
+- the worker reuses its existing periodic maintenance cycle with configurable `EXPERIMENT_EVIDENCE_RETENTION_DAYS` and `EXPERIMENT_MESSAGE_RETENTION_DAYS` defaults of 365 and 30 days;
+- bounded selection avoids repeatedly rediscovering already-scrubbed campaigns so old eligible snapshots cannot starve later cleanup batches;
+- no schema/migration, provider adapter, renderer/MIME path, delivery routing, pacing, recipient-scope, or transport behavior changed.
+
 ## Delivery-control-plane follow-on
 
-With PR #50 published, continue from repository truth in dependency order:
+With PR #51 published, continue from repository truth in dependency order:
 
 - do not fabricate semantics for `text`, `hosted-image`, `attachment-only`, or `image-dominant`; bind another content mode only if a deterministic existing owner is proven without redesign;
 - additional experiment values may be reported as effective only when runtime proof exists; the run-start snapshot records the approved envelope, not fabricated application of metadata-only values;
-- add privacy/retention controls for experiment evidence/message snapshots next;
+- improve repository supply-chain/CI hygiene next: dependency-update automation, dependency-audit gating, and clearer Quality step naming without weakening existing gates;
 - finish experiment Activity/UX/export polish; during that pass, reproduce and fix the Blast-page text-field focus regression where tapping/focusing the field causes a visible wobble/zoom-out, preserving normal mobile accessibility and page layout;
 - run final security, tenant-isolation, concurrency, performance, provider-resilience, deployment-readiness, and VPS reconciliation before claiming final production installation.
 

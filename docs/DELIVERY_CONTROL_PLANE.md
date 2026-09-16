@@ -179,6 +179,20 @@ PR #50 merged at `2e2f852da2f29afe68a474d95e3a7205b750aba9`. Exact proof head `4
 - Existing provider pacing telemetry moves from `slowed` pressure and a reduced effective per-minute rate back to `normal`, with effective throughput equal to—but never above—the configured per-minute ceiling.
 - Together with PR #49, this closes the focused pressure → slowdown → restart reconstruction → gradual recovery proof loop for the existing adaptation owner.
 
+### Published experiment retention contract — PR #51
+
+PR #51 merged at `86fd1d44d68426a145c472418b9ebcb0ec635ede`. Exact verified head `8840cbfb808e009cd9e99d68567be2ecb0597a6a` passed Quality #244 and merged-main Quality #245 passed fully.
+
+- Terminal experiment evidence uses whole-ledger retention. After the configured evidence window, all chained entries for an eligible terminal run are deleted together rather than leaving a structurally broken suffix/prefix.
+- Terminal experiment campaign message snapshots have a separate shorter retention window. Sensitive subject/body, CC/BCC, headers, attachments, tags, reply address, display name, tracking URL, and snapshot hash are scrubbed while minimal sender/tracking-state metadata plus an explicit retention marker remain.
+- Active/non-terminal runs remain protected regardless of age.
+- Retention re-checks terminal state and cutoff eligibility under database row locks, writes explicit audit markers, and is idempotent.
+- Once `experiment.evidence.purged` exists for a run, later evidence append attempts do not create a new partial chain.
+- Evidence export serializes against the same run lock as append/purge. After purge it reports `retention.evidence.status = "purged"` and integrity `available = false` instead of misrepresenting an empty ledger as a valid retained chain.
+- The worker reuses its existing periodic maintenance loop. Evidence and message windows are configurable through `EXPERIMENT_EVIDENCE_RETENTION_DAYS` and `EXPERIMENT_MESSAGE_RETENTION_DAYS`, defaulting to 365 and 30 days.
+- Cleanup remains bounded and excludes already-purged snapshots from candidate selection so old processed rows cannot starve later eligible data.
+- No schema/migration, provider adapter, renderer/MIME path, routing, pacing, recipient-scope, or transport behavior changed.
+
 ### Stop conditions and kill switch
 
 - Every experiment has hard volume/time ceilings.
@@ -191,7 +205,7 @@ PR #50 merged at `2e2f852da2f29afe68a474d95e3a7205b750aba9`. Exact proof head `4
 
 Persist enough safe evidence to reproduce each relevant observation without leaking secrets: profile/version, provider identity/type/transport, safe tenant/sender identifiers, campaign/delivery/attempt IDs, timestamps, configured ceilings, applied experiment controls, effective pacing gap/rate where known, provider pressure/cooldown, safe response category/details, retry hints, durable state transitions, policy/health transitions, stop reason, and outcome classification.
 
-Evidence/audit records should be append-only or otherwise tamper-evident at the application level.
+Evidence/audit records should be append-only or otherwise tamper-evident at the application level during their configured retention period. Whole-ledger retention must preserve chain truth: a purged ledger is reported as purged, not as an empty valid chain.
 
 Current applied evidence includes:
 
@@ -212,7 +226,7 @@ The privacy goal is to minimize sensitive information inside EmailSystem, not hi
 - Mask/hash recipient identifiers where full addresses are unnecessary.
 - Redact provider responses before persistence/display.
 - Avoid long-term message-body retention when not operationally required.
-- Add explicit retention controls for experiment evidence/message snapshots.
+- Experiment evidence and terminal message snapshots now have explicit bounded retention; active runs remain protected and post-purge export state remains truthful.
 - Keep secrets out of Git, CI artifacts, screenshots, and support references.
 
 ## Standards-compliant encoding
@@ -263,18 +277,18 @@ Image-first is a supported content format, not an anti-filter bypass. Verified `
 - published run-start approved-envelope reproducibility evidence at `7930c6b07302af2b955784d45a40ed32b4e18321`, exact-head Quality #221 green and merged-main Quality #222 green;
 - published temporary-failover-versus-policy-stop proof at `e486779a1de6ca3ad24cf59980b2f5c39242fb42`, exact-head Quality #224 green and merged-main Quality #225 green;
 - published provider adaptation restart-durability proof at `60c6177709b7142ff862e7adc53371d5a493ff15`, exact-head Quality #228 green and merged-main Quality #229 green;
-- published provider adaptation gradual-recovery proof at `2e2f852da2f29afe68a474d95e3a7205b750aba9`, exact-head Quality #231 green and merged-main Quality #232 green.
+- published provider adaptation gradual-recovery proof at `2e2f852da2f29afe68a474d95e3a7205b750aba9`, exact-head Quality #231 green and merged-main Quality #232 green;
+- published experiment evidence/message retention lifecycle at `86fd1d44d68426a145c472418b9ebcb0ec635ede`, exact-head Quality #244 green and merged-main Quality #245 green.
 
 ### Current partially implemented / requires proof
 
 - `text`, `hosted-image`, `attachment-only`, and `image-dominant` remain metadata-only and require separate owner-level reconciliation before any implementation;
 - additional effective experiment values may be recorded only where runtime proof exists; the published run-start snapshot proves the approved envelope rather than metadata-only application;
-- privacy/retention controls and final experiment Activity/UX/export polish remain incomplete.
+- final experiment Activity/UX/export polish remains incomplete.
 
 ### Remaining major milestones
 
 - bind no further content mode unless repository truth proves a deterministic existing owner without redesign;
-- add privacy/retention controls for experiment evidence/message snapshots next;
 - finish experiment Activity/UX for configuration, live evidence, stop/review, and export;
 - maintain CI/security/tenant/race coverage for every new mutation path;
 - complete final production hardening and VPS reconciliation only after repository Quality is green.
