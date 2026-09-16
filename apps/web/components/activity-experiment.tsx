@@ -53,11 +53,7 @@ export function ActivityExperiment() {
 
   useEffect(() => {
     let live = true;
-    if (!campaignId) {
-      setResult(null);
-      return;
-    }
-    setResult(null);
+    if (!campaignId) return;
     void api<{ experiment: ExperimentSummary | null }>(
       `campaigns/${campaignId}/experiment`,
     )
@@ -91,10 +87,15 @@ export function ActivityExperiment() {
             alignItems: { xs: "flex-start", sm: "center" },
           }}
         >
-          <Stack direction="row" sx={{ gap: 1, alignItems: "center", minWidth: 0 }}>
+          <Stack
+            direction="row"
+            sx={{ gap: 1, alignItems: "center", minWidth: 0 }}
+          >
             <ScienceOutlined fontSize="small" />
             <Box sx={{ minWidth: 0 }}>
-              <Typography sx={{ fontWeight: 700 }}>Authorized experiment</Typography>
+              <Typography sx={{ fontWeight: 700 }}>
+                Authorized experiment
+              </Typography>
               <Typography variant="caption" color="text.secondary">
                 {experiment.profile.name} · profile v{experiment.profileVersion}
               </Typography>
@@ -102,7 +103,12 @@ export function ActivityExperiment() {
           </Stack>
           <Stack
             direction="row"
-            sx={{ ml: { sm: "auto" }, gap: 1, alignItems: "center", flexWrap: "wrap" }}
+            sx={{
+              ml: { sm: "auto" },
+              gap: 1,
+              alignItems: "center",
+              flexWrap: "wrap",
+            }}
           >
             <Chip size="small" label={stateLabel(experiment.state)} />
             <Button
@@ -128,23 +134,40 @@ export function ActivityExperiment() {
           }}
         >
           <Box>
-            <Stack direction="row" sx={{ justifyContent: "space-between", gap: 1, mb: 0.75 }}>
+            <Stack
+              direction="row"
+              sx={{ justifyContent: "space-between", gap: 1, mb: 0.75 }}
+            >
               <Typography variant="caption">Controlled recipients</Typography>
-              <Typography variant="caption" sx={{ fontVariantNumeric: "tabular-nums" }}>
-                {experiment.recipientsUsed.toLocaleString()} / {experiment.maxRecipients.toLocaleString()}
+              <Typography
+                variant="caption"
+                sx={{ fontVariantNumeric: "tabular-nums" }}
+              >
+                {experiment.recipientsUsed.toLocaleString()} /{" "}
+                {experiment.maxRecipients.toLocaleString()}
               </Typography>
             </Stack>
             <LinearProgress
               aria-label="Experiment recipient usage"
               variant="determinate"
-              value={percent(experiment.recipientsUsed, experiment.maxRecipients)}
+              value={percent(
+                experiment.recipientsUsed,
+                experiment.maxRecipients,
+              )}
             />
           </Box>
           <Box>
-            <Stack direction="row" sx={{ justifyContent: "space-between", gap: 1, mb: 0.75 }}>
+            <Stack
+              direction="row"
+              sx={{ justifyContent: "space-between", gap: 1, mb: 0.75 }}
+            >
               <Typography variant="caption">Transport attempts</Typography>
-              <Typography variant="caption" sx={{ fontVariantNumeric: "tabular-nums" }}>
-                {experiment.attemptsUsed.toLocaleString()} / {experiment.maxAttempts.toLocaleString()}
+              <Typography
+                variant="caption"
+                sx={{ fontVariantNumeric: "tabular-nums" }}
+              >
+                {experiment.attemptsUsed.toLocaleString()} /{" "}
+                {experiment.maxAttempts.toLocaleString()}
               </Typography>
             </Stack>
             <LinearProgress
