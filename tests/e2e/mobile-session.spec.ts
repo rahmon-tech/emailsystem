@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect, type Page } from "@playwright/test";
 import { appPath } from "@emailsystem/core/paths";
 import { createUser, sessionCookie } from "@emailsystem/core/auth";
 import { saveProvider } from "@emailsystem/core/providers";
@@ -21,7 +21,7 @@ async function ensureMobileUser() {
   return user;
 }
 
-async function signIn(page: Parameters<typeof test>[0] extends never ? never : any) {
+async function signIn(page: Page) {
   await page.goto(appPath("/login"));
   await page.getByLabel("Email address").fill(email);
   await page.getByLabel("Password").fill(password);
