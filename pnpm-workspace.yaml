@@ -4,6 +4,7 @@ packages:
 minimumReleaseAge: 1440
 overrides:
   '@prisma/config>deepmerge-ts': 8.0.2
+  'html-to-text>deepmerge-ts': 8.0.2
   'prisma>mysql2': 3.22.0
 allowBuilds:
   '@prisma/engines': true
