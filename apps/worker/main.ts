@@ -13,11 +13,13 @@ import {
 } from "@emailsystem/core/engine";
 import { reconcileEvents, ingestEvent } from "@emailsystem/core/events";
 import { unclaimedStates } from "@emailsystem/core/domain";
-import { log } from "@emailsystem/core/errors";
+import { logEvent, newCorrelationId } from "@emailsystem/core/errors";
 import { retainTracking } from "@emailsystem/core/tracking";
 import { retainExperimentData } from "@emailsystem/core/experiment-retention";
 import { refreshProviderAdaptation } from "@emailsystem/core/provider-adaptation";
+
 const cfg = config();
+const workerInstanceId = newCorrelationId();
 const connection = new Redis(cfg.REDIS_URL, { maxRetriesPerRequest: null });
 const queue = new Queue("email-deliveries", { connection });
 const worker = new Worker(
@@ -32,10 +34,32 @@ const worker = new Worker(
     maxStalledCount: 1,
   },
 );
-worker.on("failed", (job) =>
-  log("worker.job.failed", { deliveryId: job?.data.deliveryId }),
+
+logEvent("info", "worker.started", {
+  correlationId: workerInstanceId,
+  concurrency: cfg.WORKER_CONCURRENCY,
+});
+
+worker.on("failed", (job, error) =>
+  logEvent(
+    "error",
+    "worker.job.failed",
+    {
+      correlationId: newCorrelationId(job?.id),
+      deliveryId: job?.data.deliveryId,
+    },
+    error,
+  ),
 );
-worker.on("error", () => log("worker.error"));
+worker.on("error", (error) =>
+  logEvent(
+    "error",
+    "worker.error",
+    { correlationId: workerInstanceId },
+    error,
+  ),
+);
+
 let stopping = false;
 let iteration = 0;
 async function pump() {
@@ -171,22 +195,30 @@ async function pump() {
           },
         });
       }
-    } catch {
-      log("worker.pump.failed");
+    } catch (error) {
+      logEvent(
+        "error",
+        "worker.pump.failed",
+        { correlationId: workerInstanceId, iteration },
+        error,
+      );
     }
     await new Promise((r) => setTimeout(r, 2000));
   }
 }
+
 const running = pump();
 async function stop() {
   if (stopping) return;
   stopping = true;
+  logEvent("info", "worker.stopping", { correlationId: workerInstanceId });
   await running;
   await worker.close();
   await queue.close();
   await connection.quit();
   await redis.quit();
   await db.$disconnect();
+  logEvent("info", "worker.stopped", { correlationId: workerInstanceId });
 }
 process.on("SIGTERM", () => {
   void stop();

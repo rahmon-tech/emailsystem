@@ -1,17 +1,39 @@
 import { ZodError } from "zod";
-import { AppError, log } from "./errors";
-export function response(data: unknown, status = 200) {
+import { AppError, logEvent, newCorrelationId } from "./errors";
+
+export function response(
+  data: unknown,
+  status = 200,
+  headers: Record<string, string> = {},
+) {
   return Response.json(data, {
     status,
     headers: {
       "Cache-Control": "no-store",
       "X-Content-Type-Options": "nosniff",
+      ...headers,
     },
   });
 }
+
 export function errorResponse(error: unknown) {
-  if (error instanceof AppError)
-    return response({ error: error.message, code: error.code }, error.status);
+  const correlationId = newCorrelationId();
+  const headers = { "X-Correlation-ID": correlationId };
+
+  if (error instanceof AppError) {
+    if (error.status >= 500)
+      logEvent(
+        "error",
+        "http.app_error",
+        { correlationId, code: error.code, status: error.status },
+        error,
+      );
+    return response(
+      { error: error.message, code: error.code },
+      error.status,
+      headers,
+    );
+  }
   if (error instanceof ZodError)
     return response(
       {
@@ -23,16 +45,21 @@ export function errorResponse(error: unknown) {
         })),
       },
       400,
+      headers,
     );
-  log("http.internal_error");
+
+  logEvent("error", "http.internal_error", { correlationId }, error);
   return response(
     {
       error: "The request could not be completed. Please try again.",
       code: "INTERNAL",
+      supportRef: correlationId,
     },
     500,
+    headers,
   );
 }
+
 export async function readBounded(request: Request, max: number) {
   if (Number(request.headers.get("content-length") ?? 0) > max)
     throw new AppError(413, "SIZE", "Request exceeds the size limit.");
@@ -62,6 +89,7 @@ export async function readBounded(request: Request, max: number) {
   }
   return result;
 }
+
 export async function readJson(
   request: Request,
   max = 8000000,
