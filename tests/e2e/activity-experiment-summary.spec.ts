@@ -93,6 +93,7 @@ test("Activity shows bounded experiment status and tenant-safe evidence export",
       page.getByRole("button", { name: "Sign in", exact: true }).click(),
     ]);
     expect(loginResponse.status()).toBe(200);
+    await expect(page).toHaveURL(/\/blast$/);
     await page.goto(appPath(`/activity?campaignId=${campaign.id}`));
 
     const card = page.getByRole("region", { name: "Authorized experiment" });
