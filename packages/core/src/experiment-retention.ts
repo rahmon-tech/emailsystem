@@ -122,22 +122,20 @@ export async function retainExperimentData(
     }
   }
 
-  const messageRuns = await db.experimentRun.findMany({
-    where: {
-      state: { in: ["STOPPED", "COMPLETED", "EXPIRED"] },
-      stoppedAt: { lt: messageCutoff },
-      campaign: { isNot: null },
-    },
-    select: { id: true },
-    take: 500,
-  });
-  const messageRunIds = messageRuns.map(({ id }) => id);
-  const campaigns = messageRunIds.length
-    ? await db.campaign.findMany({
-        where: { experimentRunId: { in: messageRunIds } },
-        select: { id: true, userId: true, message: true },
-      })
-    : [];
+  const campaigns = await db.$queryRaw<
+    Array<{ id: string; userId: string; message: Prisma.JsonValue }>
+  >`
+    SELECT c.id, c."userId", c.message
+    FROM "Campaign" c
+    JOIN "ExperimentRun" r
+      ON r.id = c."experimentRunId"
+      AND r."userId" = c."userId"
+    WHERE r.state::text IN ('STOPPED', 'COMPLETED', 'EXPIRED')
+      AND r."stoppedAt" < ${messageCutoff}
+      AND (c.message->'retention'->>'messagePurgedAt') IS NULL
+    ORDER BY r."stoppedAt" ASC, c.id ASC
+    LIMIT 500
+  `;
 
   for (const candidate of campaigns) {
     if (messageAlreadyPurged(candidate.message)) continue;
