@@ -128,7 +128,7 @@ jobs:
           mkdir -p test-results/server-logs
           cp /tmp/emailsystem-e2e-*.log test-results/server-logs/ 2>/dev/null || true
       - name: Upload browser verification artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: always()
         with:
           name: browser-verification
