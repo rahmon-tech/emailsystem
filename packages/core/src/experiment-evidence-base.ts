@@ -227,25 +227,9 @@ export async function exportExperimentEvidence(userId: string, runId: string) {
     },
   });
   if (!run) throw new AppError(404, "NOT_FOUND", "Experiment run not found.");
-  const [entries, evidencePurge] = await Promise.all([
-    db.experimentEvidence.findMany({
-      where: { userId, runId },
-      orderBy: { sequence: "asc" },
-      select: {
-        id: true,
-        runId: true,
-        sequence: true,
-        kind: true,
-        attemptId: true,
-        providerId: true,
-        campaignId: true,
-        payload: true,
-        previousHash: true,
-        hash: true,
-        createdAt: true,
-      },
-    }),
-    db.auditEvent.findFirst({
+  const { entries, evidencePurge } = await db.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM "ExperimentRun" WHERE id=${runId} AND "userId"=${userId} FOR SHARE`;
+    const evidencePurge = await tx.auditEvent.findFirst({
       where: {
         userId,
         action: "experiment.evidence.purged",
@@ -253,8 +237,28 @@ export async function exportExperimentEvidence(userId: string, runId: string) {
       },
       orderBy: { createdAt: "desc" },
       select: { createdAt: true },
-    }),
-  ]);
+    });
+    const entries = evidencePurge
+      ? []
+      : await tx.experimentEvidence.findMany({
+          where: { userId, runId },
+          orderBy: { sequence: "asc" },
+          select: {
+            id: true,
+            runId: true,
+            sequence: true,
+            kind: true,
+            attemptId: true,
+            providerId: true,
+            campaignId: true,
+            payload: true,
+            previousHash: true,
+            hash: true,
+            createdAt: true,
+          },
+        });
+    return { entries, evidencePurge };
+  });
   const integrity = evidencePurge
     ? {
         available: false,
