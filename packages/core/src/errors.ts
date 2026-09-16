@@ -19,6 +19,11 @@ export function invariant(
 export type LogLevel = "debug" | "info" | "warn" | "error";
 export type LogScalar = string | number | boolean | null | undefined;
 export type LogFields = Record<string, LogScalar>;
+export type SerializedError = {
+  name: string;
+  code?: string | number;
+  message: string;
+};
 
 const sensitiveField =
   /(authorization|cookie|password|secret|token|credential|api.?key|recipient|email)/i;
@@ -52,8 +57,9 @@ function safeFields(fields: LogFields) {
   return result;
 }
 
-export function serializeError(error: unknown) {
-  if (!(error instanceof Error)) return { name: "UnknownError" };
+export function serializeError(error: unknown): SerializedError {
+  if (!(error instanceof Error))
+    return { name: "UnknownError", message: "Unexpected non-error value" };
   const code =
     "code" in error &&
     (typeof error.code === "string" || typeof error.code === "number")
