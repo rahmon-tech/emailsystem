@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import {
   Alert,
@@ -87,6 +87,8 @@ const entryWord = (count: number) => (count === 1 ? "entry" : "entries");
 export function ActivityExperimentEvidence() {
   const params = useSearchParams();
   const campaignId = params.get("campaignId") ?? "";
+  const campaignRef = useRef(campaignId);
+  campaignRef.current = campaignId;
   const [result, setResult] = useState<Result | null>(null);
   const [verification, setVerification] = useState<VerificationSnapshot | null>(null);
   const [verifying, setVerifying] = useState(false);
@@ -124,12 +126,14 @@ export function ActivityExperimentEvidence() {
 
   const verifyChain = () => {
     if (!campaignId || verifying) return;
+    const requestedCampaignId = campaignId;
     setVerifying(true);
     void api<{ runId: string | null; evidence: EvidenceReview | null }>(
-      `campaigns/${campaignId}/experiment/evidence?verify=1`,
+      `campaigns/${requestedCampaignId}/experiment/evidence?verify=1`,
     )
       .then(({ runId, evidence }) => {
-        setResult({ campaignId, runId, evidence });
+        if (campaignRef.current !== requestedCampaignId) return;
+        setResult({ campaignId: requestedCampaignId, runId, evidence });
         if (evidence) {
           const snapshot = verificationSnapshot(evidence);
           if (snapshot) setVerification(snapshot);
@@ -138,7 +142,9 @@ export function ActivityExperimentEvidence() {
       .catch(() => {
         /* Keep the last known evidence summary and verification result. */
       })
-      .finally(() => setVerifying(false));
+      .finally(() => {
+        if (campaignRef.current === requestedCampaignId) setVerifying(false);
+      });
   };
 
   if (!campaignId || result?.campaignId !== campaignId || !result.evidence)
