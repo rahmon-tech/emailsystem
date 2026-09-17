@@ -44,6 +44,10 @@ type ExperimentSummary = {
   profile: { name: string; variables: ActivityExperimentVariables };
 };
 
+type ExperimentMutationResult = Omit<ExperimentSummary, "profile"> & {
+  profile: { name: string };
+};
+
 type Result = {
   campaignId: string;
   experiment: ExperimentSummary | null;
@@ -102,14 +106,21 @@ export function ActivityExperiment() {
     setStopping(true);
     setStopError(null);
     try {
-      const stopped = await api<ExperimentSummary>(
+      const stopped = await api<ExperimentMutationResult>(
         `experiment-runs/${experiment.id}`,
         {
           action: "stop",
           ...(stopReason.trim() ? { reason: stopReason.trim() } : {}),
         },
       );
-      setResult({ campaignId, experiment: stopped });
+      setResult({
+        campaignId,
+        experiment: {
+          ...experiment,
+          ...stopped,
+          profile: experiment.profile,
+        },
+      });
       setStopOpen(false);
       setStopReason("");
     } catch (error) {
