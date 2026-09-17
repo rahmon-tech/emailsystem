@@ -42,11 +42,6 @@ type VerificationSnapshot = {
   verifiedAt: string;
 };
 
-type VerificationState = {
-  campaignId: string;
-  snapshot: VerificationSnapshot;
-};
-
 function verificationSnapshot(evidence: EvidenceReview): VerificationSnapshot | null {
   if (
     !evidence.integrity.verified ||
@@ -93,7 +88,9 @@ export function ActivityExperimentEvidence() {
   const params = useSearchParams();
   const campaignId = params.get("campaignId") ?? "";
   const [result, setResult] = useState<Result | null>(null);
-  const [verification, setVerification] = useState<VerificationState | null>(null);
+  const [verificationByCampaign, setVerificationByCampaign] = useState<
+    Record<string, VerificationSnapshot>
+  >({});
   const [verifyingCampaignId, setVerifyingCampaignId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -125,8 +122,7 @@ export function ActivityExperimentEvidence() {
   }, [campaignId]);
 
   const verifying = verifyingCampaignId === campaignId;
-  const activeVerification =
-    verification?.campaignId === campaignId ? verification.snapshot : null;
+  const activeVerification = verificationByCampaign[campaignId] ?? null;
 
   const verifyChain = () => {
     if (!campaignId || verifying) return;
@@ -144,11 +140,10 @@ export function ActivityExperimentEvidence() {
         if (evidence) {
           const snapshot = verificationSnapshot(evidence);
           if (snapshot)
-            setVerification((current) =>
-              current && current.campaignId !== requestedCampaignId
-                ? current
-                : { campaignId: requestedCampaignId, snapshot },
-            );
+            setVerificationByCampaign((current) => ({
+              ...current,
+              [requestedCampaignId]: snapshot,
+            }));
         }
       })
       .catch(() => {
