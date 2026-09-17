@@ -8,22 +8,31 @@ Deployment is intentionally deferred. Do not deploy to Vercel or the VPS, and do
 
 The verified development stack above published `main` is:
 
-1. PR #78 `feat/activity): add experiment controls and configuration`
+1. PR #78 `feat(activity): add experiment controls and configuration`
    - base: published `main` at `ce87caa214f60247cb06a0089dcd405ed719b855`
    - exact verified head: `e135ad5a196d5a67d65b8d475f53eef2e4f4da48`
    - Quality #319 / run `35239476640`: full pipeline green
    - adds tenant-safe approved experiment configuration visibility and operator stop/review using the existing experiment-run mutation owner
-   - remains draft/unmerged intentionally while deployment is frozen
 
 2. PR #79 `feat(activity): review experiment evidence live`
    - stacked base: PR #78 exact verified head `e135ad5a196d5a67d65b8d475f53eef2e4f4da48`
    - exact verified head: `0cd6e8ac24901cff948e88015d41b0fcc3a993ef`
    - Quality #320: full pipeline green
-   - adds a minimized read-only evidence review surface derived from the existing authoritative evidence verifier
-   - exposes retention/integrity/count/recent event names and timestamps only; evidence payloads, recipient hashes, provider/message identifiers and sender data remain server-side
-   - remains draft/unmerged intentionally while deployment is frozen
+   - adds the minimized tenant-safe evidence review surface
 
-This reconciliation branch is stacked from PR #79 exact head so those verified SHAs remain immutable.
+3. PR #82 `docs: reconcile final development checkpoint`
+   - stacked base: PR #79 exact verified head `0cd6e8ac24901cff948e88015d41b0fcc3a993ef`
+   - exact verified head: `c4fc22e56f906ab4f8811ace783a77ee8d16d0fd`
+   - Quality #328 / run `35264063476`: full pipeline green
+   - reconciles `CURRENT_WORK.md` and `VERIFICATION.md` without runtime changes
+
+4. PR #83 `fix(activity): bound live evidence verification cost`
+   - stacked base: PR #82 exact verified head `c4fc22e56f906ab4f8811ace783a77ee8d16d0fd`
+   - exact verified head: `93e35f5125d3ec212565bc2d6d5b07ffc2aea333`
+   - Quality #342 / run `35267311307`: full pipeline green
+   - completes the pre-publication assembled review by moving 10-second evidence polling to bounded/index-supported summary reads, making full-chain verification operator-explicit, preserving tamper detection, and hardening overlapping-campaign UI state
+
+All four checkpoints remain draft/unmerged intentionally while publication/deployment is frozen. The current PR #84 documentation-reconciliation branch is stacked from PR #83 exact head and changes canonical documentation only; it does not alter runtime behavior.
 
 ## Completed product foundation
 
@@ -56,9 +65,9 @@ Repository reconciliation found no separate deterministic runtime owner for thos
 
 ## What remains before development can be called complete
 
-### 1. Publish the verified Activity stack
+### 1. Publish the verified pre-publication stack
 
-When deployment side effects are acceptable, publish PR #78 and then PR #79 in dependency order. Preserve exact-parent/fast-forward discipline and run merged-main Quality on the resulting SHA. Do not merge while the current instruction to defer deployment remains in force.
+When publication/deployment side effects are acceptable, publish PR #78 → #79 → #82 → #83 and the final docs-only reconciliation checkpoint in dependency order. Preserve exact-parent/fast-forward discipline where possible and run full Quality on the exact resulting assembled `main` SHA. Do not move `main` while the current instruction to defer deployment remains in force.
 
 ### 2. Final assembled-system verification
 
@@ -101,4 +110,4 @@ Experiments may vary behavior only inside their authorized envelope. Production 
 
 ## Next action
 
-Keep this reconciliation branch documentation-only and run the full Quality pipeline as a final pre-publication checkpoint. If it is green, hold the verified stack and documentation checkpoint until publication/deployment is explicitly authorized.
+Keep PR #84 documentation-only and run the full Quality pipeline on its exact head. If it is green, hold the complete verified #78 → #79 → #82 → #83 → #84 stack until publication/deployment is explicitly authorized. Do not invent additional feature work merely to keep development moving.
