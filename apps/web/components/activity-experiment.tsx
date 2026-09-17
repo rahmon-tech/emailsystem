@@ -295,7 +295,7 @@ export function ActivityExperiment() {
               placeholder="Stopped after the approved observation window."
               multiline
               minRows={2}
-              inputProps={{ maxLength: 300 }}
+              slotProps={{ htmlInput: { maxLength: 300 } }}
               helperText={`${stopReason.length}/300 · optional; stored on the run for review`}
               disabled={stopping}
               autoFocus
