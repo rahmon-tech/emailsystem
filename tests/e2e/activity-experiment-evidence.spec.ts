@@ -7,7 +7,7 @@ import { createCampaign } from "@emailsystem/core/campaigns";
 import { appendExperimentEvidence } from "@emailsystem/core/experiment-evidence";
 import { db } from "@emailsystem/db";
 
-test("Activity reviews the evidence chain live without exposing evidence payloads", async ({
+test("Activity keeps live evidence review bounded and re-verifies explicitly without exposing payloads", async ({
   page,
 }) => {
   const password = `Fixture-${crypto.randomUUID()}-Aa9!`;
@@ -99,7 +99,7 @@ test("Activity reviews the evidence chain live without exposing evidence payload
     await expect(card).toBeVisible();
     await expect(card.getByText("Chain verified", { exact: true })).toBeVisible();
     await expect(card).toContainText("1 chained entries");
-    await expect(card).toContainText("#1 · run started");
+    await expect(card).toContainText("verified through #1");
     await expect(page.getByText("browser-secret-must-not-render")).toHaveCount(0);
 
     await db.$transaction((tx) =>
@@ -115,9 +115,24 @@ test("Activity reviews the evidence chain live without exposing evidence payload
       }),
     );
 
-    await expect(card).toContainText("2 chained entries", { timeout: 15_000 });
+    await expect(card).toContainText("2 retained entries", { timeout: 15_000 });
+    await expect(card.getByText("Verification outdated", { exact: true })).toBeVisible();
     await expect(card).toContainText("#2 · transport outcome");
     await expect(page.getByText("browser-message-id-must-not-render")).toHaveCount(0);
+
+    const [verifyResponse] = await Promise.all([
+      page.waitForResponse(
+        (response) =>
+          response.url().includes(
+            appPath(`/api/campaigns/${campaign.id}/experiment/evidence?verify=1`),
+          ) && response.request().method() === "GET",
+      ),
+      card.getByRole("button", { name: "Verify chain" }).click(),
+    ]);
+    expect(verifyResponse.status()).toBe(200);
+    await expect(card.getByText("Chain verified", { exact: true })).toBeVisible();
+    await expect(card).toContainText("2 chained entries");
+    await expect(card).toContainText("verified through #2");
   } finally {
     await db.campaign.deleteMany({ where: { userId: user.id } });
     await db.experimentEvidence.deleteMany({ where: { userId: user.id } });
