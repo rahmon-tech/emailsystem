@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import {
+  Alert,
   Box,
   Button,
   Card,
@@ -13,7 +14,7 @@ import {
 } from "@mui/material";
 import { DownloadOutlined, ScienceOutlined } from "@mui/icons-material";
 import { appPath } from "@emailsystem/core/paths";
-import { api } from "./api-client";
+import { api, date } from "./api-client";
 
 type ExperimentSummary = {
   id: string;
@@ -30,6 +31,11 @@ type ExperimentSummary = {
   profile: { name: string };
 };
 
+type Result = {
+  campaignId: string;
+  summary: ExperimentSummary | null;
+};
+
 function usage(used: number, limit: number) {
   return Math.min(100, limit > 0 ? (used / limit) * 100 : 0);
 }
@@ -37,30 +43,44 @@ function usage(used: number, limit: number) {
 export function ActivityExperimentSummary() {
   const params = useSearchParams();
   const campaignId = params.get("campaignId") ?? "";
-  const [summary, setSummary] = useState<ExperimentSummary | null | undefined>(
-    undefined,
-  );
+  const [result, setResult] = useState<Result | null>(null);
 
   useEffect(() => {
     let live = true;
-    setSummary(undefined);
-    if (!campaignId) return;
-    void api<ExperimentSummary | null>(`campaigns/${campaignId}/experiment`)
-      .then((value) => {
-        if (live) setSummary(value);
-      })
-      .catch(() => {
-        if (live) setSummary(null);
-      });
+    if (!campaignId) {
+      setResult(null);
+      return;
+    }
+    const refresh = () =>
+      void api<ExperimentSummary | null>(`campaigns/${campaignId}/experiment`)
+        .then((summary) => {
+          if (live) setResult({ campaignId, summary });
+        })
+        .catch(() => {
+          if (live) setResult({ campaignId, summary: null });
+        });
+    refresh();
+    const timer = setInterval(refresh, 5000);
     return () => {
       live = false;
+      clearInterval(timer);
     };
   }, [campaignId]);
 
-  if (!campaignId || summary === undefined || summary === null) return null;
+  if (
+    !campaignId ||
+    result?.campaignId !== campaignId ||
+    result.summary === null
+  )
+    return null;
+
+  const summary = result.summary;
 
   return (
-    <Card sx={{ mb: 2, p: { xs: 1.75, sm: 2 } }} aria-label="Experiment run">
+    <Card
+      sx={{ mb: 2, p: { xs: 1.75, sm: 2 } }}
+      aria-label="Authorized experiment run"
+    >
       <Stack spacing={1.75}>
         <Stack
           direction={{ xs: "column", sm: "row" }}
@@ -79,7 +99,10 @@ export function ActivityExperimentSummary() {
             direction="row"
             sx={{ gap: 1, ml: { sm: "auto" }, alignItems: "center", flexWrap: "wrap" }}
           >
-            <Chip size="small" label={summary.state.toLowerCase().replaceAll("_", " ")} />
+            <Chip
+              size="small"
+              label={summary.state.toLowerCase().replaceAll("_", " ")}
+            />
             <Button
               component="a"
               href={appPath(`/api/experiment-runs/${summary.id}/evidence`)}
@@ -108,6 +131,7 @@ export function ActivityExperimentSummary() {
             <LinearProgress
               variant="determinate"
               value={usage(summary.recipientsUsed, summary.maxRecipients)}
+              aria-label="Experiment recipient usage"
               sx={{ mt: 0.75 }}
             />
           </Box>
@@ -121,18 +145,23 @@ export function ActivityExperimentSummary() {
             <LinearProgress
               variant="determinate"
               value={usage(summary.attemptsUsed, summary.maxAttempts)}
+              aria-label="Experiment attempt usage"
               sx={{ mt: 0.75 }}
             />
           </Box>
         </Box>
 
         <Typography variant="caption" color="text.secondary">
-          {summary.stopReason
-            ? summary.stopReason
+          {summary.stoppedAt
+            ? `Stopped ${date(summary.stoppedAt)}.`
             : summary.expiresAt
-              ? `Run expires ${new Date(summary.expiresAt).toLocaleString()}.`
-              : "Run expiry has not been established yet."}
+              ? `Bounded run expires ${date(summary.expiresAt)}.`
+              : summary.startedAt
+                ? `Started ${date(summary.startedAt)}.`
+                : "Run is ready but has not started."}
         </Typography>
+
+        {summary.stopReason && <Alert severity="info">{summary.stopReason}</Alert>}
       </Stack>
     </Card>
   );
