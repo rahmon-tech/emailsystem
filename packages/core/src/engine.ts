@@ -27,10 +27,8 @@ import {
 } from "./safety";
 import { safetySettings, messageCost } from "./safety-config";
 import type { Candidate } from "./dispatcher";
-import {
-  eligibleProvidersForSenderId,
-  providerStillAuthorized,
-} from "./senders";
+import { providerStillAuthorized } from "./senders";
+import { senderProviderAvailabilityForId } from "./sender-provider-availability";
 import {
   experimentDispatchScope,
   experimentVariables,
@@ -188,23 +186,33 @@ export async function processDelivery(
         const scopedProviderIds = experimentScope.providerIds
           ? new Set(experimentScope.providerIds)
           : null;
-        const authorized = await eligibleProvidersForSenderId(
+        const providerAvailability = await senderProviderAvailabilityForId(
           tx,
           initial.userId,
           senderIdentityId,
+          new Date(now()),
         );
-        const eligible = authorized.filter(
-          (p) =>
-            (p.quotaRemaining === null || p.quotaRemaining >= cost) &&
-            (!scopedProviderIds || scopedProviderIds.has(p.id)) &&
-            (!needsInlineTransport || supportsInlineAttachmentTransport(p)),
-        );
+        const campaignCompatible = (
+          p: (typeof providerAvailability.eligible)[number],
+        ) =>
+          (p.quotaRemaining === null || p.quotaRemaining >= cost) &&
+          (!scopedProviderIds || scopedProviderIds.has(p.id)) &&
+          (!needsInlineTransport || supportsInlineAttachmentTransport(p));
+        const eligible = providerAvailability.eligible.filter(campaignCompatible);
+        const cooling = providerAvailability.cooling.filter(campaignCompatible);
         if (!eligible.length) {
+          const nextCooldownAt = cooling.reduce<Date | null>((earliest, p) => {
+            if (!p.cooldownUntil) return earliest;
+            return !earliest ||
+              p.cooldownUntil.getTime() < earliest.getTime()
+              ? p.cooldownUntil
+              : earliest;
+          }, null);
           await waitForSafety(
             tx,
             c,
             [],
-            now() + 60000,
+            nextCooldownAt?.getTime() ?? now() + 60000,
             now(),
             needsInlineTransport
               ? "No healthy eligible provider supports the campaign's inline CID assets"
@@ -624,13 +632,22 @@ export async function processDelivery(
       const d = await tx.delivery.findUniqueOrThrow({ where: { id } });
       const pending =
         ["PROCESSING", "UNKNOWN"].includes(d.state) && d.claimId === attemptId;
+      const outcomeAt = new Date(now());
+      const hintedRetryAfterMs =
+        outcome.status === "accepted" ? 0 : outcome.error.retryAfterMs;
+      const retryAfterMs =
+        typeof hintedRetryAfterMs === "number" &&
+        Number.isFinite(hintedRetryAfterMs) &&
+        hintedRetryAfterMs > 0
+          ? hintedRetryAfterMs
+          : 0;
       if (outcome.status === "accepted") {
         await tx.deliveryAttempt.update({
           where: { id: attemptId },
           data: {
             state: "ACCEPTED",
             providerMessageId: outcome.providerMessageId,
-            finishedAt: new Date(),
+            finishedAt: outcomeAt,
           },
         });
         if (pending)
@@ -638,7 +655,7 @@ export async function processDelivery(
             where: { id },
             data: {
               state: "PROVIDER_ACCEPTED",
-              acceptedAt: new Date(),
+              acceptedAt: outcomeAt,
               safeError: null,
             },
           });
@@ -660,7 +677,7 @@ export async function processDelivery(
             state: outcome.status === "unknown" ? "UNKNOWN" : "REJECTED",
             category: outcome.error.category,
             safeError: outcome.error.message,
-            finishedAt: new Date(),
+            finishedAt: outcomeAt,
           },
         });
         if (pending)
@@ -672,8 +689,7 @@ export async function processDelivery(
               ...(typeof decision === "number"
                 ? {
                     nextAttemptAt: new Date(
-                      Date.now() +
-                        Math.max(decision, outcome.error.retryAfterMs ?? 0),
+                      outcomeAt.getTime() + Math.max(decision, retryAfterMs),
                     ),
                   }
                 : {}),
@@ -712,15 +728,22 @@ export async function processDelivery(
               enabled: false,
             },
           });
-        else if (["temporary", "rate_limit"].includes(outcome.error.category))
+        else if (["temporary", "rate_limit"].includes(outcome.error.category)) {
+          const cooldownUntil = new Date(
+            outcomeAt.getTime() + Math.max(30000, retryAfterMs),
+          );
           await tx.providerConnection.updateMany({
-            where: { id: provider!.id, revision: provider!.revision },
-            data: {
-              cooldownUntil: new Date(
-                Date.now() + Math.max(30000, outcome.error.retryAfterMs ?? 0),
-              ),
+            where: {
+              id: provider!.id,
+              revision: provider!.revision,
+              OR: [
+                { cooldownUntil: null },
+                { cooldownUntil: { lt: cooldownUntil } },
+              ],
             },
+            data: { cooldownUntil },
           });
+        }
       }
       if (outcome.status === "accepted")
         await checkExistingSafetyOutcomes(
@@ -756,14 +779,14 @@ export async function processDelivery(
           attemptId,
           providerId: provider!.id,
           campaignId: initial.campaignId,
-          createdAt: attemptAfter.finishedAt ?? new Date(),
+          createdAt: attemptAfter.finishedAt ?? outcomeAt,
           payload: {
             status: outcome.status,
             providerMessageId: attemptAfter.providerMessageId,
             category: attemptAfter.category,
             safeError: attemptAfter.safeError,
             retryAfterMs:
-              outcome.status === "accepted" ? null : outcome.error.retryAfterMs ?? null,
+              outcome.status === "accepted" ? null : retryAfterMs || null,
             attemptState: attemptAfter.state,
             deliveryState: deliveryAfter.state,
             nextAttemptAt: deliveryAfter.nextAttemptAt,
