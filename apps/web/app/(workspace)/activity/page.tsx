@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import { Activity } from "../../../components/activity";
 import { ActivityExperiment } from "../../../components/activity-experiment";
+import { ActivityExperimentEvidence } from "../../../components/activity-experiment-evidence";
 import { ActivityPacing } from "../../../components/activity-pacing";
 import { ActivityProviderStatus } from "../../../components/activity-provider-status";
 import { SavedCampaigns } from "../../../components/saved-campaigns";
@@ -12,6 +13,7 @@ export default function Page() {
       <SavedCampaigns />
       <ActivityPacing />
       <ActivityExperiment />
+      <ActivityExperimentEvidence />
       <ActivityProviderStatus />
       <Activity />
     </Suspense>
