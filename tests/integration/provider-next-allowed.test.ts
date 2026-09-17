@@ -28,6 +28,8 @@ async function fixture() {
     concurrency: 10,
   });
   assert(provider);
+  assert.equal(provider.enabled, true);
+  assert.equal(provider.health, "HEALTHY");
   const list = await importRecipients(
     user.id,
     Buffer.from("controlled@example.net"),
@@ -42,6 +44,13 @@ async function fixture() {
     startKey: crypto.randomUUID(),
   });
   await prepareCampaign(campaign.id);
+  const prepared = await db.campaign.findUniqueOrThrow({
+    where: { id: campaign.id },
+    select: { state: true, preparedAt: true, safetyWaitUntil: true },
+  });
+  assert.equal(prepared.state, "QUEUED");
+  assert(prepared.preparedAt);
+  assert.equal(prepared.safetyWaitUntil, null);
   const delivery = await db.delivery.findFirstOrThrow({
     where: { campaignId: campaign.id },
   });
@@ -60,8 +69,10 @@ after(async () => {
 test("a temporary rejection never shortens a longer provider cooldown established while transport is in flight", async () => {
   const f = await fixture();
   const longerCooldown = new Date(Date.now() + 5 * 60_000);
+  let sends = 0;
 
   await processDelivery(f.delivery.id, async () => {
+    sends += 1;
     await db.providerConnection.update({
       where: { id: f.provider.id },
       data: { cooldownUntil: longerCooldown },
@@ -76,6 +87,7 @@ test("a temporary rejection never shortens a longer provider cooldown establishe
     };
   });
 
+  assert.equal(sends, 1, "fixture must reach one real transport invocation");
   const provider = await db.providerConnection.findUniqueOrThrow({
     where: { id: f.provider.id },
     select: { cooldownUntil: true },
