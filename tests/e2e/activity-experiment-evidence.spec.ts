@@ -7,7 +7,7 @@ import { createCampaign } from "@emailsystem/core/campaigns";
 import { appendExperimentEvidence } from "@emailsystem/core/experiment-evidence";
 import { db } from "@emailsystem/db";
 
-test("Activity keeps live evidence review bounded and re-verifies explicitly without exposing payloads", async ({
+test("Activity keeps live evidence review bounded and verifies explicitly without exposing payloads", async ({
   page,
 }) => {
   const password = `Fixture-${crypto.randomUUID()}-Aa9!`;
@@ -97,10 +97,24 @@ test("Activity keeps live evidence review bounded and re-verifies explicitly wit
 
     const card = page.getByRole("region", { name: "Experiment evidence review" });
     await expect(card).toBeVisible();
+    await expect(card.getByText("Not yet verified", { exact: true })).toBeVisible();
+    await expect(card).toContainText("1 retained entries");
+    await expect(card).toContainText("#1 · run started");
+    await expect(page.getByText("browser-secret-must-not-render")).toHaveCount(0);
+
+    const [firstVerifyResponse] = await Promise.all([
+      page.waitForResponse(
+        (response) =>
+          response.url().includes(
+            appPath(`/api/campaigns/${campaign.id}/experiment/evidence?verify=1`),
+          ) && response.request().method() === "GET",
+      ),
+      card.getByRole("button", { name: "Verify chain" }).click(),
+    ]);
+    expect(firstVerifyResponse.status()).toBe(200);
     await expect(card.getByText("Chain verified", { exact: true })).toBeVisible();
     await expect(card).toContainText("1 chained entries");
     await expect(card).toContainText("verified through #1");
-    await expect(page.getByText("browser-secret-must-not-render")).toHaveCount(0);
 
     await db.$transaction((tx) =>
       appendExperimentEvidence(tx, {
