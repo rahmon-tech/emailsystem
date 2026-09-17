@@ -280,18 +280,29 @@ Image-first is a supported content format, not an anti-filter bypass. Verified `
 - published provider adaptation gradual-recovery proof at `2e2f852da2f29afe68a474d95e3a7205b750aba9`, exact-head Quality #231 green and merged-main Quality #232 green;
 - published experiment evidence/message retention lifecycle at `86fd1d44d68426a145c472418b9ebcb0ec635ede`, exact-head Quality #244 green and merged-main Quality #245 green.
 
-### Current partially implemented / requires proof
+### Verified pre-publication stack (not yet published on `main`)
 
-- `text`, `hosted-image`, `attachment-only`, and `image-dominant` remain metadata-only and require separate owner-level reconciliation before any implementation;
-- additional effective experiment values may be recorded only where runtime proof exists; the published run-start snapshot proves the approved envelope rather than metadata-only application;
-- final experiment Activity/UX/export polish remains incomplete.
+Published `main` remains at `ce87caa214f60247cb06a0089dcd405ed719b855`. The following stacked draft checkpoints are verified but intentionally unmerged while publication/deployment side effects remain deferred:
+
+- PR #78 exact head `e135ad5a196d5a67d65b8d475f53eef2e4f4da48` / Quality #319: Activity approved experiment configuration plus tenant-scoped operator stop/review controls;
+- PR #79 exact head `0cd6e8ac24901cff948e88015d41b0fcc3a993ef` / Quality #320: tenant-safe Activity evidence review surface;
+- PR #82 exact head `c4fc22e56f906ab4f8811ace783a77ee8d16d0fd` / Quality #328: canonical repository-truth/verification reconciliation;
+- PR #83 exact head `93e35f5125d3ec212565bc2d6d5b07ffc2aea333` / Quality #342: bounded/index-supported live evidence summary, operator-explicit full-chain verification, tamper proof, and overlapping-campaign UI race hardening.
+
+The pre-publication ancestry is exact and ahead-only: `ce87… → e135… → 0cd6… → c4fc… → 93e35…`. These checkpoints must not be described as published-main behavior until publication is explicitly authorized and exact assembled-main Quality passes.
+
+### Current intentionally metadata-only / deferred semantics
+
+- `text`, `hosted-image`, `attachment-only`, and `image-dominant` remain metadata-only. Repository truth does not currently provide a distinct deterministic runtime owner for them without redesign, so they are not production-completion blockers and must not be reported as effective behavior;
+- additional effective experiment values may be recorded only where runtime proof exists; the published run-start snapshot proves the approved envelope rather than metadata-only application.
 
 ### Remaining major milestones
 
 - bind no further content mode unless repository truth proves a deterministic existing owner without redesign;
-- finish experiment Activity/UX for configuration, live evidence, stop/review, and export;
-- maintain CI/security/tenant/race coverage for every new mutation path;
-- complete final production hardening and VPS reconciliation only after repository Quality is green.
+- publish the verified #78 → #79 → #82 → #83 stack only when publication/deployment side effects are explicitly authorized, preserving exact-parent ancestry where possible;
+- run full Quality on the exact resulting assembled `main` SHA and then reconcile canonical documentation to that verified SHA;
+- distinguish repository/CI proof from provider-account credentials and deployment-host acceptance;
+- perform VPS reconciliation and a controlled legitimate production smoke test only after final merged-main Quality is green.
 
 ## Non-negotiable experiment boundary
 
