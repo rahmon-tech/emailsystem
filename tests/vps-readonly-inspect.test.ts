@@ -13,6 +13,7 @@ test("VPS inspection script remains read-only and privacy bounded", async () => 
     /\bprisma\b[^\n]*\bmigrate\b/i,
     /\b(?:ufw|iptables|nft)\s+/i,
     /\bdocker\s+inspect\b/i,
+    /\bsh\s+-c\b/i,
     /\bcat\s+[^\n]*(?:\.env|nginx|caddy)/i,
   ]) {
     assert.doesNotMatch(script, forbidden);
