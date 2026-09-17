@@ -76,10 +76,14 @@ jobs:
         run: pnpm secrets:scan
       - name: Typecheck TypeScript
         run: pnpm typecheck
-      - name: Run unit tests
-        run: pnpm test
-      - name: Run integration tests
-        run: pnpm test:integration
+      - name: Run unit tests with critical coverage visibility
+        run: |
+          mkdir -p test-results/coverage
+          pnpm test:coverage | tee test-results/coverage/unit.txt
+      - name: Run integration tests with critical coverage visibility
+        run: |
+          mkdir -p test-results/coverage
+          pnpm test:integration:coverage | tee test-results/coverage/integration.txt
       - name: Build production web application
         run: pnpm build
         id: web_build
