@@ -22,7 +22,23 @@ after(async () => {
   await redis.quit();
 });
 
-test("experiment evidence summary is tenant-safe and excludes evidence payload data", async () => {
+type EvidenceBody = {
+  runId: string;
+  evidence: {
+    retention: { status: string; purgedAt: string | null };
+    integrity: {
+      available: boolean;
+      verified: boolean;
+      valid: boolean | null;
+      count: number;
+      verifiedThrough: number | null;
+      headHash: string | null;
+    };
+    recent: Array<{ sequence: number; kind: string; createdAt: string }>;
+  };
+};
+
+test("experiment evidence live summary is bounded while explicit verification remains tenant-safe and tamper-evident", async () => {
   const password = `Fixture-${crypto.randomUUID()}-Aa9!`;
   const owner = await createUser(
     `evidence-summary-owner-${crypto.randomUUID()}@example.com`,
@@ -113,57 +129,93 @@ test("experiment evidence summary is tenant-safe and excludes evidence payload d
   });
 
   const origin = new URL(process.env.APP_URL!).origin;
-  const call = (token: string) =>
+  const call = (token: string, verify = false) =>
     GET(
-      new Request(origin + `/api/campaigns/${campaign.id}/experiment/evidence`, {
-        headers: { Cookie: `${sessionCookie}=${token}` },
-      }),
+      new Request(
+        origin +
+          `/api/campaigns/${campaign.id}/experiment/evidence${verify ? "?verify=1" : ""}`,
+        { headers: { Cookie: `${sessionCookie}=${token}` } },
+      ),
       { params: Promise.resolve({ id: campaign.id }) },
     );
-
-  const response = await call(ownerSession.token);
-  assert.equal(response.status, 200);
-  const body = (await response.json()) as {
-    runId: string;
-    evidence: {
-      retention: { status: string; purgedAt: string | null };
-      integrity: {
-        available: boolean;
-        valid: boolean;
-        count: number;
-        verifiedThrough: number;
-        headHash: string | null;
-      };
-      recent: Array<{ sequence: number; kind: string; createdAt: string }>;
-    };
+  const read = async (verify = false) => {
+    const response = await call(ownerSession.token, verify);
+    assert.equal(response.status, 200);
+    return (await response.json()) as EvidenceBody;
   };
-  assert.equal(body.runId, run.id);
-  assert.deepEqual(body.evidence.retention, { status: "retained", purgedAt: null });
-  assert.equal(body.evidence.integrity.available, true);
-  assert.equal(body.evidence.integrity.valid, true);
-  assert.equal(body.evidence.integrity.count, 2);
-  assert.equal(body.evidence.integrity.verifiedThrough, 2);
-  assert(body.evidence.integrity.headHash);
+
+  const summary = await read();
+  assert.equal(summary.runId, run.id);
+  assert.deepEqual(summary.evidence.retention, {
+    status: "retained",
+    purgedAt: null,
+  });
+  assert.equal(summary.evidence.integrity.available, true);
+  assert.equal(summary.evidence.integrity.verified, false);
+  assert.equal(summary.evidence.integrity.valid, null);
+  assert.equal(summary.evidence.integrity.count, 2);
+  assert.equal(summary.evidence.integrity.verifiedThrough, null);
+  assert(summary.evidence.integrity.headHash);
   assert.deepEqual(
-    body.evidence.recent.map(({ sequence, kind }) => ({ sequence, kind })),
+    summary.evidence.recent.map(({ sequence, kind }) => ({ sequence, kind })),
     [
       { sequence: 2, kind: "transport.outcome" },
       { sequence: 1, kind: "run.started" },
     ],
   );
 
-  const serialized = JSON.stringify(body);
-  for (const hidden of [
-    "payload",
-    "never-return-this",
-    "recipient-hash-must-stay-server-side",
-    "message-id-must-stay-server-side",
-    "attempt-hidden-1",
-    "provider-hidden-1",
-    "sender@example.com",
-  ]) {
-    assert.equal(serialized.includes(hidden), false, `summary exposed ${hidden}`);
+  const verified = await read(true);
+  assert.equal(verified.evidence.integrity.available, true);
+  assert.equal(verified.evidence.integrity.verified, true);
+  assert.equal(verified.evidence.integrity.valid, true);
+  assert.equal(verified.evidence.integrity.count, 2);
+  assert.equal(verified.evidence.integrity.verifiedThrough, 2);
+  assert.equal(
+    verified.evidence.integrity.headHash,
+    summary.evidence.integrity.headHash,
+  );
+
+  for (const body of [summary, verified]) {
+    const serialized = JSON.stringify(body);
+    for (const hidden of [
+      "payload",
+      "never-return-this",
+      "recipient-hash-must-stay-server-side",
+      "message-id-must-stay-server-side",
+      "attempt-hidden-1",
+      "provider-hidden-1",
+      "sender@example.com",
+    ]) {
+      assert.equal(serialized.includes(hidden), false, `summary exposed ${hidden}`);
+    }
   }
 
+  const firstEntry = await db.experimentEvidence.findFirstOrThrow({
+    where: { userId: owner.id, runId: run.id },
+    orderBy: { sequence: "asc" },
+    select: { id: true },
+  });
+  await db.experimentEvidence.update({
+    where: { id: firstEntry.id },
+    data: { payload: { tampered: "must-be-detected-by-full-verification" } },
+  });
+
+  const afterTamperSummary = await read();
+  assert.equal(afterTamperSummary.evidence.integrity.verified, false);
+  assert.equal(afterTamperSummary.evidence.integrity.valid, null);
+  assert.equal(afterTamperSummary.evidence.integrity.count, 2);
+
+  const afterTamperVerification = await read(true);
+  assert.equal(afterTamperVerification.evidence.integrity.verified, true);
+  assert.equal(afterTamperVerification.evidence.integrity.valid, false);
+  assert.equal(afterTamperVerification.evidence.integrity.verifiedThrough, 0);
+  assert.equal(
+    JSON.stringify(afterTamperVerification).includes(
+      "must-be-detected-by-full-verification",
+    ),
+    false,
+  );
+
   assert.equal((await call(otherSession.token)).status, 404);
+  assert.equal((await call(otherSession.token, true)).status, 404);
 });
