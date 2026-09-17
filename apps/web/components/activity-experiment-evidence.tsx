@@ -144,7 +144,11 @@ export function ActivityExperimentEvidence() {
         if (evidence) {
           const snapshot = verificationSnapshot(evidence);
           if (snapshot)
-            setVerification({ campaignId: requestedCampaignId, snapshot });
+            setVerification((current) =>
+              current && current.campaignId !== requestedCampaignId
+                ? current
+                : { campaignId: requestedCampaignId, snapshot },
+            );
         }
       })
       .catch(() => {
