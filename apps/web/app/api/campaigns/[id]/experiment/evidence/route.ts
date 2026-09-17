@@ -13,6 +13,7 @@ export async function GET(request: Request, { params }: Context) {
   try {
     const user = await requireUser(request);
     const id = z.uuid().parse((await params).id);
+    const verify = new URL(request.url).searchParams.get("verify") === "1";
     const campaign = await db.campaign.findFirst({
       where: { id, userId: user.id },
       select: { experimentRunId: true },
@@ -30,6 +31,7 @@ export async function GET(request: Request, { params }: Context) {
       evidence: await getExperimentEvidenceReview(
         user.id,
         campaign.experimentRunId,
+        { verify },
       ),
     });
   } catch (error) {
