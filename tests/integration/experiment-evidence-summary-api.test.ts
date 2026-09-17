@@ -4,12 +4,14 @@ import { db } from "@emailsystem/db";
 import { redis } from "@emailsystem/core/redis";
 import { createUser, login, sessionCookie } from "@emailsystem/core/auth";
 import { appendExperimentEvidence } from "@emailsystem/core/experiment-evidence";
-import { GET } from "../../apps/web/app/api/experiment-runs/[id]/evidence/summary/route.ts";
+import { GET } from "../../apps/web/app/api/campaigns/[id]/experiment/evidence/route.ts";
 
 const users: string[] = [];
 
 after(async () => {
   if (users.length) {
+    await db.campaign.deleteMany({ where: { userId: { in: users } } });
+    await db.contactImport.deleteMany({ where: { userId: { in: users } } });
     await db.experimentEvidence.deleteMany({ where: { userId: { in: users } } });
     await db.experimentRun.deleteMany({ where: { userId: { in: users } } });
     await db.experimentProfile.deleteMany({ where: { userId: { in: users } } });
@@ -64,6 +66,29 @@ test("experiment evidence summary is tenant-safe and excludes evidence payload d
       expiresAt: new Date(Date.now() + 900_000),
     },
   });
+  const contactImport = await db.contactImport.create({
+    data: {
+      userId: owner.id,
+      filename: "evidence-review.txt",
+      state: "READY",
+      stats: { valid: 0, invalid: 0, duplicate: 0 },
+    },
+  });
+  const campaign = await db.campaign.create({
+    data: {
+      userId: owner.id,
+      experimentRunId: run.id,
+      name: "Evidence review campaign",
+      message: {
+        from: "sender@example.com",
+        subject: "Evidence review",
+        html: "<p>Evidence review</p>",
+        text: "Evidence review",
+      },
+      importId: contactImport.id,
+      startKey: crypto.randomUUID(),
+    },
+  });
   await db.$transaction(async (tx) => {
     await appendExperimentEvidence(tx, {
       userId: owner.id,
@@ -78,6 +103,7 @@ test("experiment evidence summary is tenant-safe and excludes evidence payload d
       kind: "transport.outcome",
       attemptId: "attempt-hidden-1",
       providerId: "provider-hidden-1",
+      campaignId: campaign.id,
       payload: {
         recipientHash: "recipient-hash-must-stay-server-side",
         providerMessageId: "message-id-must-stay-server-side",
@@ -89,33 +115,37 @@ test("experiment evidence summary is tenant-safe and excludes evidence payload d
   const origin = new URL(process.env.APP_URL!).origin;
   const call = (token: string) =>
     GET(
-      new Request(origin + `/api/experiment-runs/${run.id}/evidence/summary`, {
+      new Request(origin + `/api/campaigns/${campaign.id}/experiment/evidence`, {
         headers: { Cookie: `${sessionCookie}=${token}` },
       }),
-      { params: Promise.resolve({ id: run.id }) },
+      { params: Promise.resolve({ id: campaign.id }) },
     );
 
   const response = await call(ownerSession.token);
   assert.equal(response.status, 200);
   const body = (await response.json()) as {
-    retention: { status: string; purgedAt: string | null };
-    integrity: {
-      available: boolean;
-      valid: boolean;
-      count: number;
-      verifiedThrough: number;
-      headHash: string | null;
+    runId: string;
+    evidence: {
+      retention: { status: string; purgedAt: string | null };
+      integrity: {
+        available: boolean;
+        valid: boolean;
+        count: number;
+        verifiedThrough: number;
+        headHash: string | null;
+      };
+      recent: Array<{ sequence: number; kind: string; createdAt: string }>;
     };
-    recent: Array<{ sequence: number; kind: string; createdAt: string }>;
   };
-  assert.deepEqual(body.retention, { status: "retained", purgedAt: null });
-  assert.equal(body.integrity.available, true);
-  assert.equal(body.integrity.valid, true);
-  assert.equal(body.integrity.count, 2);
-  assert.equal(body.integrity.verifiedThrough, 2);
-  assert(body.integrity.headHash);
+  assert.equal(body.runId, run.id);
+  assert.deepEqual(body.evidence.retention, { status: "retained", purgedAt: null });
+  assert.equal(body.evidence.integrity.available, true);
+  assert.equal(body.evidence.integrity.valid, true);
+  assert.equal(body.evidence.integrity.count, 2);
+  assert.equal(body.evidence.integrity.verifiedThrough, 2);
+  assert(body.evidence.integrity.headHash);
   assert.deepEqual(
-    body.recent.map(({ sequence, kind }) => ({ sequence, kind })),
+    body.evidence.recent.map(({ sequence, kind }) => ({ sequence, kind })),
     [
       { sequence: 2, kind: "transport.outcome" },
       { sequence: 1, kind: "run.started" },
@@ -130,6 +160,7 @@ test("experiment evidence summary is tenant-safe and excludes evidence payload d
     "message-id-must-stay-server-side",
     "attempt-hidden-1",
     "provider-hidden-1",
+    "sender@example.com",
   ]) {
     assert.equal(serialized.includes(hidden), false, `summary exposed ${hidden}`);
   }
