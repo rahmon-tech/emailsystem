@@ -97,19 +97,12 @@ export function ActivityExperimentEvidence() {
     setVerifying(false);
     if (!campaignId) return;
 
-    const refresh = (verify = false) => {
-      if (verify) setVerifying(true);
-      const suffix = verify ? "?verify=1" : "";
+    const refresh = () =>
       void api<{ runId: string | null; evidence: EvidenceReview | null }>(
-        `campaigns/${campaignId}/experiment/evidence${suffix}`,
+        `campaigns/${campaignId}/experiment/evidence`,
       )
         .then(({ runId, evidence }) => {
-          if (!live) return;
-          setResult({ campaignId, runId, evidence });
-          if (evidence) {
-            const snapshot = verificationSnapshot(evidence);
-            if (snapshot) setVerification(snapshot);
-          }
+          if (live) setResult({ campaignId, runId, evidence });
         })
         .catch(() => {
           if (!live) return;
@@ -118,14 +111,10 @@ export function ActivityExperimentEvidence() {
               ? current
               : { campaignId, runId: null, evidence: null },
           );
-        })
-        .finally(() => {
-          if (live && verify) setVerifying(false);
         });
-    };
 
-    refresh(true);
-    const timer = setInterval(() => refresh(false), 10_000);
+    refresh();
+    const timer = setInterval(refresh, 10_000);
     return () => {
       live = false;
       clearInterval(timer);
