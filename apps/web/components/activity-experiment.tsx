@@ -54,17 +54,27 @@ export function ActivityExperiment() {
   useEffect(() => {
     let live = true;
     if (!campaignId) return;
-    void api<{ experiment: ExperimentSummary | null }>(
-      `campaigns/${campaignId}/experiment`,
-    )
-      .then(({ experiment }) => {
-        if (live) setResult({ campaignId, experiment });
-      })
-      .catch(() => {
-        if (live) setResult({ campaignId, experiment: null });
-      });
+    const refresh = () =>
+      void api<{ experiment: ExperimentSummary | null }>(
+        `campaigns/${campaignId}/experiment`,
+      )
+        .then(({ experiment }) => {
+          if (live) setResult({ campaignId, experiment });
+        })
+        .catch(() => {
+          if (!live) return;
+          setResult((current) =>
+            current?.campaignId === campaignId
+              ? current
+              : { campaignId, experiment: null },
+          );
+        });
+
+    refresh();
+    const timer = setInterval(refresh, 5000);
     return () => {
       live = false;
+      clearInterval(timer);
     };
   }, [campaignId]);
 
