@@ -53,10 +53,7 @@ export function ActivityExperiment() {
 
   useEffect(() => {
     let live = true;
-    if (!campaignId) {
-      setResult(null);
-      return;
-    }
+    if (!campaignId) return;
     const refresh = () =>
       void api<{ experiment: ExperimentSummary | null }>(
         `campaigns/${campaignId}/experiment`,
