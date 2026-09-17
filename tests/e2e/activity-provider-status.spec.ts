@@ -64,6 +64,10 @@ test("Activity shows live campaign provider availability", async ({ page }) => {
     await expect(panel.getByText("Unavailable", { exact: true })).toBeVisible();
     await expect(panel.getByText("Cooling down", { exact: true })).toBeVisible();
   } finally {
+    // The E2E worker may have already created deliveries/attempts for this
+    // campaign. Remove the campaign first so those child rows cascade before
+    // the provider/user owner rows are deleted.
+    await db.campaign.deleteMany({ where: { userId: user.id } });
     await db.user.deleteMany({ where: { id: user.id } });
   }
 });
