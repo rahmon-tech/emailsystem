@@ -126,10 +126,7 @@ test("campaign provider status is tenant scoped and follows campaign transport s
       }),
       { params: Promise.resolve({ id: campaign.id }) },
     );
-
-  const response = await call(ownerSession.token);
-  assert.equal(response.status, 200);
-  const status = (await response.json()) as {
+  type Status = {
     scopedProviderCount: number;
     eligibleProviderCount: number;
     campaignBlockReason: string | null;
@@ -142,6 +139,13 @@ test("campaign provider status is tenant scoped and follows campaign transport s
       pressure: string;
     }[];
   };
+  const read = async () => {
+    const response = await call(ownerSession.token);
+    assert.equal(response.status, 200);
+    return (await response.json()) as Status;
+  };
+
+  const status = await read();
   assert.equal(status.campaignBlockReason, null);
   assert.equal(status.scopedProviderCount, 2);
   assert.equal(status.eligibleProviderCount, 1);
@@ -190,12 +194,52 @@ test("campaign provider status is tenant scoped and follows campaign transport s
     data: { experimentRunId: run.id },
   });
 
-  const scopedResponse = await call(ownerSession.token);
-  assert.equal(scopedResponse.status, 200);
-  const scoped = (await scopedResponse.json()) as typeof status;
+  const scoped = await read();
   assert.equal(scoped.scopedProviderCount, 1);
   assert.equal(scoped.eligibleProviderCount, 1);
   assert.deepEqual(scoped.providers.map((row) => row.id), [healthy.id]);
+
+  await db.experimentRun.update({
+    where: { id: run.id },
+    data: { attemptsUsed: 20 },
+  });
+  const attemptBlocked = await read();
+  assert.equal(
+    attemptBlocked.campaignBlockReason,
+    "Experiment attempt ceiling reached; no further transport starts are allowed.",
+  );
+  assert.equal(attemptBlocked.eligibleProviderCount, 0);
+  assert.equal(attemptBlocked.providers[0]?.eligible, false);
+
+  await db.experimentRun.update({
+    where: { id: run.id },
+    data: { attemptsUsed: 0 },
+  });
+  await db.user.update({
+    where: { id: owner.id },
+    data: { experimentKillSwitchAt: new Date(now) },
+  });
+  const killSwitchBlocked = await read();
+  assert.equal(
+    killSwitchBlocked.campaignBlockReason,
+    "Experiment transport is disabled by the account kill switch.",
+  );
+  assert.equal(killSwitchBlocked.eligibleProviderCount, 0);
+
+  await db.user.update({
+    where: { id: owner.id },
+    data: { experimentKillSwitchAt: null },
+  });
+  await db.experimentRun.update({
+    where: { id: run.id },
+    data: { startsAt: new Date(now + 60_000) },
+  });
+  const windowBlocked = await read();
+  assert.equal(
+    windowBlocked.campaignBlockReason,
+    "This experiment is not inside its approved start window yet.",
+  );
+  assert.equal(windowBlocked.eligibleProviderCount, 0);
 
   assert.equal((await call(otherSession.token)).status, 404);
 });
