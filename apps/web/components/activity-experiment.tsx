@@ -8,13 +8,22 @@ import {
   Button,
   Card,
   Chip,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   LinearProgress,
   Stack,
+  TextField,
   Typography,
 } from "@mui/material";
-import { DownloadOutlined, ScienceOutlined } from "@mui/icons-material";
+import { DownloadOutlined, ScienceOutlined, StopCircleOutlined } from "@mui/icons-material";
 import { appPath } from "@emailsystem/core/paths";
 import { api } from "./api-client";
+import {
+  experimentConfigurationLabels,
+  type ActivityExperimentVariables,
+} from "./activity-experiment-model";
 
 type ExperimentSummary = {
   id: string;
@@ -32,7 +41,7 @@ type ExperimentSummary = {
   stoppedAt: string | null;
   killSwitchAt: string | null;
   stopReason: string | null;
-  profile: { name: string };
+  profile: { name: string; variables: ActivityExperimentVariables };
 };
 
 type Result = {
@@ -50,6 +59,10 @@ export function ActivityExperiment() {
   const params = useSearchParams();
   const campaignId = params.get("campaignId") ?? "";
   const [result, setResult] = useState<Result | null>(null);
+  const [stopOpen, setStopOpen] = useState(false);
+  const [stopReason, setStopReason] = useState("");
+  const [stopping, setStopping] = useState(false);
+  const [stopError, setStopError] = useState<string | null>(null);
 
   useEffect(() => {
     let live = true;
@@ -82,6 +95,29 @@ export function ActivityExperiment() {
     return null;
 
   const experiment = result.experiment;
+  const canStop = experiment.state === "READY" || experiment.state === "RUNNING";
+  const configuration = experimentConfigurationLabels(experiment.profile.variables);
+
+  const stopExperiment = async () => {
+    setStopping(true);
+    setStopError(null);
+    try {
+      const stopped = await api<ExperimentSummary>(
+        `experiment-runs/${experiment.id}`,
+        {
+          action: "stop",
+          ...(stopReason.trim() ? { reason: stopReason.trim() } : {}),
+        },
+      );
+      setResult({ campaignId, experiment: stopped });
+      setStopOpen(false);
+      setStopReason("");
+    } catch (error) {
+      setStopError(error instanceof Error ? error.message : "Unable to stop experiment.");
+    } finally {
+      setStopping(false);
+    }
+  };
 
   return (
     <Card
@@ -121,6 +157,20 @@ export function ActivityExperiment() {
             }}
           >
             <Chip size="small" label={stateLabel(experiment.state)} />
+            {canStop && (
+              <Button
+                size="small"
+                color="warning"
+                variant="outlined"
+                startIcon={<StopCircleOutlined />}
+                onClick={() => {
+                  setStopError(null);
+                  setStopOpen(true);
+                }}
+              >
+                Stop experiment
+              </Button>
+            )}
             <Button
               component="a"
               size="small"
@@ -135,6 +185,20 @@ export function ActivityExperiment() {
         <Typography variant="body2" color="text.secondary">
           Authorization reference: {experiment.authorizationRef}
         </Typography>
+
+        <Box>
+          <Typography variant="caption" color="text.secondary">
+            Approved configuration
+          </Typography>
+          <Stack
+            direction="row"
+            sx={{ mt: 0.75, gap: 0.75, flexWrap: "wrap" }}
+          >
+            {configuration.map((label) => (
+              <Chip key={label} size="small" variant="outlined" label={label} />
+            ))}
+          </Stack>
+        </Box>
 
         <Box
           sx={{
@@ -200,6 +264,48 @@ export function ActivityExperiment() {
           </Alert>
         )}
       </Stack>
+
+      <Dialog
+        open={stopOpen}
+        onClose={() => !stopping && setStopOpen(false)}
+        fullWidth
+        maxWidth="sm"
+      >
+        <DialogTitle>Stop authorized experiment?</DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} sx={{ pt: 0.5 }}>
+            <Typography variant="body2" color="text.secondary">
+              This stops new experiment transport starts for this run. Existing production safety and provider controls remain unchanged.
+            </Typography>
+            <TextField
+              label="Stop reason"
+              value={stopReason}
+              onChange={(event) => setStopReason(event.target.value.slice(0, 300))}
+              placeholder="Stopped after the approved observation window."
+              multiline
+              minRows={2}
+              inputProps={{ maxLength: 300 }}
+              helperText={`${stopReason.length}/300 · optional; stored on the run for review`}
+              disabled={stopping}
+              autoFocus
+            />
+            {stopError && <Alert severity="error">{stopError}</Alert>}
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setStopOpen(false)} disabled={stopping}>
+            Keep running
+          </Button>
+          <Button
+            color="warning"
+            variant="contained"
+            onClick={() => void stopExperiment()}
+            disabled={stopping}
+          >
+            {stopping ? "Stopping…" : "Confirm stop"}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Card>
   );
 }

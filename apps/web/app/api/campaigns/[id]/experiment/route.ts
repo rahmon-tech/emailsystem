@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { db } from "@emailsystem/db";
 import { requireUser } from "@emailsystem/core/auth";
+import { experimentVariables } from "@emailsystem/core/experiments";
 import { errorResponse, response } from "@emailsystem/core/http";
 
 export const runtime = "nodejs";
@@ -32,7 +33,7 @@ export async function GET(request: Request, { params }: Context) {
             stoppedAt: true,
             killSwitchAt: true,
             stopReason: true,
-            profile: { select: { name: true } },
+            profile: { select: { name: true, variables: true } },
           },
         },
       },
@@ -42,7 +43,19 @@ export async function GET(request: Request, { params }: Context) {
         { error: "Campaign not found.", code: "NOT_FOUND" },
         404,
       );
-    return response({ experiment: campaign.experimentRun });
+
+    const experiment = campaign.experimentRun
+      ? {
+          ...campaign.experimentRun,
+          profile: {
+            name: campaign.experimentRun.profile.name,
+            variables: experimentVariables.parse(
+              campaign.experimentRun.profile.variables,
+            ),
+          },
+        }
+      : null;
+    return response({ experiment });
   } catch (error) {
     return errorResponse(error);
   }
