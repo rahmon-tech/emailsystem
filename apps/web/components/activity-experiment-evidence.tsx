@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import {
   Alert,
@@ -40,6 +40,11 @@ type VerificationSnapshot = {
   verifiedThrough: number;
   headHash: string | null;
   verifiedAt: string;
+};
+
+type VerificationState = {
+  campaignId: string;
+  snapshot: VerificationSnapshot;
 };
 
 function verificationSnapshot(evidence: EvidenceReview): VerificationSnapshot | null {
@@ -87,17 +92,12 @@ const entryWord = (count: number) => (count === 1 ? "entry" : "entries");
 export function ActivityExperimentEvidence() {
   const params = useSearchParams();
   const campaignId = params.get("campaignId") ?? "";
-  const campaignRef = useRef(campaignId);
-  campaignRef.current = campaignId;
   const [result, setResult] = useState<Result | null>(null);
-  const [verification, setVerification] = useState<VerificationSnapshot | null>(null);
-  const [verifying, setVerifying] = useState(false);
+  const [verification, setVerification] = useState<VerificationState | null>(null);
+  const [verifyingCampaignId, setVerifyingCampaignId] = useState<string | null>(null);
 
   useEffect(() => {
     let live = true;
-    setResult(null);
-    setVerification(null);
-    setVerifying(false);
     if (!campaignId) return;
 
     const refresh = () =>
@@ -124,26 +124,36 @@ export function ActivityExperimentEvidence() {
     };
   }, [campaignId]);
 
+  const verifying = verifyingCampaignId === campaignId;
+  const activeVerification =
+    verification?.campaignId === campaignId ? verification.snapshot : null;
+
   const verifyChain = () => {
     if (!campaignId || verifying) return;
     const requestedCampaignId = campaignId;
-    setVerifying(true);
+    setVerifyingCampaignId(requestedCampaignId);
     void api<{ runId: string | null; evidence: EvidenceReview | null }>(
       `campaigns/${requestedCampaignId}/experiment/evidence?verify=1`,
     )
       .then(({ runId, evidence }) => {
-        if (campaignRef.current !== requestedCampaignId) return;
-        setResult({ campaignId: requestedCampaignId, runId, evidence });
+        setResult((current) =>
+          current && current.campaignId !== requestedCampaignId
+            ? current
+            : { campaignId: requestedCampaignId, runId, evidence },
+        );
         if (evidence) {
           const snapshot = verificationSnapshot(evidence);
-          if (snapshot) setVerification(snapshot);
+          if (snapshot)
+            setVerification({ campaignId: requestedCampaignId, snapshot });
         }
       })
       .catch(() => {
         /* Keep the last known evidence summary and verification result. */
       })
       .finally(() => {
-        if (campaignRef.current === requestedCampaignId) setVerifying(false);
+        setVerifyingCampaignId((current) =>
+          current === requestedCampaignId ? null : current,
+        );
       });
   };
 
@@ -151,11 +161,11 @@ export function ActivityExperimentEvidence() {
     return null;
 
   const evidence = result.evidence;
-  const status = evidenceStatus(evidence, verification);
+  const status = evidenceStatus(evidence, activeVerification);
   const verificationCurrent =
-    verification?.valid === true &&
-    verification.count === evidence.integrity.count &&
-    verification.headHash === evidence.integrity.headHash;
+    activeVerification?.valid === true &&
+    activeVerification.count === evidence.integrity.count &&
+    activeVerification.headHash === evidence.integrity.headHash;
   const head = evidence.integrity.headHash
     ? `${evidence.integrity.headHash.slice(0, 12)}…`
     : null;
@@ -207,10 +217,10 @@ export function ActivityExperimentEvidence() {
               : ""}
             .
           </Alert>
-        ) : verificationCurrent && verification ? (
+        ) : verificationCurrent && activeVerification ? (
           <Typography variant="body2" color="text.secondary">
-            {evidence.integrity.count.toLocaleString()} chained {entryWord(evidence.integrity.count)} · verified through #{verification.verifiedThrough.toLocaleString()}
-            {head ? ` · head ${head}` : ""} · verified {new Date(verification.verifiedAt).toLocaleString()}
+            {evidence.integrity.count.toLocaleString()} chained {entryWord(evidence.integrity.count)} · verified through #{activeVerification.verifiedThrough.toLocaleString()}
+            {head ? ` · head ${head}` : ""} · verified {new Date(activeVerification.verifiedAt).toLocaleString()}
           </Typography>
         ) : (
           <Typography variant="body2" color="text.secondary">
