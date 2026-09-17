@@ -137,7 +137,12 @@ printf 'https://%s%s/health/ready -> %s\n' "$DOMAIN" "$BASE_PATH" "$(http_code "
 section "TLS certificate"
 if have openssl; then
   if have timeout; then
-    if cert="$(timeout 12 sh -c "printf '' | openssl s_client -servername '$DOMAIN' -connect '$DOMAIN:443' 2>/dev/null | openssl x509 -noout -subject -issuer -dates" 2>/dev/null)"; then
+    cert="$(
+      printf '' |
+        timeout 12 openssl s_client -servername "$DOMAIN" -connect "$DOMAIN:443" 2>/dev/null |
+        openssl x509 -noout -subject -issuer -dates 2>/dev/null || true
+    )"
+    if [ -n "$cert" ]; then
       printf '%s\n' "$cert"
     else
       printf '[warn] TLS certificate inspection failed\n'
