@@ -6,6 +6,15 @@ The target for this installation is `https://app.promptologoy.com/emailblast`. T
 
 Inspect the OS, available memory/disk, Docker/Compose versions, running containers/services, listening ports, the existing HTTPS virtual host and its certificate. Preserve the current root project. Back up its proxy configuration and record the root site's status before adding the scoped route. Select the verified release commit from GitHub in an isolated directory such as `/opt/emailblast`; the private repository requires authorized access.
 
+The repository includes a deliberately read-only first-pass inspection command. Run it before any deployment mutation:
+
+```sh
+bash scripts/vps-readonly-inspect.sh app.promptologoy.com /emailblast 3087
+```
+
+It reports OS/capacity, Docker/Compose and runtime versions, service state, container/listener summaries, whether loopback port 3087 appears occupied, proxy configuration filenames, DNS, public HTTP status and TLS certificate metadata. It does not read `.env`, dump container environments, print proxy configuration contents, restart/reload services, modify the firewall, run migrations or alter containers/databases. Permission-limited checks are reported as warnings rather than escalated with `sudo`.
+
+
 For a host with Docker already installed, run from the selected checkout:
 
 ```sh
