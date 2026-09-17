@@ -102,7 +102,7 @@ export function ActivityProviderStatus() {
 
       {!status.providers.length ? (
         <Typography variant="body2" color="text.secondary">
-          No sender-authorized providers are inside this campaign's current scope.
+          No sender-authorized providers are inside this campaign&apos;s current scope.
         </Typography>
       ) : (
         <Stack spacing={1}>
