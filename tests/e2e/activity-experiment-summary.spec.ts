@@ -8,7 +8,7 @@ import { db } from "@emailsystem/db";
 
 const password = "Activity-experiment-browser-password-2026";
 
-test("Activity shows bounded experiment status and tenant-safe evidence export", async ({
+test("Activity shows live bounded experiment status and tenant-safe evidence export", async ({
   page,
 }) => {
   const email = `activity-experiment-${crypto.randomUUID()}@example.com`;
@@ -110,6 +110,26 @@ test("Activity shows bounded experiment status and tenant-safe evidence export",
       "href",
       new RegExp(`/api/experiment-runs/${run.id}/evidence$`),
     );
+
+    await db.experimentRun.update({
+      where: { id: run.id },
+      data: {
+        state: "STOPPED",
+        recipientsUsed: 7,
+        attemptsUsed: 9,
+        stoppedAt: new Date(),
+        stopReason: "Operator stopped after bounded proof.",
+      },
+    });
+
+    await expect(card.getByText("7 / 12", { exact: true })).toBeVisible({
+      timeout: 8_000,
+    });
+    await expect(card.getByText("9 / 24", { exact: true })).toBeVisible();
+    await expect(card.getByText("stopped", { exact: true })).toBeVisible();
+    await expect(
+      card.getByText("Operator stopped after bounded proof.", { exact: true }),
+    ).toBeVisible();
 
     await page.setViewportSize({ width: 390, height: 844 });
     await page.screenshot({
