@@ -66,20 +66,20 @@ export async function getExperimentEvidenceReview(
       recent: [],
     };
 
-  const [count, head, recent] = await Promise.all([
+  const [count, recentRows] = await Promise.all([
     db.experimentEvidence.count({ where: { userId, runId } }),
-    db.experimentEvidence.findFirst({
-      where: { userId, runId },
-      orderBy: { sequence: "desc" },
-      select: { hash: true },
-    }),
     db.experimentEvidence.findMany({
       where: { userId, runId },
       orderBy: { sequence: "desc" },
       take: 5,
-      select: { sequence: true, kind: true, createdAt: true },
+      select: { sequence: true, kind: true, createdAt: true, hash: true },
     }),
   ]);
+  const recent = recentRows.map(({ sequence, kind, createdAt }) => ({
+    sequence,
+    kind,
+    createdAt,
+  }));
 
   return {
     retention: { status: "retained" as const, purgedAt: null },
@@ -89,7 +89,7 @@ export async function getExperimentEvidenceReview(
       valid: null,
       count,
       verifiedThrough: null,
-      headHash: head?.hash ?? null,
+      headHash: recentRows[0]?.hash ?? null,
       verifiedAt: null,
     },
     recent,
