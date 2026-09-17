@@ -44,6 +44,7 @@ export async function campaignProviderStatus(
     where: { id: campaignId, userId },
     select: {
       id: true,
+      user: { select: { experimentKillSwitchAt: true } },
       senderIdentity: {
         select: {
           id: true,
@@ -55,10 +56,14 @@ export async function campaignProviderStatus(
       experimentRun: {
         select: {
           state: true,
+          attemptsUsed: true,
+          maxAttempts: true,
+          startsAt: true,
           expiresAt: true,
           profile: {
             select: {
               providerScopes: { select: { providerId: true } },
+              senderScopes: { select: { senderIdentityId: true } },
             },
           },
         },
@@ -148,12 +153,25 @@ export async function campaignProviderStatus(
     select: { id: true },
   });
   const experimentBlock = campaign.experimentRun
-    ? campaign.experimentRun.state !== "RUNNING"
-      ? "Experiment run is not active."
-      : campaign.experimentRun.expiresAt &&
-          campaign.experimentRun.expiresAt.getTime() <= now
-        ? "Experiment run is outside its approved time window."
-        : null
+    ? campaign.user.experimentKillSwitchAt
+      ? "Experiment transport is disabled by the account kill switch."
+      : campaign.experimentRun.state !== "RUNNING"
+        ? "Experiment run is not active."
+        : campaign.experimentRun.startsAt &&
+            campaign.experimentRun.startsAt.getTime() > now
+          ? "This experiment is not inside its approved start window yet."
+          : !campaign.experimentRun.expiresAt
+            ? "This experiment run has not been started with a bounded expiry."
+            : campaign.experimentRun.expiresAt.getTime() <= now
+              ? "This experiment run is outside its approved time window."
+              : campaign.experimentRun.attemptsUsed >=
+                  campaign.experimentRun.maxAttempts
+                ? "Experiment attempt ceiling reached; no further transport starts are allowed."
+                : !campaign.experimentRun.profile.senderScopes.some(
+                      (scope) => scope.senderIdentityId === sender.id,
+                    )
+                  ? "Campaign sender is outside the approved experiment scope."
+                  : null
     : null;
   const senderBlock = !sender.enabled
     ? "Campaign sender is disabled."
