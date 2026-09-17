@@ -69,7 +69,8 @@ export function ActivityExperimentSummary() {
 
   if (
     !campaignId ||
-    result?.campaignId !== campaignId ||
+    !result ||
+    result.campaignId !== campaignId ||
     result.summary === null
   )
     return null;
