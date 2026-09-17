@@ -241,5 +241,24 @@ test("campaign provider status is tenant scoped and follows campaign transport s
   );
   assert.equal(windowBlocked.eligibleProviderCount, 0);
 
+  await db.experimentRun.update({
+    where: { id: run.id },
+    data: { startsAt: null },
+  });
+  await db.experimentSenderScope.delete({
+    where: {
+      profileId_senderIdentityId: {
+        profileId: profile.id,
+        senderIdentityId: sender.id,
+      },
+    },
+  });
+  const senderScopeBlocked = await read();
+  assert.equal(
+    senderScopeBlocked.campaignBlockReason,
+    "Campaign sender is outside the approved experiment scope.",
+  );
+  assert.equal(senderScopeBlocked.eligibleProviderCount, 0);
+
   assert.equal((await call(otherSession.token)).status, 404);
 });
