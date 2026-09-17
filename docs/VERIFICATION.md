@@ -44,6 +44,24 @@ Quality #320 passed the complete repository pipeline.
 
 The slice reuses the authoritative tamper-evident evidence verifier server-side and exposes only retention state, integrity state/count/head and recent evidence event names/timestamps. Evidence payloads, recipient hashes, attempt/provider identifiers, message identifiers and sender data are intentionally excluded from the Activity response. Tenant-isolation integration proof and browser live-refresh proof are included.
 
+### PR #82 — canonical checkpoint reconciliation
+
+Exact head: `c4fc22e56f906ab4f8811ace783a77ee8d16d0fd`
+
+Quality #328 / run `35264063476` passed the complete repository pipeline. This checkpoint is documentation-only and reconciles repository truth without changing runtime behavior.
+
+### PR #83 — bounded Activity evidence verification
+
+Exact head: `93e35f5125d3ec212565bc2d6d5b07ffc2aea333`
+
+Quality #342 / run `35267311307` passed the complete repository pipeline, including production-container validation.
+
+The assembled review found one concrete performance/race issue in the draft Activity evidence surface. The normal 10-second refresh now uses bounded/index-supported summary reads and does not take the experiment transport lock; authoritative full-chain verification is operator-explicit. Tenant/privacy/tamper proof remains intact, and campaign-keyed client state prevents stale overlapping verification responses from contaminating another campaign's card.
+
+### PR #84 — final control-plane documentation reconciliation
+
+PR #84 is the current documentation-only checkpoint stacked directly on the verified PR #83 head. It reconciles `DELIVERY_CONTROL_PLANE.md`, `CURRENT_WORK.md`, and this report with the verified pre-publication stack while preserving the explicit no-deployment boundary. Its exact commit/Quality result is recorded in PR metadata and issue #21 rather than embedded self-referentially in the commit itself.
+
 ## Verified product boundaries
 
 The system currently has repository proof for:
@@ -82,7 +100,7 @@ A green repository test does not prove:
 
 ## Final development acceptance boundary
 
-Before calling development complete, publish the verified PR #78 → #79 stack in dependency order when deployment side effects are authorized, then run the full Quality pipeline on the exact assembled `main` SHA.
+Before calling development complete, publish the verified PR #78 → #79 → #82 → #83 stack plus the final docs-only reconciliation checkpoint in dependency order when publication/deployment side effects are authorized, then run the full Quality pipeline on the exact assembled `main` SHA.
 
 That final run must remain green across migrations/drift/upgrade rehearsal, dependency audit, secret scan, type/lint, unit/integration, tenant/race coverage, production build, browser E2E, screenshots and production-container validation. The final review should also confirm privacy/redaction and reasonable bounded-query/refresh behavior.
 
