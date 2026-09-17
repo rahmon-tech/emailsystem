@@ -1,24 +1,21 @@
 # Implementation and verification report
 
-This report separates repository/CI evidence from provider-account evidence and deployment-host evidence. A green CI run does not prove a live provider account, inbox placement, DNS/TLS reachability or VPS installation.
+This report separates repository/CI evidence from provider-account evidence and deployment-host evidence. A green CI run does not prove live provider credentials, inbox placement, DNS/TLS/webhook reachability or VPS installation.
 
-## Published baseline
+## Published assembled checkpoint
 
-Published `main` is PR #72 merge `ce87caa214f60247cb06a0089dcd405ed719b855`.
+Published `main` is exactly:
 
-The exact PR #72 feature head `f6942f6e991b5e15a40485b1b6a441315a22b8e2` passed full Quality #313 before merge. The published baseline includes the established Providers → Blast / Image-first → Activity workflow, provider/sender controls, background worker delivery, pacing/safety, tracking, authorized experiments, evidence/retention, observability and production packaging.
+`5ea40e51cbbc7848b02c3945d064e0c7e86ce580`
 
-## Verified draft stack
+The former #78 → #79 → #82 → #83 → #84 stack was published by non-forced fast-forward from `ce87caa214f60247cb06a0089dcd405ed719b855`. Commit comparison was ahead-only, so the already-verified implementation ancestry was preserved.
 
-Deployment is intentionally deferred. The following development checkpoints are verified but remain draft/unmerged:
+Quality #345 / run `35284283698` was triggered by the `main` publication push and passed completely on that exact SHA.
 
-### PR #78 — experiment configuration and operator control
+It passed:
 
-Exact head: `e135ad5a196d5a67d65b8d475f53eef2e4f4da48`
-
-Quality #319 / run `35239476640` passed the complete repository pipeline:
-
-- production dependency audit;
+- locked dependency installation;
+- high/critical production dependency audit;
 - Prisma generation;
 - fresh PostgreSQL migrations;
 - migration/schema drift verification;
@@ -29,96 +26,114 @@ Quality #319 / run `35239476640` passed the complete repository pipeline:
 - unit tests;
 - PostgreSQL/Redis integration tests;
 - production Next.js build;
-- Playwright browser E2E;
+- Playwright Chromium/browser E2E;
 - screenshot/visual review emission;
 - production-container validation;
-- diagnostics/artifact collection and teardown.
+- diagnostics/artifact handling and teardown.
 
-The slice exposes normalized approved experiment configuration in Activity and adds operator stop/review through the existing tenant-scoped experiment-run mutation owner. No schema, provider adapter, renderer/MIME, dispatcher/worker, pacing or transport semantics changed.
+This is the final repository/CI development acceptance checkpoint for the assembled published state.
 
-### PR #79 — minimized live evidence review
+## Published milestone history
+
+The final Activity/evidence/documentation slices are now contained in `main`:
+
+### PR #78 — experiment configuration and operator control
+
+Exact head: `e135ad5a196d5a67d65b8d475f53eef2e4f4da48`
+
+Quality #319 / run `35239476640` passed fully.
+
+### PR #79 — minimized Activity evidence review
 
 Exact head: `0cd6e8ac24901cff948e88015d41b0fcc3a993ef`
 
-Quality #320 passed the complete repository pipeline.
-
-The slice reuses the authoritative tamper-evident evidence verifier server-side and exposes only retention state, integrity state/count/head and recent evidence event names/timestamps. Evidence payloads, recipient hashes, attempt/provider identifiers, message identifiers and sender data are intentionally excluded from the Activity response. Tenant-isolation integration proof and browser live-refresh proof are included.
+Quality #320 passed fully.
 
 ### PR #82 — canonical checkpoint reconciliation
 
 Exact head: `c4fc22e56f906ab4f8811ace783a77ee8d16d0fd`
 
-Quality #328 / run `35264063476` passed the complete repository pipeline. This checkpoint is documentation-only and reconciles repository truth without changing runtime behavior.
+Quality #328 / run `35264063476` passed fully.
 
 ### PR #83 — bounded Activity evidence verification
 
 Exact head: `93e35f5125d3ec212565bc2d6d5b07ffc2aea333`
 
-Quality #342 / run `35267311307` passed the complete repository pipeline, including production-container validation.
+Quality #342 / run `35267311307` passed fully.
 
-The assembled review found one concrete performance/race issue in the draft Activity evidence surface. The normal 10-second refresh now uses bounded/index-supported summary reads and does not take the experiment transport lock; authoritative full-chain verification is operator-explicit. Tenant/privacy/tamper proof remains intact, and campaign-keyed client state prevents stale overlapping verification responses from contaminating another campaign's card.
+The normal 10-second Activity evidence refresh uses bounded/index-supported summary reads and does not take the experiment transport/control lock. Authoritative full-chain verification is operator-explicit. Tenant/privacy/tamper proof remains intact, and campaign-keyed state prevents stale overlapping verification responses from contaminating another campaign.
 
-### PR #84 — final control-plane documentation reconciliation
+### PR #84 — final pre-publication canonical documentation reconciliation
 
-PR #84 is the current documentation-only checkpoint stacked directly on the verified PR #83 head. It reconciles `DELIVERY_CONTROL_PLANE.md`, `CURRENT_WORK.md`, and this report with the verified pre-publication stack while preserving the explicit no-deployment boundary. Its exact commit/Quality result is recorded in PR metadata and issue #21 rather than embedded self-referentially in the commit itself.
+Exact head: `5ea40e51cbbc7848b02c3945d064e0c7e86ce580`
+
+Quality #344 / run `35280902536` passed fully before publication. The same exact commit is now published `main`, and push-triggered Quality #345 passed fully afterward.
 
 ## Verified product boundaries
 
-The system currently has repository proof for:
+The repository has CI proof for:
 
-- tenant-scoped provider credentials, sender identities and provider-domain authorization;
+- tenant-scoped provider credentials/configuration models, sender identities and provider-domain authorization logic;
 - imports, immutable campaign snapshots, scheduling, campaign preparation and background dispatch;
 - weighted/fair provider selection plus provider quotas/rates/concurrency and shared account/domain/campaign ceilings;
 - warm-up profiles, adaptive slowdown, durable pressure reconstruction and gradual recovery;
 - provider `Retry-After` parsing, delivery retry timing, provider cooldown and Activity `nextAllowedAt` visibility;
 - fail-closed provider policy/enforcement handling;
-- suppressions/unsubscribe and complaint/hard-bounce safety brakes;
-- truthful provider acceptance versus downstream delivery state;
+- suppression/unsubscribe and complaint/hard-bounce safety brakes;
+- truthful provider acceptance versus downstream-delivery state;
 - tracking/privacy/reputation controls and structured redacted observability;
-- ordinary HTML/text + attachment/CID semantics and Image-first composer behavior on the existing message path;
+- ordinary HTML/text + attachment/CID semantics and Image-first behavior through the existing message path;
 - authorized experiment profiles/runs, bounded scope/windows/usage, kill switch and transport-start checks;
 - run-wide experiment concurrency, smooth pacing and bounded-burst pacing;
 - explicit UTF-8/transfer-encoding controls where deterministic raw-MIME ownership exists;
 - deterministic `cid-inline` runtime binding and deterministic `html` snapshot evidence;
 - run-start reproducibility evidence, temporary failover vs policy-stop proof and SHA-256 evidence export;
 - evidence/message retention with whole-ledger purge and sensitive terminal snapshot scrubbing;
-- Activity experiment summary/configuration/stop/evidence UX in the verified draft stack;
+- Activity experiment summary/configuration/stop/evidence UX;
+- bounded live evidence review plus operator-explicit full-chain verification;
 - native bootstrap/preflight, Docker/standalone packaging and the full Quality workflow.
 
 ## Intentionally unclaimed behavior
 
 `text`, `hosted-image`, `attachment-only` and `image-dominant` remain experiment metadata only. They are not reported as effective runtime behavior because no separate deterministic existing owner has been proven for those labels without redesigning the message path.
 
-A green repository test does not prove:
+Repository/CI verification also does **not** prove:
 
 - any live provider credential is currently valid;
-- a provider account has a particular quota/permission state;
+- a provider account has a particular quota, permission, reputation or production state;
 - a sender/domain is currently verified at that provider;
 - provider acceptance equals inbox delivery;
-- DNS, TLS, webhooks or reverse proxy are reachable on the intended VPS;
-- PostgreSQL/Redis persistence, backups or process supervision are correctly installed on the target host.
+- DNS, TLS, webhooks or reverse proxy are reachable in the intended environment;
+- PostgreSQL/Redis persistence and backups are correctly installed on the target host;
+- web/worker process supervision is correctly configured on the target host;
+- a real recipient/provider smoke test has passed.
 
-## Final development acceptance boundary
+## Development acceptance boundary
 
-Before calling development complete, publish the verified PR #78 → #79 → #82 → #83 stack plus the final docs-only reconciliation checkpoint in dependency order when publication/deployment side effects are authorized, then run the full Quality pipeline on the exact assembled `main` SHA.
+The development/publication acceptance boundary is satisfied by exact published `main` SHA `5ea40e51cbbc7848b02c3945d064e0c7e86ce580` and push-triggered Quality #345 / run `35284283698`.
 
-That final run must remain green across migrations/drift/upgrade rehearsal, dependency audit, secret scan, type/lint, unit/integration, tenant/race coverage, production build, browser E2E, screenshots and production-container validation. The final review should also confirm privacy/redaction and reasonable bounded-query/refresh behavior.
+Further repository feature work should be driven by a new product requirement or a concrete defect, not by the old pre-publication checklist.
 
-## Deployment acceptance boundary — deferred
+## Deployment/provider acceptance boundary
 
-Only after final merged-main Quality is green should deployment work begin. The deployment phase must inspect the actual host and verify:
+The next phase is environment-specific acceptance.
 
-- required Node/pnpm/runtime prerequisites;
+The complete EmailSystem runtime is self-hosted web + independent worker + PostgreSQL + Redis. Vercel is not the acceptance target for the whole system.
+
+The real environment must verify:
+
+- Node/pnpm or Docker prerequisites;
 - PostgreSQL and Redis persistence;
-- migration application and rollback/restore plan;
-- web + worker process supervision and restart behavior;
-- reverse proxy, TLS and configured base path;
-- production secrets and provider credentials;
-- sender/domain authorization and webhook reachability;
-- health/readiness endpoints;
-- logging/monitoring and backup/restore;
+- migrations and restore/rollback procedure;
+- web + worker process supervision/restart;
+- reverse proxy/TLS/base path;
+- production secrets/provider credentials;
+- sender/domain authorization;
+- authenticated webhook reachability;
+- health/readiness;
+- logging/monitoring;
+- backups/restore;
+- provider-account quota/permission reality;
 - a small controlled legitimate smoke test.
-
-Vercel is not the acceptance target for the complete EmailSystem runtime. No Vercel or VPS deployment is authorized by this checkpoint.
 
 See `CURRENT_WORK.md`, `DELIVERY_CONTROL_PLANE.md`, `PROVIDERS.md`, `DEPLOYMENT.md`, `ARCHITECTURE.md` and `SECURITY.md` for the governing boundaries.
