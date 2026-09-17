@@ -27,6 +27,7 @@ async function fixture() {
     perMinute: 1000,
     concurrency: 10,
   });
+  assert(provider);
   const list = await importRecipients(
     user.id,
     Buffer.from("controlled@example.net"),
