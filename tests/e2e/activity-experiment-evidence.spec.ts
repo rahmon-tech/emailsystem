@@ -98,7 +98,7 @@ test("Activity keeps live evidence review bounded and verifies explicitly withou
     const card = page.getByRole("region", { name: "Experiment evidence review" });
     await expect(card).toBeVisible();
     await expect(card.getByText("Not yet verified", { exact: true })).toBeVisible();
-    await expect(card).toContainText("1 retained entries");
+    await expect(card).toContainText("1 retained entry");
     await expect(card).toContainText("#1 · run started");
     await expect(page.getByText("browser-secret-must-not-render")).toHaveCount(0);
 
@@ -113,7 +113,7 @@ test("Activity keeps live evidence review bounded and verifies explicitly withou
     ]);
     expect(firstVerifyResponse.status()).toBe(200);
     await expect(card.getByText("Chain verified", { exact: true })).toBeVisible();
-    await expect(card).toContainText("1 chained entries");
+    await expect(card).toContainText("1 chained entry");
     await expect(card).toContainText("verified through #1");
 
     await db.$transaction((tx) =>
