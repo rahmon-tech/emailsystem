@@ -82,6 +82,7 @@ function evidenceStatus(
 }
 
 const eventLabel = (kind: string) => kind.replaceAll(".", " ").replaceAll("-", " ");
+const entryWord = (count: number) => (count === 1 ? "entry" : "entries");
 
 export function ActivityExperimentEvidence() {
   const params = useSearchParams();
@@ -202,12 +203,12 @@ export function ActivityExperimentEvidence() {
           </Alert>
         ) : verificationCurrent && verification ? (
           <Typography variant="body2" color="text.secondary">
-            {evidence.integrity.count.toLocaleString()} chained entries · verified through #{verification.verifiedThrough.toLocaleString()}
+            {evidence.integrity.count.toLocaleString()} chained {entryWord(evidence.integrity.count)} · verified through #{verification.verifiedThrough.toLocaleString()}
             {head ? ` · head ${head}` : ""} · verified {new Date(verification.verifiedAt).toLocaleString()}
           </Typography>
         ) : (
           <Typography variant="body2" color="text.secondary">
-            {evidence.integrity.count.toLocaleString()} retained entries · full-chain verification required
+            {evidence.integrity.count.toLocaleString()} retained {entryWord(evidence.integrity.count)} · full-chain verification required
             {head ? ` · head ${head}` : ""}
           </Typography>
         )}
