@@ -33,7 +33,7 @@ test("image-first optionally wraps the primary CID image in an http(s) destinati
     await expect(page).toHaveURL(/\/blast$/);
     await page.goto(appPath("/blast/image"));
     await expect(
-      page.getByRole("heading", { name: "Image-first blast", exact: true }),
+      page.getByRole("heading", { name: "Blast", exact: true }),
     ).toBeVisible();
 
     await page.getByLabel("Primary email image").setInputFiles({
