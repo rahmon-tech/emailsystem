@@ -133,7 +133,7 @@ export function ActivityExperiment() {
   return (
     <Card
       component="section"
-      aria-label="Authorized experiment"
+      aria-label="Controlled experiment"
       sx={{ mb: 2, p: { xs: 1.75, sm: 2 } }}
     >
       <Stack spacing={1.75}>
@@ -151,10 +151,10 @@ export function ActivityExperiment() {
             <ScienceOutlined fontSize="small" />
             <Box sx={{ minWidth: 0 }}>
               <Typography sx={{ fontWeight: 700 }}>
-                Authorized experiment
+                Controlled experiment
               </Typography>
               <Typography variant="caption" color="text.secondary">
-                {experiment.profile.name} · profile v{experiment.profileVersion}
+                {experiment.profile.name} · settings v{experiment.profileVersion}
               </Typography>
             </Box>
           </Stack>
@@ -188,18 +188,18 @@ export function ActivityExperiment() {
               startIcon={<DownloadOutlined />}
               href={appPath(`/api/experiment-runs/${experiment.id}/evidence`)}
             >
-              Export evidence
+              Download records
             </Button>
           </Stack>
         </Stack>
 
         <Typography variant="body2" color="text.secondary">
-          Authorization reference: {experiment.authorizationRef}
+          Approval reference: {experiment.authorizationRef}
         </Typography>
 
         <Box>
           <Typography variant="caption" color="text.secondary">
-            Approved configuration
+            Approved settings
           </Typography>
           <Stack
             direction="row"
@@ -223,7 +223,7 @@ export function ActivityExperiment() {
               direction="row"
               sx={{ justifyContent: "space-between", gap: 1, mb: 0.75 }}
             >
-              <Typography variant="caption">Controlled recipients</Typography>
+              <Typography variant="caption">Recipients used</Typography>
               <Typography
                 variant="caption"
                 sx={{ fontVariantNumeric: "tabular-nums" }}
@@ -246,7 +246,7 @@ export function ActivityExperiment() {
               direction="row"
               sx={{ justifyContent: "space-between", gap: 1, mb: 0.75 }}
             >
-              <Typography variant="caption">Transport attempts</Typography>
+              <Typography variant="caption">Send attempts</Typography>
               <Typography
                 variant="caption"
                 sx={{ fontVariantNumeric: "tabular-nums" }}
@@ -265,8 +265,8 @@ export function ActivityExperiment() {
 
         <Typography variant="caption" color="text.secondary">
           {experiment.expiresAt
-            ? `Bounded until ${new Date(experiment.expiresAt).toLocaleString()} · maximum duration ${Math.ceil(experiment.maxDurationSeconds / 60).toLocaleString()} min.`
-            : `Maximum duration ${Math.ceil(experiment.maxDurationSeconds / 60).toLocaleString()} min; bounded expiry is set when the run starts.`}
+            ? `Ends by ${new Date(experiment.expiresAt).toLocaleString()} · maximum duration ${Math.ceil(experiment.maxDurationSeconds / 60).toLocaleString()} min.`
+            : `Maximum duration ${Math.ceil(experiment.maxDurationSeconds / 60).toLocaleString()} min; the end time is set when the experiment starts.`}
         </Typography>
 
         {experiment.stopReason && (
@@ -282,11 +282,12 @@ export function ActivityExperiment() {
         fullWidth
         maxWidth="sm"
       >
-        <DialogTitle>Stop authorized experiment?</DialogTitle>
+        <DialogTitle>Stop controlled experiment?</DialogTitle>
         <DialogContent>
           <Stack spacing={2} sx={{ pt: 0.5 }}>
             <Typography variant="body2" color="text.secondary">
-              This stops new experiment transport starts for this run. Existing production safety and provider controls remain unchanged.
+              This stops any new sends for this experiment. Your normal campaign
+              sending limits and sending-service settings are not changed.
             </Typography>
             <TextField
               label="Stop reason"
@@ -296,7 +297,7 @@ export function ActivityExperiment() {
               multiline
               minRows={2}
               slotProps={{ htmlInput: { maxLength: 300 } }}
-              helperText={`${stopReason.length}/300 · optional; stored on the run for review`}
+              helperText={`${stopReason.length}/300 · optional; saved with the experiment record`}
               disabled={stopping}
               autoFocus
             />
