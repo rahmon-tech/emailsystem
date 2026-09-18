@@ -481,7 +481,6 @@ export async function processDelivery(
       initial.email,
       initial.unsubscribeToken,
     );
-    if (!selectedSender) return;
     const message = {
       ...baseMessage,
       from: deliverySender.email,
