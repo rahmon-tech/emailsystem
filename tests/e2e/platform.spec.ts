@@ -45,9 +45,9 @@ test("login, provider setup, HTML import, preview, test, campaign controls, reco
     .getByRole("button", { name: "Sending safety", exact: true })
     .click();
   await expect(
-    page.getByLabel("Account daily safeguard", { exact: true }),
+    page.getByLabel("Account · rolling 24h", { exact: true }),
   ).toHaveValue("");
-  await page.getByLabel("Account daily safeguard", { exact: true }).fill("12000");
+  await page.getByLabel("Account · rolling 24h", { exact: true }).fill("12000");
   await page
     .getByRole("button", { name: "Save safety settings", exact: true })
     .click();
@@ -433,7 +433,7 @@ test("login, provider setup, HTML import, preview, test, campaign controls, reco
           page.getByText("Browser verification", { exact: true }),
         ).toBeVisible();
       else
-        await expect(page.getByLabel("Sending domain")).toContainText(
+        await expect(page.getByLabel("Sending domains")).toContainText(
           "example.com",
         );
       if (route === "/blast") {
@@ -530,7 +530,7 @@ test("login, provider setup, HTML import, preview, test, campaign controls, reco
           exact: true,
         });
         await expect(
-          dialog.getByLabel("Account daily safeguard", { exact: true }),
+          dialog.getByLabel("Account · rolling 24h", { exact: true }),
         ).toHaveValue("12000");
         await dialog
           .getByRole("button", { name: "Automatic safety pauses", exact: true })
