@@ -76,6 +76,8 @@ export interface ProviderRow {
     fromEmail: string;
     fromName: string;
     replyTo: string;
+    senderDomain?: string;
+    senderAliases?: string[];
     region?: string;
     domain?: string;
     messageStream?: string;
@@ -94,6 +96,8 @@ export interface ProviderRow {
   perSecond: number;
   perMinute: number;
   concurrency: number;
+  dailyBudgetOverride: number | null;
+  monthlyBudgetOverride: number | null;
   credentialHint: string;
   recentAcceptance: number | null;
   domainAuthorizations: {
@@ -563,6 +567,27 @@ export function Providers() {
     </>
   );
 }
+const suggestedAliases = [
+  "info",
+  "support",
+  "hello",
+  "contact",
+  "sales",
+  "updates",
+  "news",
+  "team",
+  "alerts",
+  "billing",
+] as const;
+
+const aliasValues = (value: string) =>
+  [...new Set(
+    value
+      .split(/[\s,;]+/)
+      .map((item) => item.trim().toLowerCase())
+      .filter(Boolean),
+  )].slice(0, 10);
+
 const labels: Record<string, string> = {
   apiKey: "API key",
   managementApiKey: "Management API key",
@@ -596,6 +621,27 @@ function ProviderForm({
       row?.transport ?? d.transports[0],
     ),
     [name, setName] = useState(row?.name ?? ""),
+    [senderDomain, setSenderDomain] = useState(
+      row?.settings.senderDomain ??
+        row?.settings.fromEmail?.split("@")[1] ??
+        row?.settings.domain ??
+        "",
+    ),
+    [aliases, setAliases] = useState(
+      (
+        row?.settings.senderAliases?.length
+          ? row.settings.senderAliases
+          : row?.settings.fromEmail
+            ? [row.settings.fromEmail.split("@")[0]]
+            : ["info"]
+      ).join(", "),
+    ),
+    [dailyBudget, setDailyBudget] = useState(
+      row?.dailyBudgetOverride ?? 5000,
+    ),
+    [monthlyBudget, setMonthlyBudget] = useState(
+      row?.monthlyBudgetOverride ?? 150000,
+    ),
     [settings, setSettings] = useState({
       ...row?.settings,
       fromEmail: row?.settings.fromEmail ?? "",
@@ -696,14 +742,6 @@ function ProviderForm({
               ))}
             </TextField>
           )}
-          {type === "mailgun" && (
-            <TextField
-              label="Mailgun sending domain"
-              value={settings.domain ?? ""}
-              onChange={(e) => change("domain", e.target.value)}
-              required
-            />
-          )}
           {type === "postmark" && (
             <>
               <TextField
@@ -796,19 +834,61 @@ function ProviderForm({
               }
             />
           ))}
-          <Typography sx={{ fontWeight: 700 }}>Verification sender</Typography>
-          <Typography variant="body2" color="text.secondary">
-            This address is used to check the connection and creates an identity
-            in Domains & senders. Campaigns choose from verified identities
-            there; this field is not a per-campaign free-text From.
-          </Typography>
+          <Box>
+            <Typography sx={{ fontWeight: 700 }}>Sending domain & aliases</Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+              Campaigns choose the verified domain. Enabled aliases are managed
+              behind it and do not increase provider capacity.
+            </Typography>
+          </Box>
           <TextField
-            label="Verification sender email"
-            type="email"
-            value={settings.fromEmail}
-            onChange={(e) => change("fromEmail", e.target.value)}
+            label="Sending domain"
+            value={senderDomain}
+            onChange={(e) => setSenderDomain(e.target.value.toLowerCase())}
+            placeholder="example.com"
             required
           />
+          <TextField
+            label="Sender aliases"
+            value={aliases}
+            onChange={(e) => setAliases(e.target.value)}
+            placeholder="info, support, hello"
+            helperText="Up to 10 local parts. Deliveries use a stable alias assignment so retries do not randomly change sender."
+            required
+          />
+          <Button
+            size="small"
+            sx={{ alignSelf: "flex-start" }}
+            onClick={() => setAliases(suggestedAliases.join(", "))}
+          >
+            Use 10 suggested aliases
+          </Button>
+          <Box
+            sx={{
+              display: "grid",
+              gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" },
+              gap: 2,
+            }}
+          >
+            <TextField
+              label="Daily connection limit"
+              type="number"
+              value={dailyBudget}
+              slotProps={{ htmlInput: { min: 1 } }}
+              onChange={(e) => setDailyBudget(Number(e.target.value))}
+              helperText="Hard rolling 24-hour cap for this connection."
+              required
+            />
+            <TextField
+              label="Monthly connection limit"
+              type="number"
+              value={monthlyBudget}
+              slotProps={{ htmlInput: { min: 1 } }}
+              onChange={(e) => setMonthlyBudget(Number(e.target.value))}
+              helperText="Hard UTC calendar-month cap for this connection."
+              required
+            />
+          </Box>
           <TextField
             label="Default display name"
             value={settings.fromName}
@@ -843,7 +923,7 @@ function ProviderForm({
           )}
           <Accordion disableGutters sx={{ "&:before": { display: "none" } }}>
             <AccordionSummary expandIcon={<ExpandMore />}>
-              <Typography>Sending limits and webhooks</Typography>
+              <Typography>Advanced throughput</Typography>
             </AccordionSummary>
             <AccordionDetails>
               <Stack spacing={2}>
@@ -934,47 +1014,78 @@ function ProviderForm({
                     )}
                   </>
                 )}
-                {d.webhook !== "none" && (
-                  <>
-                    <Typography sx={{ fontSize: 14 }}>
-                      Delivery notifications
-                    </Typography>
-                    <Typography sx={{ fontSize: 13 }} color="text.secondary">
-                      {row
-                        ? `Endpoint: ${appUrl}/api/webhooks/${row.id}`
-                        : "The endpoint is shown here after you save the connection."}
-                    </Typography>
-                    {(type === "ses"
-                      ? ["snsTopicArn"]
-                      : type === "sendgrid"
-                        ? ["webhookPublicKey"]
-                        : ["webhookSecret"]
-                    ).map((key) => (
-                      <TextField
-                        key={key}
-                        label={labels[key]}
-                        type="password"
-                        autoComplete="new-password"
-                        value={secrets[key] ?? ""}
-                        onChange={(e) =>
-                          setSecrets({ ...secrets, [key]: e.target.value })
-                        }
-                      />
-                    ))}
-                    <Typography sx={{ fontSize: 13 }} color="text.secondary">
-                      {["resend", "mailgun", "sendgrid"].includes(type)
-                        ? "Copy the verification key from your provider’s webhook settings."
-                        : type === "ses"
-                          ? "Use the exact SNS topic ARN for this SES account and region."
-                          : type === "elastic"
-                            ? "Append ?key=YOUR_WEBHOOK_SECRET to the endpoint in Elastic Email."
-                            : "Configure HTTP Basic authentication: username emailsystem, password your webhook secret."}
-                    </Typography>
-                  </>
-                )}
+
               </Stack>
             </AccordionDetails>
           </Accordion>
+          <Box
+            sx={{
+              p: 2,
+              borderRadius: 2,
+              bgcolor: "action.hover",
+            }}
+          >
+            <Stack spacing={1.5}>
+              <Typography sx={{ fontWeight: 700 }}>
+                Delivery status & webhook
+              </Typography>
+              {d.webhook === "none" ? (
+                <Alert severity="info">
+                  Generic SMTP can confirm server acceptance, but it has no
+                  portable delivery webhook. Final delivery stays unconfirmed
+                  unless this mail service exposes a provider-specific event
+                  integration.
+                </Alert>
+              ) : (
+                <>
+                  <Typography variant="body2" color="text.secondary">
+                    Delivery/bounce/complaint events update Activity after your
+                    provider is configured to call this endpoint.
+                  </Typography>
+                  <Typography
+                    component="code"
+                    sx={{
+                      fontSize: 12,
+                      overflowWrap: "anywhere",
+                      p: 1.25,
+                      borderRadius: 1.5,
+                      bgcolor: "background.paper",
+                    }}
+                  >
+                    {row
+                      ? `${appUrl}/api/webhooks/${row.id}`
+                      : "Save the connection once to create its webhook endpoint."}
+                  </Typography>
+                  {(type === "ses"
+                    ? ["snsTopicArn"]
+                    : type === "sendgrid"
+                      ? ["webhookPublicKey"]
+                      : ["webhookSecret"]
+                  ).map((key) => (
+                    <TextField
+                      key={key}
+                      label={labels[key]}
+                      type="password"
+                      autoComplete="new-password"
+                      value={secrets[key] ?? ""}
+                      onChange={(e) =>
+                        setSecrets({ ...secrets, [key]: e.target.value })
+                      }
+                    />
+                  ))}
+                  <Typography variant="caption" color="text.secondary">
+                    {["resend", "mailgun", "sendgrid"].includes(type)
+                      ? "Copy the verification/signing key from the provider webhook settings."
+                      : type === "ses"
+                        ? "Use the exact SNS topic ARN for this SES account and region."
+                        : type === "elastic"
+                          ? "Append ?key=YOUR_WEBHOOK_SECRET to this endpoint in Elastic Email."
+                          : "Configure HTTP Basic authentication with username emailsystem and this webhook secret."}
+                  </Typography>
+                </>
+              )}
+            </Stack>
+          </Box>
         </Stack>
       </DialogContent>
       <DialogActions>
@@ -990,18 +1101,31 @@ function ProviderForm({
             setBusy(true);
             setError("");
             try {
+              const localParts = aliasValues(aliases);
+              const domain = senderDomain.trim().toLowerCase();
+              if (!domain || !localParts.length)
+                throw new Error("Enter a sending domain and at least one sender alias.");
+              const providerSettings = {
+                ...settings,
+                senderDomain: domain,
+                senderAliases: localParts,
+                fromEmail: `${localParts[0]}@${domain}`,
+                ...(type === "mailgun" ? { domain } : {}),
+              };
               await api(
                 row ? `providers/${row.id}` : "providers",
                 {
                   name,
                   type,
                   transport,
-                  settings,
+                  settings: providerSettings,
                   credentials: secrets,
                   weight,
                   perSecond: second,
                   perMinute: minute,
                   concurrency,
+                  dailyBudget,
+                  monthlyBudget,
                 },
                 row ? "PUT" : "POST",
               );
