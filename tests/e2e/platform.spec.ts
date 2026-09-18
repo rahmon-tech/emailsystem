@@ -93,6 +93,13 @@ test("login, provider setup, HTML import, preview, test, campaign controls, reco
     const input = (label: string) =>
       dialog.getByLabel(label).and(dialog.locator("input"));
     await expect(input(credential)).toBeVisible();
+    const deliveryCredential =
+      provider === "Amazon SES"
+        ? "SNS topic ARN"
+        : provider === "SendGrid"
+          ? "Delivery update public key"
+          : "Delivery update signing key";
+    await expect(input(deliveryCredential)).toBeVisible();
     await expect(
       dialog.getByRole("link", { name: new RegExp("Where do I get") }).first(),
     ).toHaveAttribute("href", /^https:/);
@@ -145,9 +152,19 @@ test("login, provider setup, HTML import, preview, test, campaign controls, reco
   }
   await chooseProvider("Custom SMTP");
   await expect(page.getByLabel("SMTP hostname")).toBeVisible();
+  await expect(page.getByLabel("Delivery update signing key")).toBeVisible();
+  await expect(
+    page.getByText(/Custom SMTP cannot prove final inbox delivery by SMTP alone/),
+  ).toBeVisible();
   await page
     .getByRole("button", { name: "Advanced sending speed" })
     .click();
+  const customPort = page.getByLabel("Port", { exact: true });
+  await expect(customPort).toHaveValue("587");
+  await customPort.fill("");
+  await expect(customPort).toHaveValue("");
+  await customPort.fill("465");
+  await expect(customPort).toHaveValue("465");
   await expect(page.getByLabel("Security", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Cancel", exact: true }).click();
   await chooseProvider("Development Mock");
