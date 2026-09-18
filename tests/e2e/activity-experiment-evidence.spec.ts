@@ -99,7 +99,7 @@ test("Activity keeps live evidence review bounded and verifies explicitly withou
     await expect(card).toBeVisible();
     await expect(card.getByText("Not checked yet", { exact: true })).toBeVisible();
     await expect(card).toContainText("1 protected entry");
-    await expect(card).toContainText("#1 · run started");
+    await expect(card).toContainText("#1 · Experiment started");
     await expect(page.getByText("browser-secret-must-not-render")).toHaveCount(0);
 
     const [firstVerifyResponse] = await Promise.all([
