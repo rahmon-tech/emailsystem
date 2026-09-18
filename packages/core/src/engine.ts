@@ -457,7 +457,8 @@ export async function processDelivery(
       },
       { timeout: 60000 },
     );
-    if (!claimed || !provider || !candidate) return;
+    if (!claimed || !provider || !candidate || !selectedSender) return;
+    const deliverySender = selectedSender;
     // Rendering/decryption can fail safely before the transport-start marker.
     let connection: ReturnType<typeof unlocked>;
     try {
@@ -483,9 +484,9 @@ export async function processDelivery(
     if (!selectedSender) return;
     const message = {
       ...baseMessage,
-      from: selectedSender.email,
-      fromName: selectedSender.displayName,
-      replyTo: selectedSender.replyTo || baseMessage.replyTo,
+      from: deliverySender.email,
+      fromName: deliverySender.displayName,
+      replyTo: deliverySender.replyTo || baseMessage.replyTo,
     };
     transmitted = await db.$transaction(
       async (tx) => {
@@ -515,7 +516,7 @@ export async function processDelivery(
             tx,
             initial.userId,
             p.id,
-            selectedSender.id,
+            deliverySender.id,
           )) ||
           (await tx.providerConnection.count({
             where: { userId: initial.userId, health: "POLICY_BLOCKED" },
@@ -560,7 +561,7 @@ export async function processDelivery(
           userId: initial.userId,
           runId: c.experimentRunId,
           campaignId: c.id,
-          senderIdentityId: selectedSender.id,
+          senderIdentityId: deliverySender.id,
           providerId: p.id,
           recipient: initial.email,
           attemptId,
@@ -611,7 +612,7 @@ export async function processDelivery(
                 c.experimentRunId,
                 initial.email,
               ),
-              senderIdentityId: selectedSender.id,
+              senderIdentityId: deliverySender.id,
               senderDomain: domain,
               messageUnits: cost,
               provider: {
