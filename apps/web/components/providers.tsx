@@ -192,7 +192,7 @@ export function Providers() {
       await api(`providers/${id}/${action}`, {});
       await reload();
       setToast(
-        action === "verify" ? "Verification finished." : "Provider updated.",
+        action === "verify" ? "Connection check finished." : "Sending service updated.",
       );
     } catch (e) {
       setError((e as Error).message);
@@ -203,15 +203,15 @@ export function Providers() {
   return (
     <>
       <PageTitle
-        title="Providers"
-        description="Manage sending connections. Domain, alias, capacity and delivery-event settings belong to each connection."
+        title="Sending services"
+        description="Connect and manage the services that send your email campaigns."
         action={
           <Button
             variant="contained"
             startIcon={<Add />}
             onClick={() => setPicker(true)}
           >
-            Add provider
+            Add sending service
           </Button>
         }
       />
@@ -226,11 +226,11 @@ export function Providers() {
         >
           <Box sx={{ minWidth: 0 }}>
             <Typography sx={{ fontSize: 13, fontWeight: 700 }}>
-              Account-wide sending settings
+              Settings shared across all sending services
             </Typography>
             <Typography variant="caption" color="text.secondary">
-              These controls apply across connections. Provider credentials, domains,
-              aliases, daily/monthly capacity and webhooks stay inside each provider.
+              These settings affect all sending services. Login details, sending
+              domains, From addresses, limits, and delivery updates stay with each service.
             </Typography>
           </Box>
           <Stack
@@ -250,11 +250,11 @@ export function Providers() {
         <Card>
           <EmptyState
             icon={<HubOutlined />}
-            title="No providers yet"
-            description="Connect your first sending service."
+            title="No sending services yet"
+            description="Connect the first service you want to use for sending email."
             action={
               <Button startIcon={<Add />} onClick={() => setPicker(true)}>
-                Add provider
+                Add sending service
               </Button>
             }
           />
@@ -270,7 +270,7 @@ export function Providers() {
             }}
           >
             <Typography variant="body2" sx={{ fontWeight: 600 }}>
-              Connections{" "}
+              Sending services{" "}
               <Box component="span" sx={{ color: "text.secondary", ml: 0.5 }}>
                 {items.length}
               </Box>
@@ -328,8 +328,8 @@ export function Providers() {
                   <Typography variant="caption" color="text.secondary">
                     {(p.settings.senderAliases?.length ?? 1)} alias
                     {(p.settings.senderAliases?.length ?? 1) === 1 ? "" : "es"} ·{" "}
-                    {p.dailyBudgetOverride?.toLocaleString() ?? "Shared default"}/day ·{" "}
-                    {p.monthlyBudgetOverride?.toLocaleString() ?? "No connection cap"}/month
+                    {p.dailyBudgetOverride?.toLocaleString() ?? "Shared limit"}/24h ·{" "}
+                    {p.monthlyBudgetOverride?.toLocaleString() ?? "No monthly limit"}/month
                   </Typography>
                 </Stack>
                 <Stack
@@ -377,7 +377,7 @@ export function Providers() {
                   }}
                 >
                   <Tooltip
-                    title={`Last checked: ${date(p.verifiedAt)} · Weight ${p.weight} · ${p.perMinute}/min`}
+                    title={`Last checked: ${date(p.verifiedAt)} · traffic share ${p.weight} · up to ${p.perMinute} emails/min`}
                   >
                     <Typography variant="caption" color="text.secondary">
                       {p.verifiedAt
@@ -386,9 +386,9 @@ export function Providers() {
                     </Typography>
                   </Tooltip>
                   <Stack direction="row" spacing={0.25}>
-                    <Tooltip title="Verify connection">
+                    <Tooltip title="Check connection">
                       <IconButton
-                        aria-label={`Verify ${p.name}`}
+                        aria-label={`Check ${p.name}`}
                         disabled={busy === p.id}
                         onClick={() => void run(p.id, "verify")}
                       >
@@ -417,7 +417,7 @@ export function Providers() {
                   <Accordion>
                     <AccordionSummary expandIcon={<ExpandMore />}>
                       <Typography variant="body2">
-                        Verification details
+                        Connection check details
                       </Typography>
                     </AccordionSummary>
                     <AccordionDetails>
@@ -483,7 +483,7 @@ export function Providers() {
       <ResponsiveDialog
         open={picker}
         onClose={() => setPicker(false)}
-        title="Add provider"
+        title="Add sending service"
         width={660}
         mobileFullScreen
       >
@@ -549,10 +549,10 @@ export function Providers() {
             await reload();
             if (selected.row) {
               setSelected(null);
-              setToast("Provider updated. Delivery status settings are active.");
+              setToast("Sending service updated. Delivery updates are active.");
             } else {
               setSelected({ type: saved.type, row: saved });
-              setToast("Connection saved. Add its webhook signing details to receive delivery outcomes.");
+              setToast("Connection saved. Finish delivery-update setup to receive delivered, bounced, and complaint results.");
             }
           }}
         />
@@ -753,7 +753,7 @@ function ProviderForm({
             </ToggleButtonGroup>
           )}
           <TextField
-            label="Connection name"
+            label="Name this connection"
             value={name}
             onChange={(e) => setName(e.target.value)}
             required
@@ -776,7 +776,7 @@ function ProviderForm({
             <>
               <TextField
                 select
-                label="Message Stream type"
+                label="Postmark stream use"
                 value={settings.messageStreamType ?? "broadcast"}
                 onChange={(e) => {
                   change("messageStreamType", e.target.value);
@@ -786,9 +786,9 @@ function ProviderForm({
                   );
                 }}
               >
-                <MenuItem value="broadcast">Broadcast — campaigns</MenuItem>
+                <MenuItem value="broadcast">Campaign sending</MenuItem>
                 <MenuItem value="transactional">
-                  Transactional — test only
+                  Test emails only
                 </MenuItem>
               </TextField>
               <TextField
@@ -799,8 +799,8 @@ function ProviderForm({
               />
               {settings.messageStreamType === "transactional" && (
                 <Alert severity="info">
-                  Campaigns require a Broadcast stream. This connection can be
-                  used for explicit test emails.
+                  This Postmark stream is set for test/transactional mail, so
+                  EmailSystem will not use it for campaigns.
                 </Alert>
               )}
               {transport === "smtp" && (
@@ -865,10 +865,11 @@ function ProviderForm({
             />
           ))}
           <Box>
-            <Typography sx={{ fontWeight: 700 }}>Sending domain & aliases</Typography>
+            <Typography sx={{ fontWeight: 700 }}>Sending domain & From addresses</Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-              Campaigns choose the verified domain. Enabled aliases are managed
-              behind it and do not increase provider capacity.
+              Choose the domain this service is allowed to send from, then add
+              the From addresses you want to use. More addresses do not increase
+              the service's sending limit.
             </Typography>
           </Box>
           <TextField
@@ -879,11 +880,11 @@ function ProviderForm({
             required
           />
           <TextField
-            label="Sender aliases"
+            label="From address names"
             value={aliases}
             onChange={(e) => setAliases(e.target.value)}
             placeholder="info, support, hello"
-            helperText="Up to 10 local parts. Deliveries use a stable alias assignment so retries do not randomly change sender."
+            helperText="Enter up to 10 names before @, such as info, support, or hello. Retries keep the same From address when possible."
             required
           />
           <Button
@@ -891,7 +892,7 @@ function ProviderForm({
             sx={{ alignSelf: "flex-start" }}
             onClick={() => setAliases(suggestedAliases.join(", "))}
           >
-            Use 10 suggested aliases
+            Use 10 suggested addresses
           </Button>
           <Box
             sx={{
@@ -906,7 +907,7 @@ function ProviderForm({
               value={dailyBudget}
               slotProps={{ htmlInput: { min: 1 } }}
               onChange={(e) => setDailyBudget(Number(e.target.value))}
-              helperText="Hard rolling 24-hour cap for this connection."
+              helperText="Maximum emails this service may send in any rolling 24-hour period."
               required
             />
             <TextField
@@ -915,7 +916,7 @@ function ProviderForm({
               value={monthlyBudget}
               slotProps={{ htmlInput: { min: 1 } }}
               onChange={(e) => setMonthlyBudget(Number(e.target.value))}
-              helperText="Hard UTC calendar-month cap for this connection."
+              helperText="Maximum emails this service may send in one calendar month (UTC)."
               required
             />
           </Box>
@@ -953,14 +954,13 @@ function ProviderForm({
           )}
           <Accordion disableGutters sx={{ "&:before": { display: "none" } }}>
             <AccordionSummary expandIcon={<ExpandMore />}>
-              <Typography>Advanced throughput</Typography>
+              <Typography>Advanced sending speed</Typography>
             </AccordionSummary>
             <AccordionDetails>
               <Stack spacing={2}>
                 <Typography sx={{ fontSize: 13 }} color="text.secondary">
-                  Use limits within your provider’s allowance. Connections for
-                  the same provider and sending domain share a conservative
-                  limit.
+                  Keep these values within the limits given by your email service.
+                  Connections using the same service and domain may share capacity.
                 </Typography>
                 <Box
                   sx={{
@@ -970,25 +970,25 @@ function ProviderForm({
                   }}
                 >
                   <TextField
-                    label="Weight"
+                    label="Traffic share"
                     type="number"
                     value={weight}
                     onChange={(e) => setWeight(Number(e.target.value))}
                   />
                   <TextField
-                    label="Concurrent sends"
+                    label="Emails at once"
                     type="number"
                     value={concurrency}
                     onChange={(e) => setConcurrency(Number(e.target.value))}
                   />
                   <TextField
-                    label="Recipients / second"
+                    label="Emails / second"
                     type="number"
                     value={second}
                     onChange={(e) => setSecond(Number(e.target.value))}
                   />
                   <TextField
-                    label="Recipients / minute"
+                    label="Emails / minute"
                     type="number"
                     value={minute}
                     onChange={(e) => setMinute(Number(e.target.value))}
@@ -1057,27 +1057,27 @@ function ProviderForm({
           >
             <Stack spacing={1.5}>
               <Typography sx={{ fontWeight: 700 }}>
-                Delivery status & webhook
+                Delivery updates
               </Typography>
               {d.webhook === "none" ? (
                 <Alert severity="info">
-                  Generic SMTP can confirm server acceptance, but it has no
-                  portable delivery webhook. Final delivery stays unconfirmed
-                  unless this mail service exposes a provider-specific event
-                  integration.
+                  Standard SMTP can confirm that the mail server accepted an email,
+                  but final delivered, bounced, or complaint updates are unavailable
+                  unless this service supports delivery-event webhooks.
                 </Alert>
               ) : !row ? (
                 <Alert severity="info">
-                  Save and verify the connection first. EmailSystem will create its
-                  permanent callback URL, keep this setup open, and then let you
-                  paste the provider signing key or event credential. This avoids
-                  asking for a key before the provider has a URL to register.
+                  Save and check the connection first. EmailSystem will then show
+                  the permanent delivery-update URL you can register with this
+                  service. After that, add the signing key or event credential the
+                  service gives you.
                 </Alert>
               ) : (
                 <>
                   <Typography variant="body2" color="text.secondary">
-                    Delivery, bounce and complaint events update Activity after
-                    your provider calls this connection-specific endpoint.
+                    Delivered, bounced, and complaint results will appear in
+                    Activity after this sending service starts sending updates to
+                    the URL below.
                   </Typography>
                   <Typography
                     component="code"
@@ -1110,12 +1110,12 @@ function ProviderForm({
                   ))}
                   <Typography variant="caption" color="text.secondary">
                     {["resend", "mailgun", "sendgrid"].includes(type)
-                      ? "Register the callback URL above with the provider, then paste its verification/signing key here."
+                      ? "Add the delivery-update URL above in your sending service, then paste the verification/signing key it gives you here."
                       : type === "ses"
-                        ? "Register the callback through SNS and use the exact topic ARN for this SES account and region."
+                        ? "Connect this delivery-update URL through Amazon SNS, then use the exact topic ARN for this SES account and region."
                         : type === "elastic"
-                          ? "Register the callback URL, then append ?key=YOUR_WEBHOOK_SECRET in Elastic Email."
-                          : "Register the callback URL, then configure HTTP Basic authentication with username emailsystem and this webhook secret."}
+                          ? "Add the delivery-update URL in Elastic Email, then append ?key=YOUR_WEBHOOK_SECRET."
+                          : "Add the delivery-update URL in your service, then use HTTP Basic authentication with username emailsystem and this webhook secret."}
                   </Typography>
                 </>
               )}
@@ -1172,7 +1172,7 @@ function ProviderForm({
             }
           }}
         >
-          {busy ? "Saving and verifying…" : "Save & Verify"}
+          {busy ? "Saving and checking…" : "Save & check connection"}
         </Button>
       </DialogActions>
     </ResponsiveDialog>
@@ -1244,15 +1244,15 @@ function TestDialog({
         <Stack spacing={2} sx={{ pt: 1 }}>
           <Failure error={error} />
           <Typography color="text.secondary">
-            A small test email will use this exact connection. Provider quotas
-            and charges may apply.
+            A small test email will use this exact sending service. Its normal
+            sending limits and charges may apply.
           </Typography>
           <TextField
             select
-            label="Sender identity"
+            label="From address"
             value={senderIdentityId}
             onChange={(event) => setSenderIdentityId(event.target.value)}
-            helperText="A successful delivery-capable test authorizes only this address unless the provider has already proven the whole domain."
+            helperText="A successful test confirms this From address. The whole domain is used only when the sending service has verified it."
           >
             {senders.map((sender) => (
               <MenuItem key={sender.id} value={sender.id}>
@@ -1296,15 +1296,15 @@ function TestDialog({
               <Typography sx={{ fontWeight: 600 }}>
                 {result.status === "accepted"
                   ? result.testMode
-                    ? "Provider validated the test without delivery"
-                    : "Provider accepted the test"
+                    ? "The sending service validated the test without delivery"
+                    : "The sending service accepted the test"
                   : result.status}
               </Typography>
               <Typography sx={{ fontSize: 13 }}>
                 {result.safeError ??
                   (result.testMode
-                    ? "No email was delivered. Sandbox validation does not confirm mailbox delivery."
-                    : "Acceptance does not yet confirm mailbox delivery.")}
+                    ? "No email was delivered. Test-only validation does not confirm mailbox delivery."
+                    : "The sending service accepted the email, but final mailbox delivery is not confirmed yet.")}
               </Typography>
               {result.providerMessageId && (
                 <Typography sx={{ fontSize: 12 }}>
