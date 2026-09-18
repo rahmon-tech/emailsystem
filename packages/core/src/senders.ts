@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { z } from "zod";
 import { db, type Prisma } from "@emailsystem/db";
 import type { Verification } from "@emailsystem/providers";
@@ -99,6 +100,78 @@ export async function eligibleProvidersForSenderId(
     include: senderInclude,
   });
   return sender ? eligibleProvidersForSender(sender) : [];
+}
+
+export async function resolveSenderDomain(userId: string, domainId: string) {
+  const domain = await db.authorizedDomain.findFirst({
+    where: { id: domainId, userId },
+  });
+  if (!domain)
+    throw new AppError(422, "SENDER_DOMAIN", "Choose an authorized sending domain.");
+  if (domain.status !== "VERIFIED")
+    throw new AppError(
+      422,
+      "DOMAIN_UNVERIFIED",
+      "This sending domain is not verified through a provider.",
+    );
+  const identities = await db.senderIdentity.findMany({
+    where: { userId, authorizedDomainId: domain.id, enabled: true },
+    include: senderInclude,
+    orderBy: { email: "asc" },
+  });
+  const viable = identities
+    .map((sender) => ({ sender, providers: eligibleProvidersForSender(sender) }))
+    .filter((item) => item.providers.length > 0);
+  if (!viable.length)
+    throw new AppError(
+      422,
+      "SENDER_DOMAIN",
+      "This domain has no enabled sender alias with an eligible provider.",
+    );
+  const providers = [
+    ...new Map(
+      viable.flatMap((item) => item.providers).map((provider) => [provider.id, provider]),
+    ).values(),
+  ];
+  return {
+    domain,
+    sender: viable[0].sender,
+    senders: viable.map((item) => item.sender),
+    providers,
+  };
+}
+
+export async function selectDeliverySender(
+  tx: Prisma.TransactionClient,
+  userId: string,
+  anchorSenderId: string,
+  deliveryId: string,
+  rotate: boolean,
+) {
+  const anchor = await tx.senderIdentity.findFirst({
+    where: { id: anchorSenderId, userId },
+    include: senderInclude,
+  });
+  if (!anchor) return null;
+  if (!rotate) {
+    const providers = eligibleProvidersForSender(anchor);
+    return providers.length ? { sender: anchor, providers } : null;
+  }
+  const identities = await tx.senderIdentity.findMany({
+    where: {
+      userId,
+      authorizedDomainId: anchor.authorizedDomainId,
+      enabled: true,
+    },
+    include: senderInclude,
+    orderBy: { email: "asc" },
+  });
+  const viable = identities
+    .map((sender) => ({ sender, providers: eligibleProvidersForSender(sender) }))
+    .filter((item) => item.providers.length > 0);
+  if (!viable.length) return null;
+  const hash = createHash("sha256").update(deliveryId).digest();
+  return viable[hash.readUInt32BE(0) % viable.length];
 }
 
 export async function resolveSender(
@@ -243,9 +316,10 @@ export async function ensureProviderIdentity(
   providerId: string,
   settings: ConnectionInput["settings"],
 ) {
-  const email = z.email().parse(settings.fromEmail.trim().toLowerCase());
-  const [localPart, rawDomain] = email.split("@");
-  const domain = canonicalDomain(rawDomain);
+  const configuredEmail = z.email().parse(settings.fromEmail.trim().toLowerCase());
+  const [localPart, rawDomain] = configuredEmail.split("@");
+  const domain = canonicalDomain(settings.senderDomain ?? rawDomain);
+  const email = senderEmail(localPart, domain);
   const authorizedDomain = await tx.authorizedDomain.upsert({
     where: { userId_domain: { userId, domain } },
     create: { userId, domain },
@@ -334,8 +408,10 @@ export async function syncProviderAuthorization(
   });
   if (!provider) return;
   const settings = provider.settings as ConnectionInput["settings"];
-  const email = settings.fromEmail.toLowerCase();
-  const domainName = canonicalDomain(email.split("@")[1]);
+  const configuredEmail = settings.fromEmail.toLowerCase();
+  const [localPart, rawDomain] = configuredEmail.split("@");
+  const domainName = canonicalDomain(settings.senderDomain ?? rawDomain);
+  const email = senderEmail(localPart, domainName);
   const domain = await tx.authorizedDomain.findUnique({
     where: { userId_domain: { userId, domain: domainName } },
   });
