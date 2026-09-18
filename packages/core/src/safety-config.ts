@@ -9,6 +9,8 @@ export const safetySettings = z
   .object({
     accountDaily: dailyBudget.nullable().default(null),
     domainDaily: dailyBudget.nullable().default(null),
+    accountMonthly: dailyBudget.nullable().default(null),
+    domainMonthly: dailyBudget.nullable().default(null),
     providerDaily: dailyBudget.nullable().default(null),
     campaignDaily: dailyBudget.nullable().default(null),
     accountPerMinute: pacingPerMinute.default(null),
