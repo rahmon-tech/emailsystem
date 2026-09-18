@@ -58,7 +58,13 @@ type Flight = {
   providers: { id: string; name: string }[];
   previewHtml: string;
   text: string;
-  sender: { email: string; eligibleProviderCount: number };
+  sender: {
+    domainId: string;
+    email: string;
+    domain: string;
+    aliasCount: number;
+    eligibleProviderCount: number;
+  };
   tracking: { enabled: boolean };
 };
 
@@ -117,6 +123,7 @@ export function ImageBlast() {
   const [tracking, setTracking] = useState({ enabled: false });
   const [importId, setImportId] = useState("");
   const [name, setName] = useState("");
+  const [senderDomainId, setSenderDomainId] = useState("");
   const [senderIdentityId, setSenderIdentityId] = useState("");
   const [subject, setSubject] = useState("");
   const [preheader, setPreheader] = useState("");
@@ -162,10 +169,21 @@ export function ImageBlast() {
         if (!active) return;
         setImports(importRows);
         setSenders(senderCatalog);
-        const first = senderCatalog.domains
-          .flatMap((domain) => domain.senders)
-          .find((sender) => sender.enabled && sender.availableProviderIds.length > 0);
-        if (first) setSenderIdentityId(first.id);
+        const firstDomain = senderCatalog.domains.find(
+          (domain) =>
+            domain.status === "VERIFIED" &&
+            domain.senders.some(
+              (sender) =>
+                sender.enabled && sender.availableProviderIds.length > 0,
+            ),
+        );
+        const first = firstDomain?.senders.find(
+          (sender) => sender.enabled && sender.availableProviderIds.length > 0,
+        );
+        if (firstDomain && first) {
+          setSenderDomainId(firstDomain.id);
+          setSenderIdentityId(first.id);
+        }
       })
       .catch((reason) => setError((reason as Error).message));
     return () => {
@@ -185,6 +203,7 @@ export function ImageBlast() {
   const payload = () => ({
     name,
     importId,
+    senderDomainId,
     senderIdentityId,
     subject,
     preheader,
@@ -291,12 +310,25 @@ export function ImageBlast() {
   };
 
   const selectedImport = imports.find((row) => row.id === importId);
-  const eligibleSenders =
-    senders?.domains.flatMap((domain) =>
-      domain.senders.filter(
-        (sender) => sender.enabled && sender.availableProviderIds.length > 0,
-      ),
-    ) ?? [];
+  const eligibleDomains =
+    senders?.domains
+      .map((domain) => {
+        const eligibleSenders = domain.senders.filter(
+          (sender) => sender.enabled && sender.availableProviderIds.length > 0,
+        );
+        return {
+          ...domain,
+          senders: eligibleSenders,
+          providerIds: [
+            ...new Set(
+              eligibleSenders.flatMap((sender) => sender.availableProviderIds),
+            ),
+          ],
+        };
+      })
+      .filter(
+        (domain) => domain.status === "VERIFIED" && domain.senders.length > 0,
+      ) ?? [];
   const imageDataUrl = image
     ? `data:${image.contentType};base64,${image.content}`
     : "";
@@ -308,11 +340,11 @@ export function ImageBlast() {
   return (
     <>
       <PageTitle
-        title="Image-first blast"
-        description="Send a primary image as a real inline CID asset instead of a remote image URL."
+        title="Blast"
+        description="Image-first mode · send the primary visual as a real inline CID asset."
         action={
           <Button component={Link} href="/blast" variant="outlined">
-            Standard composer
+            Standard mode
           </Button>
         }
       />
@@ -341,6 +373,21 @@ export function ImageBlast() {
                 select
                 label="Recipient import"
                 value={importId}
+                slotProps={{
+                  select: {
+                    MenuProps: {
+                      slotProps: {
+                        paper: {
+                          sx: {
+                            maxHeight: 320,
+                            overscrollBehavior: "contain",
+                          },
+                        },
+                      },
+                      MenuListProps: { sx: { py: 0.5 } },
+                    },
+                  },
+                }}
                 onChange={(event) => {
                   setImportId(event.target.value);
                   invalidate();
@@ -383,17 +430,27 @@ export function ImageBlast() {
               />
               <TextField
                 select
-                label="Sender identity"
-                value={senderIdentityId}
+                label="Sending domain"
+                value={senderDomainId}
                 onChange={(event) => {
-                  setSenderIdentityId(event.target.value);
+                  const domain = eligibleDomains.find(
+                    (item) => item.id === event.target.value,
+                  );
+                  const sender = domain?.senders[0];
+                  if (!domain || !sender) return;
+                  setSenderDomainId(domain.id);
+                  setSenderIdentityId(sender.id);
                   invalidate();
                 }}
+                helperText="The verified alias pool and eligible providers are handled automatically."
                 required
               >
-                {eligibleSenders.map((sender) => (
-                  <MenuItem key={sender.id} value={sender.id}>
-                    {sender.email}
+                {eligibleDomains.map((domain) => (
+                  <MenuItem key={domain.id} value={domain.id}>
+                    {domain.domain} · {domain.senders.length} alias
+                    {domain.senders.length === 1 ? "" : "es"} ·{" "}
+                    {domain.providerIds.length} provider
+                    {domain.providerIds.length === 1 ? "" : "s"}
                   </MenuItem>
                 ))}
               </TextField>
@@ -691,6 +748,7 @@ export function ImageBlast() {
                   !!busy ||
                   !importId ||
                   !name.trim() ||
+                  !senderDomainId ||
                   !senderIdentityId ||
                   !subject.trim() ||
                   !image ||
@@ -725,6 +783,7 @@ export function ImageBlast() {
                 message={payload()}
                 disabled={
                   !!busy ||
+                  !senderDomainId ||
                   !senderIdentityId ||
                   !subject.trim() ||
                   !image ||
