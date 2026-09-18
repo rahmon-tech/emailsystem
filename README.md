@@ -29,18 +29,23 @@ while the backend handles queues, workers, provider selection, rate limits, retr
 - Verified sending domains and multiple From addresses.
 - Provider-aware connection verification and health state.
 - Delivery-event webhooks for supported providers.
-- CSV, TXT, XLSX, and pasted-recipient imports.
-- Recipient normalization, deduplication, and account-wide suppressions.
-- Rich-text and raw HTML email composition.
+- CSV, TXT, XLSX, and pasted-recipient imports with automatic email-column detection.
+- Reusable recipient lists with normalization, deduplication, invalid-row reporting, and account-wide suppression checks.
+- Rich-text composition, HTML-file import, source editing, and generated plain-text alternatives.
 - Dedicated **Image-first** campaign composer for emails built around one primary embedded image.
-- HTML sanitization, previews, attachments, scheduling, and pre-flight validation.
+- Desktop, mobile, plain-text, and prepared-HTML previews before launch.
+- Attachments, CC/BCC, tags, scheduling, controlled test sends, and provider-aware pre-flight validation.
+- Verified sending-domain pools with multiple From addresses, display names, Reply-To values, and per-provider authorization.
+- Optional first-party click tracking with aggregate analytics and likely-bot/scanner separation.
+- Adaptive provider slowdown/cooldown plus configurable domain soft-start/warm-up behavior.
 - Durable campaign, delivery, attempt, event, and audit records in PostgreSQL.
 - Redis/BullMQ background workers for queueing and coordination.
 - Provider-aware rate, concurrency, cooldown, quota, and routing controls.
 - Account, domain, provider, and campaign sending safeguards.
-- Complaint and hard-bounce review gates.
-- Signed unsubscribe flow and suppression handling.
-- Live Activity updates with pause, resume, cancel, filtering, and CSV export.
+- Complaint and hard-bounce review gates with explicit operator acknowledgement before protected sending resumes.
+- Signed one-click unsubscribe flow and account-wide do-not-send handling.
+- Live Activity updates with throughput estimates, provider availability, pause/resume/cancel, safe retry, filtering, suppression inspection, and CSV export.
+- Advanced controlled-experiment subsystem with scoped recipients/providers/senders, hard ceilings, kill switch, and verifiable evidence records.
 - Docker Compose and native/systemd production deployment paths.
 - Full CI verification with database migrations, integration tests, browser E2E, and production-container checks.
 
@@ -143,6 +148,107 @@ Normal server-side validation and provider-specific capability checks remain aut
 Image-first is useful for newsletters, announcements, posters, invitations, product launches, event creatives, visual promotions, and other campaigns where the message is intentionally centered around one designed image.
 
 It still preserves EmailBlast's main engineering boundaries: the campaign is durable, provider policy is respected, delivery state remains truthful, suppressions still apply, and the browser does not need to remain open while delivery continues.
+
+---
+
+## Standard campaign composer
+
+The standard composer is the general-purpose campaign path at `/blast`. It supports both ordinary rich-text authoring and developer-supplied HTML without forcing imported email designs through a visual editor.
+
+### Recipient import and saved lists
+
+Recipients can be supplied in four ways:
+
+- CSV;
+- TXT;
+- XLSX;
+- pasted email addresses, one per line.
+
+For CSV/XLSX imports, EmailBlast looks for common email-column headers such as `email`, `e-mail`, `email address`, or `email_address`. If there is no recognized header, it detects the first column containing a valid email address.
+
+Imports record useful quality statistics:
+
+- rows inspected;
+- valid addresses;
+- invalid addresses;
+- duplicates;
+- addresses already on the do-not-send list;
+- final sendable recipients.
+
+Addresses are normalized to lowercase and deduplicated before they become campaign recipients. Existing suppressions are removed during import rather than left for the worker to discover later.
+
+Completed imports stay available as **Saved recipient lists**, so the same list can be selected again for a future campaign. Removing a saved list does not rewrite campaigns that already used it.
+
+### Message authoring
+
+The standard composer supports:
+
+- campaign name;
+- one or more verified sending domains;
+- subject;
+- inbox preview text/preheader;
+- optional CC and BCC copies;
+- tags;
+- local-time scheduling;
+- optional click tracking;
+- file attachments;
+- rich-text authoring;
+- raw HTML/source authoring;
+- HTML-file import;
+- optional hand-authored plain text.
+
+Imported/source HTML can remain in source mode so an existing email layout is not destroyed by round-tripping it through the rich editor.
+
+When plain text is omitted, EmailBlast derives a text alternative from the normalized HTML.
+
+### Email normalization and preview
+
+Before the message snapshot is accepted, EmailBlast normalizes the HTML deterministically and does not fetch remote resources during that process.
+
+The renderer:
+
+- strips active content such as scripts, forms, iframes and unsafe event handlers;
+- sanitizes unsafe links and image sources;
+- sanitizes CSS;
+- preserves supported media queries and email-safe formatting;
+- inlines CSS for email-client compatibility;
+- preserves supported Outlook conditional/VML fallbacks;
+- injects preview text;
+- generates the plain-text alternative;
+- produces a deterministic snapshot hash.
+
+The composer can show the prepared message as:
+
+- desktop preview;
+- mobile preview;
+- plain-text preview;
+- prepared HTML/source.
+
+This makes the final normalized message inspectable before pre-flight and sending.
+
+### Controlled test send
+
+Both standard and Image-first campaigns support a controlled test send.
+
+A test lets the operator choose an eligible sending service and a test recipient, then sends the prepared message without converting that test into normal campaign-recipient statistics.
+
+---
+
+## Sending identities, domains and provider accounts
+
+EmailBlast separates three concepts that many smaller mail tools collapse into one setting:
+
+1. **Sending domain** — a domain the user has added and verified.
+2. **From address** — an enabled sender identity under that domain, with its own display name and optional Reply-To.
+3. **Sending-service connection** — one configured provider account/transport such as a Resend account, SES connection, SendGrid account, Brevo account, or Custom SMTP server.
+
+A verified domain can expose multiple From addresses such as `info@`, `support@`, `hello@`, or `sales@`. Enabling more From addresses does **not** increase the account's sending limits.
+
+Provider/domain authorization is tracked explicitly. A provider must be authorized for the selected domain/From identity before it becomes eligible for campaign traffic.
+
+During campaign setup the user chooses the sending domain(s); EmailBlast then works with the eligible From addresses and provider connections already authorized under those selections.
+
+Retries keep the same From address when possible so a retry does not unnecessarily change sender identity.
 
 ---
 
@@ -252,6 +358,24 @@ This separation means:
 - a worker restart does not erase campaign/delivery truth;
 - the application can reconstruct operational state from durable records when temporary Redis coordination data is lost.
 
+### Adaptive provider pacing
+
+Configured provider limits are ceilings, not a promise that EmailBlast will always send at that exact rate.
+
+The runtime watches recent provider outcomes and can temporarily reduce a connection's effective pace or extend its cooldown when the provider is showing pressure. The Sending services and Activity surfaces expose the difference between the configured limit and the currently effective rate.
+
+The final campaign pace can therefore be lower than an individual provider's configured rate when account, domain, campaign, cooldown, or adaptive controls require it.
+
+### Domain soft-start
+
+EmailBlast also has configurable sending-domain ramp-up profiles:
+
+- **Slow and cautious**;
+- **Recommended / balanced**;
+- **Faster, still within configured limits**.
+
+For higher-volume domains, a new or recently idle domain begins below its full configured rate and increases toward normal capacity as successful transport starts accumulate. Soft-start never raises a provider or safety limit; it only makes the effective pace more conservative.
+
 ---
 
 ## Safety and sending controls
@@ -274,6 +398,41 @@ Controls can include:
 The goal is to reduce accidental over-sending and keep a provider/account problem from automatically spreading across every campaign.
 
 Provider policy enforcement is handled separately from normal failover. A provider that reports an enforcement/policy problem is not treated like an ordinary temporarily slow provider that should simply be routed around.
+
+### Automatic protection pauses
+
+Complaint and hard-bounce thresholds can trigger protected sending pauses after a configured minimum sample size.
+
+The operator chooses whether the protection applies to the affected campaign, the whole account, or both. A protected pause is not cleared just because a worker restarts: an operator must review the outcomes, acknowledge that the cause was addressed, and then explicitly resume permitted sending.
+
+### First-party link tracking
+
+Click tracking is optional and is **off by default**.
+
+When enabled, EmailBlast rewrites eligible message links to opaque tokens under the installation's own `APP_URL`, for example:
+
+```text
+https://mail.example.com/r/<opaque-token>
+```
+
+No third-party link shortener is required.
+
+Tracking is intentionally aggregate and privacy-minimal:
+
+- no recipient identity is stored with a visit;
+- no IP address is stored;
+- no browser fingerprint is stored;
+- no cookie is created for click analytics;
+- request headers are not retained;
+- user-agent history is not retained;
+- daily totals are aggregated per tracked link;
+- obvious scanners/bots and HEAD/prefetch traffic are counted separately as likely automated visits.
+
+Because security products may open links automatically, EmailBlast does not present a tracked visit as proof that a human clicked.
+
+Operators can also maintain blocked destination domains and optionally fail closed when a destination cannot be checked.
+
+Tracking links expire and aggregate click records are retained according to configurable retention periods.
 
 ---
 
@@ -371,6 +530,78 @@ The Activity surface is intended to answer practical operational questions:
 Live updates use Server-Sent Events where appropriate so the page can update without making the browser responsible for the worker process.
 
 Operational logs and browser/API responses are designed to avoid returning stored provider secrets.
+
+### Campaign controls and history
+
+Activity supports state-aware operations instead of exposing the same actions for every campaign.
+
+Depending on campaign state, an operator can:
+
+- pause queued/sending work;
+- resume a normal operator pause;
+- cancel recipients whose transport has not started;
+- retry only recipients in a definitive failed state;
+- export campaign results as CSV;
+- inspect the account do-not-send list;
+- add a manual suppression;
+- inspect provider usage/availability and current campaign pace;
+- review tracked-visit totals when tracking was enabled.
+
+A safe retry deliberately leaves already accepted and **UNKNOWN** deliveries untouched.
+
+Finished campaigns can be removed from the main Activity listing without rewriting their underlying delivery history.
+
+---
+
+## Advanced controlled experiments
+
+EmailBlast contains an advanced, bounded experiment subsystem intended for explicitly authorized testing and operator/API workflows. It is separate from ordinary campaign sending.
+
+An experiment profile can scope:
+
+- the exact provider connections allowed;
+- the exact sender identities allowed;
+- a controlled recipient allowlist;
+- maximum unique recipients;
+- maximum transport attempts;
+- maximum run duration;
+- an optional approved start/end window;
+- sending pattern;
+- concurrency;
+- transfer encoding;
+- message/content mode.
+
+Supported experiment content modes include HTML, plain text, CID-inline images, hosted-image tests, attachment-only tests, and Image-first tests. Provider capability checks reject combinations the selected transport cannot actually support.
+
+### Hard experiment boundaries
+
+Experiment runs have their own controls on top of the normal EmailBlast safety system:
+
+- recipient ceilings;
+- attempt ceilings;
+- duration ceilings;
+- provider/sender scope;
+- controlled-recipient allowlist;
+- approved time window;
+- account-level experiment kill switch;
+- explicit stop action and stop reason.
+
+An experiment cannot use those controls to weaken ordinary account/domain/provider safety limits.
+
+### Tamper-evident evidence
+
+Authorized experiment runs can record a hash-chained evidence ledger for events such as:
+
+- run start;
+- transport start;
+- transport outcome;
+- effective pacing controls;
+- requested/effective encoding;
+- requested/effective content mode.
+
+Recipient evidence uses run-scoped hashes rather than exposing the controlled recipient addresses in the ledger.
+
+The Activity surface can verify the evidence chain, show whether the check is current, and export the experiment records. Evidence retention is configurable and purge events are themselves recorded.
 
 ---
 
