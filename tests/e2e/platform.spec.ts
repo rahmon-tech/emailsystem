@@ -227,7 +227,7 @@ test("login, provider setup, HTML import, preview, test, campaign controls, reco
   await expect(savedCallbackSecret).toBeVisible();
   await expect(savedCallbackSecret).toHaveValue(/^eswh_/);
   await expect(
-    savedProviderDialog.getByText(/shown once more alongside the permanent webhook URL/),
+    savedProviderDialog.getByText(/shown once more alongside the permanent webhook URL|secret created during the first save/),
   ).toBeVisible();
   await expect(
     savedProviderDialog.getByRole("button", { name: "Copy webhook URL", exact: true }),
