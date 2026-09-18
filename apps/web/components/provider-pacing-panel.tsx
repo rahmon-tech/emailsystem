@@ -19,11 +19,11 @@ export type ProviderPacingRow = {
 };
 
 function pressureLabel(row: ProviderPacingRow) {
-  if (row.pressure === "blocked") return "Policy review";
-  if (row.pressure === "cooldown") return "Cooling down";
-  if (row.pressure === "slowed") return `${row.slowdown}× adaptive slowdown`;
-  if (row.pressure === "disabled") return "Disabled";
-  return "Normal";
+  if (row.pressure === "blocked") return "Needs review";
+  if (row.pressure === "cooldown") return "Temporarily paused";
+  if (row.pressure === "slowed") return "Sending slower";
+  if (row.pressure === "disabled") return "Turned off";
+  return "Ready";
 }
 
 export function ProviderPacingPanel() {
@@ -54,9 +54,10 @@ export function ProviderPacingPanel() {
       <Stack direction="row" sx={{ gap: 1, alignItems: "center", mb: 2 }}>
         <SpeedOutlined fontSize="small" />
         <Box>
-          <Typography sx={{ fontWeight: 700 }}>Live provider pacing</Typography>
+          <Typography sx={{ fontWeight: 700 }}>Current sending speed</Typography>
           <Typography variant="caption" color="text.secondary">
-            Configured capacity versus the current adaptive provider rate. Sender-domain, campaign and account ceilings may reduce the final campaign pace further.
+            Shows the current speed available from each sending service. Account,
+            domain, and campaign limits may reduce the final speed.
           </Typography>
         </Box>
       </Stack>
@@ -75,10 +76,13 @@ export function ProviderPacingPanel() {
           >
             <Box sx={{ minWidth: 0, flex: 1 }}>
               <Typography sx={{ fontSize: 13, fontWeight: 650 }}>
-                {row.name} pacing
+                {row.name}
               </Typography>
               <Typography variant="caption" color="text.secondary">
-                Configured {row.configuredPerMinute.toLocaleString()}/min · effective {row.effectivePerMinute.toLocaleString()}/min
+                {row.effectivePerMinute.toLocaleString()} emails/min
+                {row.effectivePerMinute !== row.configuredPerMinute
+                  ? ` · limit ${row.configuredPerMinute.toLocaleString()}/min`
+                  : ""}
               </Typography>
             </Box>
             <Box sx={{ textAlign: { xs: "left", sm: "right" } }}>
@@ -89,7 +93,7 @@ export function ProviderPacingPanel() {
                   color="text.secondary"
                   sx={{ display: "block", mt: 0.5 }}
                 >
-                  Next provider slot {new Date(row.nextAllowedAt).toLocaleTimeString()}
+                  Can try again at {new Date(row.nextAllowedAt).toLocaleTimeString()}
                 </Typography>
               )}
             </Box>
