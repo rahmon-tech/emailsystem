@@ -280,7 +280,7 @@ export async function processDelivery(
           senderIdentityId,
           id,
           Boolean(snapshot.senderPool?.enabled) && !c.experimentRunId,
-          capacityDomainIds.length ? capacityDomainIds : snapshot.senderPool?.domainIds,
+          snapshot.senderPool?.domainIds ? capacityDomainIds : undefined,
           capacityProviderIds,
         );
         if (!senderSelection) {
