@@ -68,6 +68,35 @@ while the backend handles queues, workers, provider selection, rate limits, retr
 
 Built-in services use application-owned provider metadata so users do not need to manually enter standard API endpoints or SMTP hosts.
 
+### Sending-service connection controls
+
+Each configured provider account is its own connection object. A connection can carry:
+
+- a user-facing connection name;
+- API or SMTP transport mode;
+- provider-specific credentials;
+- sending domain and authorized From addresses;
+- default display name and Reply-To;
+- traffic-share weight;
+- maximum simultaneous sends;
+- per-second and per-minute ceilings;
+- rolling 24-hour connection limit;
+- calendar-month connection limit;
+- provider region/stream settings where applicable;
+- delivery-webhook authentication material.
+
+The Sending services screen can:
+
+- verify a connection;
+- show individual verification checks;
+- send a controlled provider test email;
+- show recent acceptance percentage;
+- enable/disable or remove the connection;
+- show current configured vs effective sending speed;
+- surface temporary cooldown/slowdown or provider policy state.
+
+When multiple eligible connections are available for the selected campaign domain(s), these connection-level settings feed the routing decision. With only one eligible connection, there is nothing to distribute: that one connection is used as long as it remains authorized and within its limits.
+
 See [Provider setup](docs/PROVIDERS.md) for credentials, verification behavior, SMTP modes, and webhook configuration.
 
 ---
@@ -376,6 +405,25 @@ EmailBlast also has configurable sending-domain ramp-up profiles:
 
 For higher-volume domains, a new or recently idle domain begins below its full configured rate and increases toward normal capacity as successful transport starts accumulate. Soft-start never raises a provider or safety limit; it only makes the effective pace more conservative.
 
+### Worker recovery and maintenance
+
+The worker process also owns recurring operational work around the delivery queue.
+
+Alongside BullMQ delivery jobs it:
+
+- prepares large campaigns in durable recipient batches;
+- enqueues deliveries that are ready to run;
+- recovers stalled/expired delivery claims;
+- reconciles provider events that could not be matched immediately;
+- finalizes campaigns when terminal conditions are reached;
+- publishes the worker heartbeat used by readiness checks;
+- refreshes adaptive provider slowdown/cooldown decisions;
+- periodically re-checks provider state where required;
+- expires old sessions;
+- applies configured Activity, webhook, attempt, click-analytics, and experiment retention policies.
+
+A worker crash therefore does not make the browser or Redis the source of truth. PostgreSQL claim/state data is used to determine what can safely resume.
+
 ---
 
 ## Safety and sending controls
@@ -512,6 +560,21 @@ Major persisted concepts include:
 - safety/review state.
 
 PostgreSQL owns durable truth. Redis is used for queues, short-lived coordination, pacing, capacity reservation, and worker/runtime state that can be derived or safely reconstructed.
+
+### Configurable retention
+
+Operational data is not kept forever by accident. Environment-controlled retention covers:
+
+- Activity events;
+- rejected delivery-attempt records that are safe to discard;
+- processed webhook/provider events;
+- click analytics;
+- tracked-link lifetime;
+- experiment evidence;
+- experiment message snapshots;
+- expired sessions.
+
+Experiment message retention is handled specially: after the configured period, the sensitive message body/attachments can be scrubbed while the run/audit history remains.
 
 ---
 
