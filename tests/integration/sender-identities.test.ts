@@ -355,3 +355,98 @@ test("address-specific providers do not widen a domain alias pool", async () => 
     ),
   );
 });
+
+
+test("domain-first preflight combines only providers authorized for the selected domain", async () => {
+  const user = await userFixture("domain-capacity");
+  const first = await saveProvider(user.id, {
+    name: "Primary domain A",
+    type: "mock",
+    transport: "api",
+    settings: {
+      fromEmail: "info@alpha.example.com",
+      senderDomain: "alpha.example.com",
+      senderAliases: ["info", "support"],
+    },
+    credentials: {},
+    dailyBudget: 40,
+    monthlyBudget: 1000,
+    perSecond: 10,
+    perMinute: 600,
+    concurrency: 2,
+  });
+  const second = await saveProvider(user.id, {
+    name: "Secondary domain A",
+    type: "mock",
+    transport: "api",
+    settings: {
+      fromEmail: "news@alpha.example.com",
+      senderDomain: "alpha.example.com",
+      senderAliases: ["news", "updates"],
+    },
+    credentials: {},
+    dailyBudget: 60,
+    monthlyBudget: 1000,
+    perSecond: 10,
+    perMinute: 600,
+    concurrency: 2,
+  });
+  const other = await saveProvider(user.id, {
+    name: "Domain B only",
+    type: "mock",
+    transport: "api",
+    settings: {
+      fromEmail: "hello@beta.example.com",
+      senderDomain: "beta.example.com",
+      senderAliases: ["hello"],
+    },
+    credentials: {},
+    dailyBudget: 25,
+    monthlyBudget: 500,
+    perSecond: 10,
+    perMinute: 600,
+    concurrency: 2,
+  });
+  assert(first && second && other);
+
+  const catalog = await listSenders(user.id);
+  const alpha = catalog.domains.find(
+    (domain) => domain.domain === "alpha.example.com",
+  )!;
+  const beta = catalog.domains.find(
+    (domain) => domain.domain === "beta.example.com",
+  )!;
+  const imported = await importRecipients(
+    user.id,
+    Buffer.from("reader@example.net"),
+    "domain-capacity.txt",
+  );
+  const common = {
+    name: "Domain capacity",
+    importId: imported.id,
+    subject: "Capacity",
+    html: "<p>Capacity.</p>",
+  };
+
+  const alphaFlight = await preflight(user.id, {
+    ...common,
+    senderDomainId: alpha.id,
+  });
+  assert(alphaFlight.ready);
+  assert.deepEqual(
+    alphaFlight.providers.map((provider) => provider.id).sort(),
+    [first.id, second.id].sort(),
+  );
+  assert.equal(alphaFlight.safety.availableUnits, 100);
+
+  const betaFlight = await preflight(user.id, {
+    ...common,
+    senderDomainId: beta.id,
+  });
+  assert(betaFlight.ready);
+  assert.deepEqual(
+    betaFlight.providers.map((provider) => provider.id),
+    [other.id],
+  );
+  assert.equal(betaFlight.safety.availableUnits, 25);
+});
