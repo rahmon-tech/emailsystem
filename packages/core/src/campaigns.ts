@@ -741,18 +741,54 @@ export async function campaignSummary(userId: string, id: string) {
       where: { campaignId: id, userId, acceptedAt: { not: null } },
     }),
   ]);
-  const safety = await safetyCapacity(
-    userId,
-    (c.message as { from: string }).from,
-    id,
+  const snapshot = c.message as {
+    from: string;
+    tracking?: { enabled: boolean };
+    senderPool?: { domains?: string[] };
+  };
+  const domains = [
+    ...new Set(
+      snapshot.senderPool?.domains?.length
+        ? snapshot.senderPool.domains
+        : [senderDomain(snapshot.from)],
+    ),
+  ];
+  const safetyRows = await Promise.all(
+    domains.map((domain) =>
+      safetyCapacity(userId, `activity@${domain}`, id),
+    ),
   );
+  const baseSafety = safetyRows[0];
+  const safety = {
+    ...baseSafety,
+    domain: domains[0] ?? baseSafety.domain,
+    domains,
+    usage: [
+      ...baseSafety.usage.filter(
+        (budget) => !budget.scope.startsWith("domain:"),
+      ),
+      ...safetyRows.flatMap((row) =>
+        row.usage.filter((budget) => budget.scope.startsWith("domain:")),
+      ),
+    ],
+    monthlyUsage: [
+      ...baseSafety.monthlyUsage.filter(
+        (budget) => budget.scope === "account-month",
+      ),
+      ...safetyRows.flatMap((row) =>
+        row.monthlyUsage.filter((budget) =>
+          budget.scope.startsWith("domain-month:"),
+        ),
+      ),
+    ],
+  };
   const summary = { ...c, message: undefined };
   return {
     ...summary,
     tracking: {
       ...(await trackingSummary(userId, id)),
       enabled:
-        (c.message as { tracking?: { enabled: boolean } }).tracking?.enabled ??
+        snapshot.tracking?.enabled ??
         false,
     },
     safety,
