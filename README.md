@@ -3,53 +3,40 @@
 [![Verify EmailBlast](https://github.com/rahmon-tech/emailsystem/actions/workflows/ci.yml/badge.svg)](https://github.com/rahmon-tech/emailsystem/actions/workflows/ci.yml)
 ![TypeScript](https://img.shields.io/badge/TypeScript-6.x-3178C6?logo=typescript&logoColor=white)
 ![Next.js](https://img.shields.io/badge/Next.js-16-black?logo=next.js&logoColor=white)
-![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-17-4169E1?logo=postgresql&logoColor=white)
 ![Redis](https://img.shields.io/badge/Redis-7.4-DC382D?logo=redis&logoColor=white)
-![Prisma](https://img.shields.io/badge/Prisma-7-2D3748?logo=prisma&logoColor=white)
 ![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)
-![Node.js](https://img.shields.io/badge/Node.js-24-5FA04E?logo=node.js&logoColor=white)
-![pnpm](https://img.shields.io/badge/pnpm-11-F69220?logo=pnpm&logoColor=white)
 
-**EmailBlast** is a self-hosted, multi-provider email campaign and delivery platform built for reliable background sending, provider-aware routing, delivery-event reconciliation, and operational control.
+**EmailBlast** is a self-hosted email campaign and delivery platform for teams that want to use one or more email providers without making the browser, a single SMTP connection, or one provider API the source of truth.
 
-The product keeps the user-facing workflow simple:
+It combines campaign composition, recipient imports, provider-aware routing, background delivery, delivery-event reconciliation, sending safeguards, and operational visibility in one system.
 
-**Sending services → Create campaign → Activity**
+> **Provider acceptance is not mailbox delivery.** EmailBlast records transport attempts separately from recipient delivery state and does not blindly resend uncertain outcomes.
 
-while the backend handles queues, workers, provider selection, rate limits, retries, suppressions, safety budgets, webhooks, and durable delivery state.
+## Highlights
 
-> Provider acceptance is not treated as mailbox delivery. Unknown outcomes are held for reconciliation instead of being blindly resent.
+- **Multi-provider delivery** — Resend, Amazon SES, Mailgun, SendGrid, Brevo, Postmark, Mailjet, SMTP2GO, Elastic Email, and Custom SMTP.
+- **Standard + Image-first campaigns** — rich text, imported HTML/source mode, attachments, scheduling, or a primary CID-embedded image with optional click-through.
+- **Reusable recipient imports** — CSV, TXT, XLSX, or pasted addresses with normalization, deduplication, suppression checks, and import statistics.
+- **Verified sender pools** — multiple domains and From addresses with provider/domain authorization and optional multi-connection routing.
+- **Durable background sending** — PostgreSQL owns campaign/delivery state; Redis and BullMQ coordinate asynchronous work, pacing, and concurrency.
+- **Conservative retry semantics** — definitive failures can be retried; uncertain post-transport outcomes are held for reconciliation.
+- **Sending controls** — account/domain/provider/campaign limits, adaptive provider slowdown, cooldowns, domain soft-start, and complaint/hard-bounce protection.
+- **First-party click tracking** — optional aggregate analytics with likely scanner/bot separation and no stored visitor IPs, fingerprints, cookies, or request-header history.
+- **Operational Activity** — live progress, provider availability, pacing estimates, pause/resume/cancel, safe retry, suppressions, and CSV export.
+- **Production deployment** — Docker Compose for dedicated/shared hosts and a native Node.js + systemd path.
 
----
+See [Features](docs/FEATURES.md) for the full product and runtime behavior.
 
-## Features
+## Image-first campaigns
 
-- Multi-provider **API and SMTP** sending.
-- Verified sending domains and multiple From addresses.
-- Provider-aware connection verification and health state.
-- Delivery-event webhooks for supported providers.
-- CSV, TXT, XLSX, and pasted-recipient imports with automatic email-column detection.
-- Reusable recipient lists with normalization, deduplication, invalid-row reporting, and account-wide suppression checks.
-- Rich-text composition, HTML-file import, source editing, and generated plain-text alternatives.
-- Dedicated **Image-first** campaign composer for emails built around one primary embedded image.
-- Desktop, mobile, plain-text, and prepared-HTML previews before launch.
-- Attachments, CC/BCC, tags, scheduling, controlled test sends, and provider-aware pre-flight validation.
-- Verified sending-domain pools with multiple From addresses, display names, Reply-To values, and per-provider authorization.
-- Optional first-party click tracking with aggregate analytics and likely-bot/scanner separation.
-- Adaptive provider slowdown/cooldown plus configurable domain soft-start/warm-up behavior.
-- Durable campaign, delivery, attempt, event, and audit records in PostgreSQL.
-- Redis/BullMQ background workers for queueing and coordination.
-- Provider-aware rate, concurrency, cooldown, quota, and routing controls.
-- Account, domain, provider, and campaign sending safeguards.
-- Complaint and hard-bounce review gates with explicit operator acknowledgement before protected sending resumes.
-- Signed one-click unsubscribe flow and account-wide do-not-send handling.
-- Live Activity updates with throughput estimates, provider availability, pause/resume/cancel, safe retry, filtering, suppression inspection, and CSV export.
-- Advanced controlled-experiment subsystem with scoped recipients/providers/senders, hard ceilings, kill switch, and verifiable evidence records.
-- Docker Compose and native/systemd production deployment paths.
-- Full CI verification with database migrations, integration tests, browser E2E, and production-container checks.
+Image-first is a first-class campaign mode for messages built around one primary visual.
 
----
+The image is stored as an **inline CID attachment**, referenced by the generated HTML, and sent through the same pre-flight, worker, provider, safety, webhook, and Activity pipeline as a standard campaign. It supports alt/plain-text fallback, an optional destination link, optional click tracking, scheduling, CC/BCC, tags, additional attachments, preview, and controlled test sends.
+
+Current primary-image formats are PNG, JPEG, GIF, and WebP. The campaign enforces the normal attachment/file-size limits and filters provider routes that cannot send inline CID content.
+
+Detailed behavior: [Features → Image-first campaigns](docs/FEATURES.md#image-first-campaigns).
 
 ## Supported sending services
 
@@ -66,725 +53,126 @@ while the backend handles queues, workers, provider selection, rate limits, retr
 | Elastic Email | ✅ | ✅ | ✅ |
 | Custom SMTP | — | ✅ | Provider-dependent |
 
-Built-in services use application-owned provider metadata so users do not need to manually enter standard API endpoints or SMTP hosts.
-
-### Sending-service connection controls
-
-Each configured provider account is its own connection object. A connection can carry:
-
-- a user-facing connection name;
-- API or SMTP transport mode;
-- provider-specific credentials;
-- sending domain and authorized From addresses;
-- default display name and Reply-To;
-- traffic-share weight;
-- maximum simultaneous sends;
-- per-second and per-minute ceilings;
-- rolling 24-hour connection limit;
-- calendar-month connection limit;
-- provider region/stream settings where applicable;
-- delivery-webhook authentication material.
-
-The Sending services screen can:
-
-- verify a connection;
-- show individual verification checks;
-- send a controlled provider test email;
-- show recent acceptance percentage;
-- enable/disable or remove the connection;
-- show current configured vs effective sending speed;
-- surface temporary cooldown/slowdown or provider policy state.
-
-When multiple eligible connections are available for the selected campaign domain(s), these connection-level settings feed the routing decision. With only one eligible connection, there is nothing to distribute: that one connection is used as long as it remains authorized and within its limits.
-
-See [Provider setup](docs/PROVIDERS.md) for credentials, verification behavior, SMTP modes, and webhook configuration.
-
----
-
-## Image-first campaigns
-
-EmailBlast includes a dedicated **Image-first** composer at `/blast/image` for campaigns where one main visual is the email.
-
-This is not a separate delivery engine. Image-first campaigns reuse the same recipient imports, verified sending identities, multi-provider routing, pre-flight validation, background workers, safety controls, webhooks, Activity reporting, retries, and durable delivery state as standard campaigns.
-
-### How Image-first works
-
-1. **Choose recipients**  
-   Use an existing import or upload a CSV, TXT, or XLSX file. The same normalization, deduplication, suppression, and campaign-delivery pipeline applies.
-
-2. **Choose one or more verified sending domains**  
-   Image-first campaigns can use the same multi-domain and multi-provider routing logic as standard campaigns. Only currently eligible From addresses and sending services are considered.
-
-3. **Upload the primary image**  
-   Supported formats are **PNG, JPEG, GIF, and WebP**.
-
-4. **Embed the image inside the email**  
-   The primary image is stored in the campaign message as an inline attachment with its own Content-ID and referenced through `cid:<content-id>`. It is not dependent on a third-party image host for the main visual.
-
-5. **Provide alt text / plain-text fallback**  
-   Alt text is required. It is also used as the plain-text fallback when the image cannot be displayed, so an image-centered message still has a meaningful text alternative.
-
-6. **Optionally make the whole image clickable**  
-   A normal `http://` or `https://` destination can wrap the primary image. When click tracking is enabled, the existing EmailBlast tracking flow applies; when tracking is off, the link remains direct.
-
-7. **Add the normal campaign metadata**  
-   Image-first supports subject, preview text, CC, BCC, tags, scheduling, and additional file attachments.
-
-8. **Preview the actual prepared structure**  
-   EmailBlast creates the HTML around the CID image and renders the same prepared message structure used for campaign pre-flight.
-
-9. **Run provider-aware pre-flight**  
-   Pre-flight verifies the recipient list, sender/domain state, message structure, and whether the currently eligible sending services can handle the embedded-image campaign before the send button is enabled.
-
-10. **Send a controlled test first**  
-    Image-first has its own test-message flow so the exact image/message structure can be checked against a selected eligible provider without adding that test to campaign statistics.
-
-11. **Queue and send normally**  
-    Once launched, the campaign becomes ordinary durable EmailBlast work: workers claim deliveries, enforce pacing/capacity/safety, call the selected provider, persist attempts, and reconcile downstream events.
-
-### Image-first message structure
-
-Conceptually, the prepared message looks like:
-
-```text
-multipart email
-├── plain-text alternative
-├── HTML body
-│    └── <img src="cid:image-...">
-├── inline primary image
-│    ├── Content-ID: image-...
-│    └── disposition: inline
-└── optional normal attachments
-```
-
-The generated HTML keeps the primary image responsive, capped at a 1200-pixel presentation width, and can wrap the entire visual in an optional destination link.
-
-### Limits
-
-The current Image-first composer applies these client-side campaign limits:
-
-- primary image types: PNG, JPEG, GIF, WebP;
-- primary image maximum: **5 MB**;
-- primary image + normal attachments: **maximum 5 files total**;
-- primary image + normal attachments: **maximum 5 MB total**;
-- recipient upload: **under 10 MB**;
-- image destination: optional, but must be a complete HTTP(S) URL.
-
-Normal server-side validation and provider-specific capability checks remain authoritative.
-
-### Why this mode exists
-
-Image-first is useful for newsletters, announcements, posters, invitations, product launches, event creatives, visual promotions, and other campaigns where the message is intentionally centered around one designed image.
-
-It still preserves EmailBlast's main engineering boundaries: the campaign is durable, provider policy is respected, delivery state remains truthful, suppressions still apply, and the browser does not need to remain open while delivery continues.
-
----
-
-## Standard campaign composer
-
-The standard composer is the general-purpose campaign path at `/blast`. It supports both ordinary rich-text authoring and developer-supplied HTML without forcing imported email designs through a visual editor.
-
-### Recipient import and saved lists
-
-Recipients can be supplied in four ways:
-
-- CSV;
-- TXT;
-- XLSX;
-- pasted email addresses, one per line.
-
-For CSV/XLSX imports, EmailBlast looks for common email-column headers such as `email`, `e-mail`, `email address`, or `email_address`. If there is no recognized header, it detects the first column containing a valid email address.
-
-Imports record useful quality statistics:
-
-- rows inspected;
-- valid addresses;
-- invalid addresses;
-- duplicates;
-- addresses already on the do-not-send list;
-- final sendable recipients.
-
-Addresses are normalized to lowercase and deduplicated before they become campaign recipients. Existing suppressions are removed during import rather than left for the worker to discover later.
-
-Completed imports stay available as **Saved recipient lists**, so the same list can be selected again for a future campaign. Removing a saved list does not rewrite campaigns that already used it.
-
-### Message authoring
-
-The standard composer supports:
-
-- campaign name;
-- one or more verified sending domains;
-- subject;
-- inbox preview text/preheader;
-- optional CC and BCC copies;
-- tags;
-- local-time scheduling;
-- optional click tracking;
-- file attachments;
-- rich-text authoring;
-- raw HTML/source authoring;
-- HTML-file import;
-- optional hand-authored plain text.
-
-Imported/source HTML can remain in source mode so an existing email layout is not destroyed by round-tripping it through the rich editor.
-
-When plain text is omitted, EmailBlast derives a text alternative from the normalized HTML.
-
-### Email normalization and preview
-
-Before the message snapshot is accepted, EmailBlast normalizes the HTML deterministically and does not fetch remote resources during that process.
-
-The renderer:
-
-- strips active content such as scripts, forms, iframes and unsafe event handlers;
-- sanitizes unsafe links and image sources;
-- sanitizes CSS;
-- preserves supported media queries and email-safe formatting;
-- inlines CSS for email-client compatibility;
-- preserves supported Outlook conditional/VML fallbacks;
-- injects preview text;
-- generates the plain-text alternative;
-- produces a deterministic snapshot hash.
-
-The composer can show the prepared message as:
-
-- desktop preview;
-- mobile preview;
-- plain-text preview;
-- prepared HTML/source.
-
-This makes the final normalized message inspectable before pre-flight and sending.
-
-### Controlled test send
-
-Both standard and Image-first campaigns support a controlled test send.
-
-A test lets the operator choose an eligible sending service and a test recipient, then sends the prepared message without converting that test into normal campaign-recipient statistics.
-
----
-
-## Sending identities, domains and provider accounts
-
-EmailBlast separates three concepts that many smaller mail tools collapse into one setting:
-
-1. **Sending domain** — a domain the user has added and verified.
-2. **From address** — an enabled sender identity under that domain, with its own display name and optional Reply-To.
-3. **Sending-service connection** — one configured provider account/transport such as a Resend account, SES connection, SendGrid account, Brevo account, or Custom SMTP server.
-
-A verified domain can expose multiple From addresses such as `info@`, `support@`, `hello@`, or `sales@`. Enabling more From addresses does **not** increase the account's sending limits.
-
-Provider/domain authorization is tracked explicitly. A provider must be authorized for the selected domain/From identity before it becomes eligible for campaign traffic.
-
-During campaign setup the user chooses the sending domain(s); EmailBlast then works with the eligible From addresses and provider connections already authorized under those selections.
-
-Retries keep the same From address when possible so a retry does not unnecessarily change sender identity.
-
----
-
-## What EmailBlast actually does
-
-EmailBlast is more than a form that calls an email API. It owns the lifecycle around a campaign so sending can continue safely even when the browser is closed.
-
-A typical campaign moves through these stages:
-
-1. **Connect a sending service**  
-   The user selects a built-in provider or Custom SMTP. EmailBlast supplies the known provider endpoint/host metadata, validates account-specific credentials, encrypts them before persistence, and records verification/health state.
-
-2. **Configure the sending identity**  
-   A connection is associated with a verified sending domain and one or more From addresses. Campaigns select eligible domains rather than hard-coding a single transport connection.
-
-3. **Import recipients**  
-   CSV, TXT, XLSX, or pasted addresses are parsed, normalized, deduplicated, checked against suppression state, and stored as campaign/import data rather than kept only in browser memory.
-
-4. **Compose the message**  
-   Users can use the rich editor or import HTML. EmailBlast sanitizes the content, creates the plain-text alternative, validates attachments and message structure, and stores an immutable message snapshot for the campaign.
-
-5. **Run pre-flight checks**  
-   Before sending, EmailBlast checks sender/domain eligibility, provider availability, suppression state, configured sending limits, content/message readiness, and campaign state.
-
-6. **Queue the campaign**  
-   The web request returns without keeping the browser responsible for the send. Durable campaign and delivery rows are persisted and background workers continue independently.
-
-7. **Select an eligible route**  
-   Workers evaluate the currently usable combinations of sending domain, From address, and provider connection. Disabled, blocked, cooling-down, unauthorized, or exhausted routes are excluded.
-
-8. **Reserve capacity and start transport**  
-   Redis coordinates rate, concurrency, pacing, and shared capacity while PostgreSQL remains the durable source of truth for campaign/delivery state.
-
-9. **Send through API or SMTP**  
-   Provider adapters normalize API and SMTP differences behind a common transport boundary. Each attempt records safe result data without exposing stored credentials.
-
-10. **Reconcile the result**  
-    Immediate provider acceptance is recorded, but final delivery is updated only when an authoritative event exists. Webhooks can move messages to Delivered, Bounced, Complained, and related states.
-
-11. **Recover safely**  
-    Temporary failures may become eligible for bounded retry. Unknown outcomes are not automatically resent because the provider may already have accepted the message.
-
-12. **Observe and control**  
-    Activity exposes progress and delivery state while allowing permitted pause, resume, cancel, filtering, review, and export actions.
-
----
-
-## Delivery engine
-
-The delivery engine is designed around one important rule:
-
-> **Do not confuse “we sent a request” with “it is safe to send again.”**
-
-Each recipient delivery has durable state in PostgreSQL. A transport attempt is recorded separately so the system can distinguish:
-
-- work waiting in the queue;
-- work claimed by a worker;
-- transport that has actually started;
-- provider acceptance;
-- definitive rejection;
-- temporary failure;
-- unknown outcome;
-- authenticated downstream delivery events.
-
-This matters when a network connection dies after a provider has accepted the message but before EmailBlast receives the response. Automatically retrying that recipient could create a duplicate email.
-
-EmailBlast therefore treats uncertain transport outcomes conservatively and waits for reconciliation or operator review where appropriate.
-
-### Provider routing
-
-Provider routing matters when the user has **more than one eligible sending-service connection** available for the sending domain(s) selected during campaign setup.
-
-A sending-service connection is one configured provider account/transport in EmailBlast — for example a Resend connection, an Amazon SES connection, a SendGrid connection, or multiple separate connections to the same provider. It does **not** mean multiple EmailBlast user accounts.
-
-During campaign setup, the user chooses one or more verified sending domains rather than manually choosing a provider for every recipient. EmailBlast then finds the provider connections already authorized and available for those selected domains and From addresses.
-
-- With **one eligible connection**, that connection is used.
-- With **multiple eligible connections**, EmailBlast can distribute work across the connections that are currently allowed to send.
-- With **no eligible connection**, pre-flight blocks the campaign until a usable sending service/domain combination is available.
-
-For each delivery, eligibility can be affected by:
-
-- whether the connection is enabled;
-- successful provider verification;
-- authorization for the selected domain and From address;
-- provider policy state;
-- configured traffic share/weight;
-- per-second and per-minute limits;
-- connection concurrency;
-- daily/monthly connection capacity;
-- cooldowns and adaptive slowdown;
-- account/domain/campaign safety limits;
-- suppressions;
-- campaign state.
-
-This lets multiple healthy provider connections contribute capacity without allowing one connection to bypass the safety, authorization, or policy restrictions of another.
-
-### Background processing
-
-BullMQ and Redis handle asynchronous work and coordination, while PostgreSQL stores the durable business state.
-
-This separation means:
-
-- campaign creation does not wait for the entire mailing job;
-- closing the browser does not stop delivery;
-- multiple workers can cooperate without independently multiplying rate/concurrency limits;
-- a worker restart does not erase campaign/delivery truth;
-- the application can reconstruct operational state from durable records when temporary Redis coordination data is lost.
-
-### Adaptive provider pacing
-
-Configured provider limits are ceilings, not a promise that EmailBlast will always send at that exact rate.
-
-The runtime watches recent provider outcomes and can temporarily reduce a connection's effective pace or extend its cooldown when the provider is showing pressure. The Sending services and Activity surfaces expose the difference between the configured limit and the currently effective rate.
-
-The final campaign pace can therefore be lower than an individual provider's configured rate when account, domain, campaign, cooldown, or adaptive controls require it.
-
-### Domain soft-start
-
-EmailBlast also has configurable sending-domain ramp-up profiles:
-
-- **Slow and cautious**;
-- **Recommended / balanced**;
-- **Faster, still within configured limits**.
-
-For higher-volume domains, a new or recently idle domain begins below its full configured rate and increases toward normal capacity as successful transport starts accumulate. Soft-start never raises a provider or safety limit; it only makes the effective pace more conservative.
-
-### Worker recovery and maintenance
-
-The worker process also owns recurring operational work around the delivery queue.
-
-Alongside BullMQ delivery jobs it:
-
-- prepares large campaigns in durable recipient batches;
-- enqueues deliveries that are ready to run;
-- recovers stalled/expired delivery claims;
-- reconciles provider events that could not be matched immediately;
-- finalizes campaigns when terminal conditions are reached;
-- publishes the worker heartbeat used by readiness checks;
-- refreshes adaptive provider slowdown/cooldown decisions;
-- periodically re-checks provider state where required;
-- expires old sessions;
-- applies configured Activity, webhook, attempt, click-analytics, and experiment retention policies.
-
-A worker crash therefore does not make the browser or Redis the source of truth. PostgreSQL claim/state data is used to determine what can safely resume.
-
----
-
-## Safety and sending controls
-
-EmailBlast includes sending controls at several scopes instead of relying only on the provider's external quota.
-
-Controls can include:
-
-- provider connection daily/monthly limits;
-- account-level limits;
-- sending-domain limits;
-- campaign limits;
-- per-second/per-minute pacing;
-- concurrency limits;
-- temporary provider cooldowns;
-- complaint and hard-bounce review thresholds;
-- sender authorization;
-- account-wide suppressions.
-
-The goal is to reduce accidental over-sending and keep a provider/account problem from automatically spreading across every campaign.
-
-Provider policy enforcement is handled separately from normal failover. A provider that reports an enforcement/policy problem is not treated like an ordinary temporarily slow provider that should simply be routed around.
-
-### Automatic protection pauses
-
-Complaint and hard-bounce thresholds can trigger protected sending pauses after a configured minimum sample size.
-
-The operator chooses whether the protection applies to the affected campaign, the whole account, or both. A protected pause is not cleared just because a worker restarts: an operator must review the outcomes, acknowledge that the cause was addressed, and then explicitly resume permitted sending.
-
-### First-party link tracking
-
-Click tracking is optional and is **off by default**.
-
-When enabled, EmailBlast rewrites eligible message links to opaque tokens under the installation's own `APP_URL`, for example:
-
-```text
-https://mail.example.com/r/<opaque-token>
-```
-
-No third-party link shortener is required.
-
-Tracking is intentionally aggregate and privacy-minimal:
-
-- no recipient identity is stored with a visit;
-- no IP address is stored;
-- no browser fingerprint is stored;
-- no cookie is created for click analytics;
-- request headers are not retained;
-- user-agent history is not retained;
-- daily totals are aggregated per tracked link;
-- obvious scanners/bots and HEAD/prefetch traffic are counted separately as likely automated visits.
-
-Because security products may open links automatically, EmailBlast does not present a tracked visit as proof that a human clicked.
-
-Operators can also maintain blocked destination domains and optionally fail closed when a destination cannot be checked.
-
-Tracking links expire and aggregate click records are retained according to configurable retention periods.
-
----
-
-## Delivery status and webhook reconciliation
-
-EmailBlast deliberately separates **Accepted** from **Delivered**.
-
-For API/SMTP sends:
-
-```text
-Queued
-  ↓
-Processing
-  ↓
-Transport started
-  ↓
-Accepted / Rejected / Unknown
-  ↓
-Provider event
-  ↓
-Delivered / Bounced / Complained / other final state
-```
-
-Where supported, providers send events back to a connection-specific URL:
-
-```text
-https://your-host.example/<base-path>/api/webhooks/<connection-id>
-```
-
-EmailBlast validates the provider-specific authentication/signature, normalizes the payload, correlates it with the stored provider message/attempt information, and updates durable delivery state idempotently.
-
-Supported verification methods include provider signatures, public verification keys, SNS verification, HTTP Basic callback credentials, and provider-specific query secrets.
-
-A duplicate webhook does not create a duplicate delivery transition.
-
----
-
-## Failure handling
-
-The system distinguishes failures that have different operational meanings.
-
-| Situation | EmailBlast behavior |
-| --- | --- |
-| Invalid provider credentials | Connection stays unavailable until corrected |
-| Sender/domain not authorized | Route is excluded |
-| Provider temporarily rate-limited | Connection can enter cooldown and retry later |
-| Definitive recipient failure | Delivery can become failed/bounced as appropriate |
-| Complaint / unsubscribe | Recipient suppression is enforced |
-| Network fails before transport starts | Capacity can be released safely |
-| Network fails after transport may have started | Outcome is treated conservatively as unknown |
-| Provider policy/enforcement block | Sending is stopped/blocked rather than silently routed around |
-| Worker restarts | Durable PostgreSQL state remains authoritative |
-| Redis coordination state is lost | Safety logic fails closed/reconstructs where supported instead of assuming unlimited capacity |
-
-Manual retry is intended for deliveries that are definitively safe to retry; accepted or uncertain outcomes are not blindly duplicated.
-
----
-
-## Data and persistence model
-
-The application keeps operational state durable rather than reconstructing campaign history from provider dashboards.
-
-Major persisted concepts include:
-
-- users/accounts;
-- provider connections and encrypted credentials;
-- sending domains and From addresses;
-- recipient imports;
-- suppressions;
-- campaigns;
-- immutable campaign message snapshots;
-- deliveries;
-- individual transport attempts;
-- normalized provider events;
-- audit/activity records;
-- controlled provider-test deliveries;
-- safety/review state.
-
-PostgreSQL owns durable truth. Redis is used for queues, short-lived coordination, pacing, capacity reservation, and worker/runtime state that can be derived or safely reconstructed.
-
-### Configurable retention
-
-Operational data is not kept forever by accident. Environment-controlled retention covers:
-
-- Activity events;
-- rejected delivery-attempt records that are safe to discard;
-- processed webhook/provider events;
-- click analytics;
-- tracked-link lifetime;
-- experiment evidence;
-- experiment message snapshots;
-- expired sessions.
-
-Experiment message retention is handled specially: after the configured period, the sensitive message body/attachments can be scrubbed while the run/audit history remains.
-
----
-
-## Activity and observability
-
-The Activity surface is intended to answer practical operational questions:
-
-- Is the campaign still running?
-- How many recipients are complete or remaining?
-- Which sending services are currently usable?
-- Is the campaign waiting because of capacity, cooldown, safety, or provider state?
-- Which recipients failed, bounced, complained, or remain uncertain?
-- Can the campaign be paused, resumed, cancelled, or safely retried?
-- Can the results be exported?
-
-Live updates use Server-Sent Events where appropriate so the page can update without making the browser responsible for the worker process.
-
-Operational logs and browser/API responses are designed to avoid returning stored provider secrets.
-
-### Campaign controls and history
-
-Activity supports state-aware operations instead of exposing the same actions for every campaign.
-
-Depending on campaign state, an operator can:
-
-- pause queued/sending work;
-- resume a normal operator pause;
-- cancel recipients whose transport has not started;
-- retry only recipients in a definitive failed state;
-- export campaign results as CSV;
-- inspect the account do-not-send list;
-- add a manual suppression;
-- inspect provider usage/availability and current campaign pace;
-- review tracked-visit totals when tracking was enabled.
-
-A safe retry deliberately leaves already accepted and **UNKNOWN** deliveries untouched.
-
-Finished campaigns can be removed from the main Activity listing without rewriting their underlying delivery history.
-
----
-
-## Advanced controlled experiments
-
-EmailBlast contains an advanced, bounded experiment subsystem intended for explicitly authorized testing and operator/API workflows. It is separate from ordinary campaign sending.
-
-An experiment profile can scope:
-
-- the exact provider connections allowed;
-- the exact sender identities allowed;
-- a controlled recipient allowlist;
-- maximum unique recipients;
-- maximum transport attempts;
-- maximum run duration;
-- an optional approved start/end window;
-- sending pattern;
-- concurrency;
-- transfer encoding;
-- message/content mode.
-
-Supported experiment content modes include HTML, plain text, CID-inline images, hosted-image tests, attachment-only tests, and Image-first tests. Provider capability checks reject combinations the selected transport cannot actually support.
-
-### Hard experiment boundaries
-
-Experiment runs have their own controls on top of the normal EmailBlast safety system:
-
-- recipient ceilings;
-- attempt ceilings;
-- duration ceilings;
-- provider/sender scope;
-- controlled-recipient allowlist;
-- approved time window;
-- account-level experiment kill switch;
-- explicit stop action and stop reason.
-
-An experiment cannot use those controls to weaken ordinary account/domain/provider safety limits.
-
-### Tamper-evident evidence
-
-Authorized experiment runs can record a hash-chained evidence ledger for events such as:
-
-- run start;
-- transport start;
-- transport outcome;
-- effective pacing controls;
-- requested/effective encoding;
-- requested/effective content mode.
-
-Recipient evidence uses run-scoped hashes rather than exposing the controlled recipient addresses in the ledger.
-
-The Activity surface can verify the evidence chain, show whether the check is current, and export the experiment records. Evidence retention is configurable and purge events are themselves recorded.
-
----
+Built-in providers use application-owned endpoint metadata. Provider credentials, regions, streams, SMTP options, verification behavior, and webhooks are documented in [Providers](docs/PROVIDERS.md).
 
 ## Architecture
 
 ```text
-┌────────────────────┐
-│      Browser       │
-└─────────┬──────────┘
-          │
-          ▼
-┌────────────────────┐
-│   Next.js / React  │
-│   Web application  │
-└──────┬───────┬─────┘
-       │       │
-       │       └──────────────┐
-       ▼                      ▼
-┌──────────────┐       ┌──────────────┐
-│ PostgreSQL   │       │ Redis/BullMQ │
-│ durable data │       │ queue/state  │
-└──────────────┘       └──────┬───────┘
-                              │
-                              ▼
-                       ┌──────────────┐
-                       │   Workers    │
-                       └──────┬───────┘
-                              │
-               ┌──────────────┼──────────────┐
-               ▼              ▼              ▼
-         Provider APIs       SMTP       Webhook events
+                         ┌──────────────────┐
+                         │     Next.js      │
+                         │  UI + HTTP API   │
+                         └────────┬─────────┘
+                                  │
+                    durable state │
+                                  ▼
+                         ┌──────────────────┐
+                         │   PostgreSQL     │
+                         │ campaigns        │
+                         │ deliveries       │
+                         │ attempts/events  │
+                         │ suppressions     │
+                         └────────┬─────────┘
+                                  │ ready work
+                                  ▼
+ ┌──────────────────┐    ┌──────────────────┐    ┌────────────────────┐
+ │      Redis       │◄──►│  BullMQ worker   │───►│ Email providers     │
+ │ pacing / leases  │    │ delivery engine │    │ API / SMTP          │
+ │ queue coordination│   └────────┬─────────┘    └─────────┬──────────┘
+ └──────────────────┘             │                        │
+                                  │ attempts               │ webhooks/events
+                                  ▼                        ▼
+                         ┌──────────────────────────────────┐
+                         │ PostgreSQL reconciliation state │
+                         └──────────────────────────────────┘
 ```
 
-The delivery engine uses durable state transitions and idempotent work boundaries. A timeout, dropped connection, or missing provider response does not automatically mean a message is safe to resend.
+PostgreSQL is the durable source of truth. Redis is used for queueing and short-lived coordination that can be reconstructed or safely re-acquired.
 
-Read the full [architecture documentation](docs/ARCHITECTURE.md).
+### Delivery semantics
 
----
+A recipient delivery and a transport attempt are different records.
+
+EmailBlast distinguishes:
+
+```text
+queued
+  → processing
+  → transport started
+  → accepted / rejected / unknown
+  → provider event
+  → delivered / bounced / complained / unsubscribed
+```
+
+The distinction matters when a connection fails after transport may already have started. An **UNKNOWN** result is not automatically treated as safe to retry because the provider may already have accepted the message.
+
+### Provider routing
+
+Routing matters when a campaign's selected sending domain(s) have **more than one eligible provider connection**.
+
+- one eligible connection → that connection is used;
+- multiple eligible connections → EmailBlast may distribute work across connections that are currently authorized and within limits;
+- no eligible connection → pre-flight or runtime capacity checks hold the work until a valid route exists.
+
+Eligibility includes sender/domain authorization, connection health, policy state, weight, rate/concurrency limits, daily/monthly capacity, cooldowns, adaptive slowdown, and shared safety limits.
+
+For the state model, locking boundaries, worker recovery, and reconciliation rules, read [Architecture](docs/ARCHITECTURE.md).
 
 ## Tech stack
 
-| Area | Technology |
+| Layer | Technology |
 | --- | --- |
-| Language | TypeScript |
-| Web | Next.js 16, React 19 |
-| UI | MUI 9 |
-| Database | PostgreSQL 17 |
-| ORM | Prisma 7 |
-| Queue / coordination | Redis 7.4, BullMQ |
-| SMTP | Nodemailer |
+| Web | Next.js 16, React 19, MUI 9 |
+| Language | TypeScript 6 |
+| Database | PostgreSQL 17, Prisma 7 |
+| Queue / coordination | Redis 7.4, BullMQ 6 |
+| Email transport | Provider APIs, Nodemailer SMTP, AWS SES SDK |
+| Editor / HTML | Tiptap, CodeMirror, sanitize-html, Juice |
 | Validation | Zod |
-| Email editing | Tiptap, CodeMirror |
-| Testing | Node test runner, Playwright |
-| Deployment | Docker Compose or native/systemd |
-| Package manager | pnpm 11 |
-| Runtime | Node.js 24 |
-
----
-
-## Repository structure
-
-```text
-apps/
-  web/                  Next.js application and HTTP/UI surface
-  worker/               background BullMQ worker
-
-packages/
-  core/                 campaign, delivery, safety and domain logic
-  db/                   Prisma schema, generated client and migrations
-  providers/            provider catalog, verification, API/SMTP adapters
-  email-renderer/       HTML normalization, rendering and message snapshots
-
-docs/                   architecture, providers, security and operations
-deploy/                 Caddy and Nginx reverse-proxy examples
-scripts/                bootstrap, maintenance, verification and release helpers
-tests/                  unit, PostgreSQL/Redis integration and browser E2E tests
-```
-
----
-
-## Requirements
-
-For local development:
-
-- Node.js **24.19+**
-- pnpm **11.19**
-- PostgreSQL **17**
-- Redis **7.4**
-
-Docker Engine with the Compose plugin can be used to provide development infrastructure.
-
----
+| Tests | Node test runner, Playwright, PostgreSQL/Redis integration tests |
+| Deployment | Docker Compose or Node.js + systemd |
 
 ## Quick start
+
+### Requirements
+
+- Node.js **22.12+**
+- pnpm **11.19+**
+- Docker with Compose for local PostgreSQL/Redis
+- Git
 
 ### 1. Clone and install
 
 ```sh
 git clone https://github.com/rahmon-tech/emailsystem.git
 cd emailsystem
-
 corepack enable
 corepack prepare pnpm@11.19.0 --activate
 pnpm install --frozen-lockfile
 ```
 
-### 2. Create the environment file
+### 2. Create the local environment
 
 ```sh
 cp .env.example .env
-```
-
-Generate independent secrets:
-
-```sh
 openssl rand -hex 32
 openssl rand -hex 32
 ```
 
-Use one value for `SESSION_SECRET` and the other for `CREDENTIAL_ENCRYPTION_KEY`.
+Put the two generated values into:
+
+```dotenv
+SESSION_SECRET=<first-value>
+CREDENTIAL_ENCRYPTION_KEY=<second-value>
+```
+
+For the provided development Compose file, use:
+
+```dotenv
+DATABASE_URL=postgresql://emailsystem:local-development-only@localhost:5432/emailsystem
+REDIS_URL=redis://localhost:6379
+APP_URL=http://localhost:3000
+NEXT_PUBLIC_BASE_PATH=
+```
 
 ### 3. Start PostgreSQL and Redis
 
@@ -792,120 +180,74 @@ Use one value for `SESSION_SECRET` and the other for `CREDENTIAL_ENCRYPTION_KEY`
 docker compose -f compose.dev.yaml up -d
 ```
 
-### 4. Bootstrap the application
+### 4. Prepare the database and first user
 
 ```sh
-pnpm bootstrap:native
+pnpm db:generate
 pnpm db:migrate
 pnpm user:create
 ```
 
-### 5. Start the web application
+### 5. Run web + worker
+
+Terminal 1:
 
 ```sh
 pnpm dev
 ```
 
-### 6. Start the worker
-
-In a second terminal:
+Terminal 2:
 
 ```sh
 pnpm worker
 ```
 
-The development-only mock provider can be enabled explicitly with:
+Open `http://localhost:3000`.
 
-```dotenv
-ALLOW_MOCK_PROVIDER=true
+The mock provider is development-only and must be enabled explicitly with `ALLOW_MOCK_PROVIDER=true`.
+
+## Production deployment
+
+Choose the deployment model that matches the host:
+
+| Model | Use when | Guide |
+| --- | --- | --- |
+| Docker Compose + bundled Caddy | Dedicated VPS; EmailBlast owns the application stack and HTTPS proxy | [Deployment](docs/DEPLOYMENT.md) |
+| Docker Compose + existing proxy | VPS already runs Nginx/Caddy or other applications | [Deployment](docs/DEPLOYMENT.md) |
+| Native Node.js + systemd | PostgreSQL, Redis, reverse proxy, and service supervision are host-managed | [Native runtime](docs/NATIVE_RUNTIME.md) |
+
+Production guidance covers environment generation, migrations, first-user creation, reverse proxying, health checks, backups, upgrades, and rollback boundaries.
+
+Deploy exact CI-verified SHAs rather than an unpinned moving branch.
+
+## Repository layout
+
+```text
+apps/
+  web/                  Next.js application and HTTP/UI surface
+  worker/               BullMQ delivery worker
+
+packages/
+  core/                 campaign, delivery, routing and safety logic
+  db/                   Prisma schema, generated client and migrations
+  providers/            provider catalog and API/SMTP adapters
+  email-renderer/       HTML normalization and message rendering
+
+docs/                   product, architecture and operations documentation
+deploy/                 reverse-proxy examples
+scripts/                bootstrap, maintenance and verification helpers
+tests/                  unit, integration and browser tests
 ```
 
-It is not part of a normal production installation.
+## Verification
 
----
-
-## Environment
-
-The complete example is in [`.env.example`](.env.example).
-
-Important production values include:
-
-```dotenv
-NODE_ENV=production
-APP_URL=https://mail.example.com
-NEXT_PUBLIC_BASE_PATH=
-
-DATABASE_URL=postgresql://...
-REDIS_URL=redis://...
-
-SESSION_SECRET=
-CREDENTIAL_ENCRYPTION_KEY=
-```
-
-Never commit:
-
-- production `.env` files;
-- provider API/SMTP credentials;
-- database dumps;
-- provider bootstrap files;
-- production encryption/session keys.
-
----
-
-## Useful commands
-
-| Command | Purpose |
-| --- | --- |
-| `pnpm dev` | Start the web application in development |
-| `pnpm worker` | Start the background worker |
-| `pnpm build` | Production web build |
-| `pnpm build:native` | Prepare native/systemd standalone runtime |
-| `pnpm db:generate` | Generate Prisma client |
-| `pnpm db:migrate` | Apply repository migrations |
-| `pnpm user:create` | Create an application user |
-| `pnpm bootstrap:native` | Validate/configure a native environment |
-| `pnpm lint` | Run ESLint |
-| `pnpm typecheck` | Run TypeScript checks |
-| `pnpm test` | Run unit tests |
-| `pnpm test:integration` | Run PostgreSQL/Redis integration tests |
-| `pnpm test:e2e` | Run Playwright browser tests |
-| `pnpm secrets:scan` | Scan current repository files for credentials |
-| `pnpm secrets:scan:history` | Scan current files and Git history for credentials |
-| `pnpm audit:prod` | Audit production dependencies |
-
----
-
-## Testing and CI
-
-The GitHub Actions pipeline verifies the repository against real PostgreSQL and Redis service containers.
-
-Release checks include:
-
-- locked dependency installation;
-- production dependency audit;
-- Prisma generation;
-- fresh database migrations;
-- schema-drift checks;
-- upgrade rehearsal;
-- linting;
-- current-tree and Git-history secret scanning;
-- TypeScript;
-- unit tests;
-- PostgreSQL/Redis integration tests;
-- production build;
-- Playwright browser E2E;
-- screenshot/visual-review generation;
-- production-container build and startup;
-- application readiness.
-
-Run the main local checks with:
+Common local checks:
 
 ```sh
 pnpm audit:prod
 pnpm db:generate
 pnpm lint
 pnpm secrets:scan
-pnpm secrets:scan:history
 pnpm typecheck
 pnpm test
 pnpm test:integration
@@ -913,642 +255,35 @@ pnpm build
 pnpm test:e2e
 ```
 
-Read [Verification](docs/VERIFICATION.md) for the boundary between repository proof and live-provider/production-host acceptance.
+CI additionally rehearses migrations/upgrades, scans Git history for credentials, generates browser-review artifacts, builds production containers, and checks application readiness.
 
----
-
-## Production installation
-
-EmailBlast can be deployed in three practical ways:
-
-| Installation | Best for | What EmailBlast manages |
-| --- | --- | --- |
-| **Docker Compose + built-in Caddy** | New dedicated VPS | web, worker, PostgreSQL, Redis, HTTPS proxy |
-| **Docker Compose + existing proxy** | VPS already running Nginx/Caddy/other apps | web, worker, PostgreSQL, Redis; your existing proxy stays in control |
-| **Native VPS / no Docker** | Hosts where you prefer system packages + systemd | Node web/worker processes; PostgreSQL/Redis/proxy are installed on the host |
-
-For every production installation, point a domain/subdomain at the VPS first and keep ports **80/443** available to the HTTPS proxy.
-
-### Option A — Docker Compose on a fresh VPS
-
-This is the simplest complete installation because the repository already defines PostgreSQL 17, Redis 7.4, web, worker, persistent volumes, and Caddy.
-
-#### 1. Install Git and Docker
-
-Install Docker Engine with the Docker Compose plugin using Docker's official instructions for your Linux distribution. Confirm:
-
-```sh
-git --version
-docker --version
-docker compose version
-```
-
-#### 2. Clone EmailBlast
-
-```sh
-git clone https://github.com/rahmon-tech/emailsystem.git
-cd emailsystem
-```
-
-For a release deployment, check out an exact CI-verified commit instead of relying on a moving branch:
-
-```sh
-git fetch origin main
-git checkout --detach <verified-release-sha>
-```
-
-#### 3. Generate the production environment
-
-The repository includes a production environment generator. It creates independent database, session, and credential-encryption secrets without printing them.
-
-For a root-domain install:
-
-```sh
-docker run --rm \
-  -u "$(id -u):$(id -g)" \
-  -v "$PWD:/app" \
-  -w /app \
-  node:24.19.0-bookworm-slim \
-  node --experimental-strip-types scripts/setup-env.ts mail.example.com
-```
-
-For a path-prefixed install such as `https://example.com/emailblast`:
-
-```sh
-docker run --rm \
-  -u "$(id -u):$(id -g)" \
-  -v "$PWD:/app" \
-  -w /app \
-  node:24.19.0-bookworm-slim \
-  node --experimental-strip-types scripts/setup-env.ts example.com /emailblast
-```
-
-The generated `.env` is mode `0600`. Keep an encrypted backup of it because `CREDENTIAL_ENCRYPTION_KEY` is required to decrypt saved provider credentials.
-
-#### 4. Validate and build
-
-```sh
-docker compose config --quiet
-docker compose build
-```
-
-#### 5. Start PostgreSQL and Redis
-
-```sh
-docker compose up -d postgres redis
-```
-
-Wait until both are healthy:
-
-```sh
-docker compose ps
-```
-
-#### 6. Apply database migrations
-
-```sh
-docker compose run --rm web \
-  node node_modules/prisma/build/index.js migrate deploy
-```
-
-#### 7. Create the first application user
-
-```sh
-docker compose run --rm -it web \
-  node --import tsx scripts/create-user.ts
-```
-
-The command asks for the account email and password interactively; the password is not placed in shell history.
-
-#### 8. Start the full stack
-
-```sh
-docker compose up -d --wait web worker proxy
-```
-
-Caddy obtains TLS automatically for the `DOMAIN` stored in `.env`.
-
-#### 9. Verify production health
-
-```sh
-curl --fail https://mail.example.com/health/live
-curl --fail https://mail.example.com/health/ready
-```
-
-For a path-prefixed install:
-
-```sh
-curl --fail https://example.com/emailblast/health/live
-curl --fail https://example.com/emailblast/health/ready
-```
-
-`live` proves the web process is responding. `ready` additionally verifies PostgreSQL, Redis, and a recent worker heartbeat.
-
-### Option B — Docker on a VPS that already has Nginx/Caddy
-
-Use this when the server already hosts other applications and you do **not** want EmailBlast's bundled Caddy to own ports 80/443.
-
-Generate `.env` as above, then use the shared-host Compose overlay:
-
-```sh
-docker compose -p emailblast \
-  -f compose.yaml \
-  -f compose.shared.yaml \
-  config --quiet
-
-docker compose -p emailblast \
-  -f compose.yaml \
-  -f compose.shared.yaml \
-  up -d postgres redis
-
-docker compose -p emailblast \
-  -f compose.yaml \
-  -f compose.shared.yaml \
-  run --rm web node node_modules/prisma/build/index.js migrate deploy
-
-docker compose -p emailblast \
-  -f compose.yaml \
-  -f compose.shared.yaml \
-  run --rm -it web node --import tsx scripts/create-user.ts
-
-docker compose -p emailblast \
-  -f compose.yaml \
-  -f compose.shared.yaml \
-  up -d --wait web worker
-```
-
-By default the web container is published only on loopback at:
-
-```text
-127.0.0.1:3087
-```
-
-Point the existing reverse proxy at that loopback address. A path-prefixed Nginx example is provided in [`deploy/nginx-emailblast.conf`](deploy/nginx-emailblast.conf).
-
-Do not expose PostgreSQL, Redis, or the application loopback port directly to the internet.
-
-### Option C — VPS installation without Docker
-
-This mode runs the application directly with Node.js and systemd. PostgreSQL, Redis, and the reverse proxy are ordinary host services.
-
-A practical Ubuntu/Debian-style host needs:
-
-- Git
-- Node.js 24.19+
-- pnpm 11.19
-- PostgreSQL 17
-- Redis 7.4
-- Nginx or Caddy
-- systemd
-
-Install PostgreSQL and Redis from their supported distribution/vendor repositories, then verify:
-
-```sh
-node --version
-psql --version
-redis-server --version
-```
-
-#### 1. Create the application directory
-
-```sh
-sudo mkdir -p /opt/emailblast
-sudo chown "$USER":"$USER" /opt/emailblast
-
-git clone https://github.com/rahmon-tech/emailsystem.git /opt/emailblast
-cd /opt/emailblast
-
-git fetch origin main
-git checkout --detach <verified-release-sha>
-```
-
-#### 2. Enable pnpm and install dependencies
-
-```sh
-corepack enable
-corepack prepare pnpm@11.19.0 --activate
-pnpm install --frozen-lockfile
-```
-
-#### 3. Create PostgreSQL database/user
-
-Create a dedicated PostgreSQL role and database:
-
-```sh
-sudo -u postgres psql
-```
-
-Then in PostgreSQL:
-
-```sql
-CREATE ROLE emailsystem LOGIN PASSWORD 'replace-with-a-strong-random-password';
-CREATE DATABASE emailsystem OWNER emailsystem;
-\q
-```
-
-Do not reuse that example password. Generate a strong random value and keep it in the protected production environment file.
-
-#### 4. Configure Redis
-
-EmailBlast expects Redis to be persistent enough for production coordination. Enable AOF persistence and use a non-evicting policy:
-
-```text
-appendonly yes
-appendfsync everysec
-maxmemory-policy noeviction
-```
-
-Restart Redis after changing its configuration and verify:
-
-```sh
-redis-cli ping
-```
-
-Expected:
-
-```text
-PONG
-```
-
-#### 5. Create the production environment
-
-```sh
-cp .env.example .env
-chmod 600 .env
-```
-
-Generate two independent application secrets:
-
-```sh
-openssl rand -hex 32
-openssl rand -hex 32
-```
-
-Configure `.env` for host services:
-
-```dotenv
-NODE_ENV=production
-APP_URL=https://mail.example.com
-NEXT_PUBLIC_BASE_PATH=
-
-DATABASE_URL=postgresql://emailsystem:YOUR_DATABASE_PASSWORD@127.0.0.1:5432/emailsystem
-REDIS_URL=redis://127.0.0.1:6379
-
-SESSION_SECRET=FIRST_RANDOM_64_HEX_VALUE
-CREDENTIAL_ENCRYPTION_KEY=SECOND_RANDOM_64_HEX_VALUE
-
-ALLOW_MOCK_PROVIDER=false
-WORKER_CONCURRENCY=4
-```
-
-For `https://example.com/emailblast`, use:
-
-```dotenv
-APP_URL=https://example.com/emailblast
-NEXT_PUBLIC_BASE_PATH=/emailblast
-```
-
-#### 6. Validate the native runtime
-
-```sh
-pnpm bootstrap:native
-```
-
-This validates Node/pnpm, the environment, PostgreSQL, Redis, protected file permissions, and Prisma generation. It does **not** silently apply production migrations.
-
-#### 7. Apply migrations and create the first user
-
-```sh
-pnpm db:migrate
-pnpm user:create
-```
-
-#### 8. Build the standalone production application
-
-Root-domain install:
-
-```sh
-pnpm build:native
-```
-
-Path-prefixed install:
-
-```sh
-NEXT_PUBLIC_BASE_PATH=/emailblast pnpm build:native
-```
-
-The generated web entry point is:
-
-```text
-apps/web/.next/standalone/apps/web/server.js
-```
-
-The worker entry point remains:
-
-```text
-node --import tsx apps/worker/main.ts
-```
-
-#### 9. Create systemd services
-
-Example web service:
-
-```ini
-[Unit]
-Description=EmailBlast web
-After=network.target postgresql.service redis-server.service
-
-[Service]
-Type=simple
-WorkingDirectory=/opt/emailblast/apps/web/.next/standalone/apps/web
-EnvironmentFile=/opt/emailblast/.env
-Environment=PORT=3000
-ExecStart=/usr/bin/node server.js
-Restart=on-failure
-RestartSec=3
-NoNewPrivileges=true
-
-[Install]
-WantedBy=multi-user.target
-```
-
-Save it as:
-
-```text
-/etc/systemd/system/emailblast-web.service
-```
-
-Example worker:
-
-```ini
-[Unit]
-Description=EmailBlast worker
-After=network.target postgresql.service redis-server.service
-
-[Service]
-Type=simple
-WorkingDirectory=/opt/emailblast
-EnvironmentFile=/opt/emailblast/.env
-ExecStart=/usr/bin/node --import tsx apps/worker/main.ts
-Restart=on-failure
-RestartSec=3
-NoNewPrivileges=true
-
-[Install]
-WantedBy=multi-user.target
-```
-
-Save it as:
-
-```text
-/etc/systemd/system/emailblast-worker.service
-```
-
-Service unit names such as `postgresql.service` and `redis-server.service` vary between Linux distributions. Adjust the `After=` lines to match the services installed on the host.
-
-If Node is installed somewhere other than `/usr/bin/node`, use the actual result of:
-
-```sh
-command -v node
-```
-
-Enable and start both services:
-
-```sh
-sudo systemctl daemon-reload
-sudo systemctl enable --now emailblast-web.service
-sudo systemctl enable --now emailblast-worker.service
-```
-
-Check them:
-
-```sh
-systemctl --no-pager --full status emailblast-web.service
-systemctl --no-pager --full status emailblast-worker.service
-```
-
-#### 10. Configure HTTPS reverse proxy
-
-Keep the Node process on loopback and publish only HTTPS through Nginx/Caddy.
-
-For a path-prefix deployment, adapt [`deploy/nginx-emailblast.conf`](deploy/nginx-emailblast.conf). The proxy must preserve the configured base path and allow Server-Sent Events to stream.
-
-Do not expose PostgreSQL or Redis publicly.
-
-#### 11. Verify the native installation
-
-Loopback:
-
-```sh
-curl -fsS http://127.0.0.1:3000/health/live
-curl -fsS http://127.0.0.1:3000/health/ready
-```
-
-Public:
-
-```sh
-curl -fsS https://mail.example.com/health/live
-curl -fsS https://mail.example.com/health/ready
-```
-
-For a base path, include it in both URLs.
-
-### First login and provider setup
-
-After installation:
-
-1. sign in with the account created by `pnpm user:create` / `scripts/create-user.ts`;
-2. open **Sending services**;
-3. add a provider;
-4. verify its credentials and sending domain;
-5. save the generated delivery-webhook URL in the provider account when delivery events are supported;
-6. use **Send test email** with a controlled recipient before running a campaign.
-
-EmailBlast does not require provider credentials in repository files. Saved credentials are encrypted before persistence.
-
-### Production upgrades
-
-Always deploy a specific CI-verified SHA.
-
-#### Docker upgrade
-
-```sh
-git fetch origin main
-git checkout --detach <verified-release-sha>
-
-docker compose build
-docker compose stop worker
-docker compose run --rm web node node_modules/prisma/build/index.js migrate deploy
-docker compose up -d --force-recreate web worker proxy
-
-curl --fail https://mail.example.com/health/ready
-```
-
-On an existing-proxy installation, use the same `-p emailblast -f compose.yaml -f compose.shared.yaml` arguments and do not start the bundled proxy.
-
-#### Native/systemd upgrade
-
-```sh
-cd /opt/emailblast
-
-git fetch origin main
-git checkout --detach <verified-release-sha>
-
-pnpm install --frozen-lockfile
-pnpm bootstrap:native:check
-
-NEXT_PUBLIC_BASE_PATH=/emailblast pnpm build:native
-
-sudo systemctl stop emailblast-worker.service
-pnpm db:migrate
-sudo systemctl start emailblast-worker.service
-sudo systemctl restart emailblast-web.service
-```
-
-Use a blank `NEXT_PUBLIC_BASE_PATH` for a root-domain installation.
-
-Do not use `prisma db push` for production releases.
-
-### Backups
-
-Back up both the database **and** the protected `.env`.
-
-Docker PostgreSQL example:
-
-```sh
-mkdir -p backups
-chmod 700 backups
-
-docker compose exec -T postgres \
-  pg_dump -U emailsystem -d emailsystem -Fc \
-  > "backups/emailblast-$(date -u +%Y%m%dT%H%M%SZ).dump"
-```
-
-Native PostgreSQL example:
-
-```sh
-mkdir -p backups
-chmod 700 backups
-
-set -a
-. ./.env
-set +a
-
-pg_dump "$DATABASE_URL" -Fc \
-  > "backups/emailblast-$(date -u +%Y%m%dT%H%M%SZ).dump"
-```
-
-Store backups encrypted and off-host. Losing `CREDENTIAL_ENCRYPTION_KEY` makes saved provider credentials unrecoverable.
-
-For more operational detail, read:
-
-- [Production deployment](docs/DEPLOYMENT.md)
-- [Native/systemd runtime](docs/NATIVE_RUNTIME.md)
-
----
-
-## Delivery webhooks
-
-EmailBlast generates the callback URL for each saved connection:
-
-```text
-https://your-host.example/<base-path>/api/webhooks/<connection-id>
-```
-
-The provider-specific authentication method varies:
-
-- signed provider secret;
-- public verification key;
-- SNS topic verification;
-- HTTP Basic callback secret;
-- query-string callback secret.
-
-Custom SMTP has no universal final-delivery protocol. Confirmed delivery is only available when the SMTP service also exposes a compatible event/webhook system.
-
-See [Provider setup and delivery webhooks](docs/PROVIDERS.md).
-
----
-
-## Security
-
-EmailBlast includes controls for:
-
-- salted password hashing;
-- HttpOnly/SameSite sessions;
-- mutation Origin checks;
-- tenant-scoped database ownership;
-- AES-256-GCM provider credential encryption;
-- bounded uploads/imports;
-- HTML sanitization;
-- webhook signature/authentication verification;
-- suppression enforcement;
-- spreadsheet-safe CSV exports;
-- production dependency auditing;
-- secret scanning;
-- bounded retry behavior.
-
-Read [Security and operations](docs/SECURITY.md).
-
-Security-sensitive reports should not include credentials, recipient data, or exploit details in public issues.
-
----
-
-## Responsible use
-
-EmailBlast is intended for legitimate, permission-based email operations.
-
-Operators are responsible for:
-
-- recipient consent;
-- sender/domain authentication;
-- unsubscribe requirements;
-- provider acceptable-use policies;
-- applicable privacy and anti-spam laws;
-- account reputation and provider restrictions.
-
-The delivery engine does not intentionally bypass provider enforcement, suppressions, safety limits, or uncertain-delivery safeguards.
-
----
+See [Verification](docs/VERIFICATION.md) for the full release boundary.
 
 ## Documentation
 
 | Document | Purpose |
 | --- | --- |
-| [Architecture](docs/ARCHITECTURE.md) | Delivery model, state transitions and system design |
-| [Providers](docs/PROVIDERS.md) | Provider configuration, SMTP/API behavior and webhooks |
+| [Features](docs/FEATURES.md) | Campaign modes, imports, routing, tracking, safety and Activity |
+| [Architecture](docs/ARCHITECTURE.md) | Delivery model, workers, state transitions and reconciliation |
+| [Providers](docs/PROVIDERS.md) | Provider configuration, API/SMTP behavior and delivery webhooks |
+| [Experiments](docs/EXPERIMENTS.md) | Bounded controlled-experiment subsystem and evidence model |
 | [Security](docs/SECURITY.md) | Security controls and operational boundaries |
-| [Deployment](docs/DEPLOYMENT.md) | Production installation, backup and upgrade guidance |
-| [Native runtime](docs/NATIVE_RUNTIME.md) | Native/systemd deployment |
-| [Verification](docs/VERIFICATION.md) | CI, testing and release acceptance |
+| [Deployment](docs/DEPLOYMENT.md) | Docker production installation, backups and upgrades |
+| [Native runtime](docs/NATIVE_RUNTIME.md) | Non-Docker/systemd deployment |
+| [Verification](docs/VERIFICATION.md) | CI, tests and release acceptance |
 
----
+## Security and responsible use
 
-## Project status
+Provider credentials are encrypted before persistence. The application also applies tenant scoping, bounded uploads, HTML sanitization, mutation-origin checks, authenticated webhook processing, suppression enforcement, secret scanning, and conservative retry rules.
 
-EmailBlast is actively maintained and has been deployed in a production-style native/systemd environment.
+Do not put credentials, recipient/customer data, production dumps, or exploit details in public issues. See [SECURITY.md](SECURITY.md) for reporting guidance.
 
-Automated tests use isolated test data and mock transports where appropriate. A successful CI run does not claim that an external provider account, DNS configuration, live webhook, or specific production host is healthy.
-
----
+EmailBlast is intended for legitimate, permission-based email operations. Operators remain responsible for consent, sender authentication, unsubscribe obligations, provider policies, and applicable privacy/anti-spam law.
 
 ## Contributing
 
-Issues and pull requests are welcome for reproducible bugs, documentation improvements, provider compatibility fixes, and clearly scoped features.
-
-Please avoid submitting:
-
-- real provider credentials;
-- recipient/customer data;
-- production database dumps;
-- screenshots containing secrets;
-- changes intended to bypass provider enforcement or abuse-prevention controls.
-
-Run the relevant verification commands before opening a pull request.
-
----
+Reproducible bug reports, documentation improvements, provider compatibility fixes, and clearly scoped changes are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request.
 
 ## License
 
-The repository is publicly visible, but no open-source license has been granted yet.
-
-Until a license is added, normal copyright restrictions apply and public visibility alone does not grant permission to copy, modify, redistribute, or commercially reuse the source.
+This repository is publicly visible but currently has **no open-source license**. Public visibility alone does not grant permission to copy, modify, redistribute, or commercially reuse the source.
