@@ -160,14 +160,14 @@ export async function reviewSafety(userId: string, input: unknown) {
         throw new AppError(
           409,
           "POLICY",
-          "Resolve the provider enforcement block before recording a safety review.",
+          "Resolve the sending-service block before completing this review.",
         );
       const user = await tx.user.findUniqueOrThrow({ where: { id: userId } });
       if (data.campaignId && user.safetyPausedReason)
         throw new AppError(
           409,
           "SAFETY",
-          "Review the account safety pause first.",
+          "Review the account-wide sending pause first.",
         );
       if (
         data.campaignId &&
