@@ -853,7 +853,7 @@ function ProviderForm({
               />
               {settings.messageStreamType === "transactional" && (
                 <Alert severity="info">
-                  This Postmark stream is set for test emails, so EmailSystem
+                  This Postmark stream is set for test emails, so EmailBlast
                   will not use it for campaigns.
                 </Alert>
               )}
