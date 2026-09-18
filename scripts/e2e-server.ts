@@ -5,6 +5,7 @@ import { request } from "node:http";
 import { createWriteStream, readFileSync, writeFileSync } from "node:fs";
 import { createUser } from "@emailsystem/core/auth";
 import { db } from "@emailsystem/db";
+import { E2E_EMAIL, E2E_PASSWORD } from "../tests/e2e/credentials";
 if (
   process.env.ALLOW_MOCK_PROVIDER !== "true" ||
   !process.env.DATABASE_URL?.includes("test")
@@ -12,10 +13,8 @@ if (
   throw new Error(
     "E2E requires an isolated test database and explicitly enabled mock provider.",
   );
-const email = "browser-test@example.com",
-  password = "Isolated-browser-test-password-2026";
-if (!(await db.user.findUnique({ where: { email } })))
-  await createUser(email, password);
+if (!(await db.user.findUnique({ where: { email: E2E_EMAIL } })))
+  await createUser(E2E_EMAIL, E2E_PASSWORD);
 await db.$disconnect();
 execFileSync(
   "openssl",
