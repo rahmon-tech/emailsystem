@@ -743,13 +743,38 @@ function ProviderForm({
   const webhookUrl = row ? `${appUrl}/api/webhooks/${row.id}` : "";
   const copyWebhookUrl = async () => {
     if (!webhookUrl) return;
-    try {
-      await navigator.clipboard.writeText(webhookUrl);
-      setWebhookCopied(true);
-      window.setTimeout(() => setWebhookCopied(false), 1500);
-    } catch {
-      setError("Could not copy the webhook URL. Select the URL and copy it manually.");
+
+    let copied = false;
+    if (navigator.clipboard?.writeText) {
+      try {
+        await navigator.clipboard.writeText(webhookUrl);
+        copied = true;
+      } catch {
+        // Fall through to the DOM copy fallback below.
+      }
     }
+
+    if (!copied) {
+      const input = document.createElement("textarea");
+      input.value = webhookUrl;
+      input.setAttribute("readonly", "");
+      input.style.position = "fixed";
+      input.style.opacity = "0";
+      input.style.pointerEvents = "none";
+      document.body.appendChild(input);
+      input.select();
+      copied = document.execCommand("copy");
+      input.remove();
+    }
+
+    if (!copied) {
+      setError("Could not copy the webhook URL. Select the URL and copy it manually.");
+      return;
+    }
+
+    setError("");
+    setWebhookCopied(true);
+    window.setTimeout(() => setWebhookCopied(false), 1500);
   };
   const change = (key: string, value: unknown) =>
     setSettings((s) => ({ ...s, [key]: value }));
