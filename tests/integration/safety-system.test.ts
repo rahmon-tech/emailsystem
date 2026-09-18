@@ -179,7 +179,7 @@ test("provider monthly cap pauses only exhausted connections and resumes next UT
     await processDelivery(delivery.id, send, () => clock);
   assert.equal(sends, 2);
   const summary = await campaignSummary(f.user.id, f.campaign.id);
-  assert.match(summary.safety.waitReason ?? "", /Monthly provider limit/);
+  assert.match(summary.safety.waitReason ?? "", /sending service has reached its monthly limit/i);
   const pending = await db.delivery.findMany({
     where: {
       campaignId: f.campaign.id,
@@ -217,7 +217,7 @@ test("shared monthly account ceiling blocks additional claims until the next UTC
   await processDelivery(f.deliveries[1].id, send, () => clock);
   assert.equal(sends, 1);
   const summary = await campaignSummary(f.user.id, f.campaign.id);
-  assert.match(summary.safety.waitReason ?? "", /Monthly account\/domain safety limit/);
+  assert.match(summary.safety.waitReason ?? "", /monthly sending limit/i);
   const accountMonth = summary.safety.monthlyUsage.find(
     (budget) => budget.scope === "account-month",
   )!;
