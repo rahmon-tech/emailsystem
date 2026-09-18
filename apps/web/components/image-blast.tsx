@@ -347,8 +347,8 @@ export function ImageBlast() {
   return (
     <>
       <PageTitle
-        title="Blast"
-        description="Image-first mode · build an email around one main image embedded directly in the message."
+        title="Create campaign"
+        description="Image-first · build your email around one main image."
         inlineAction
         action={
           <Button
@@ -863,7 +863,7 @@ export function ImageBlast() {
               })
             }
           >
-            {busy === "send" ? "Queuing…" : "Confirm send"}
+            {busy === "send" ? "Starting…" : "Confirm send"}
           </Button>
         </DialogActions>
       </ResponsiveDialog>
