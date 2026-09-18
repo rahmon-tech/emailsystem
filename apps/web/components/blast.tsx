@@ -277,6 +277,9 @@ export function Blast() {
         (domain) => domain.status === "VERIFIED" && domain.senders.length > 0,
       ) ?? [];
   const hasEligibleSender = eligibleDomains.length > 0;
+  const selectedDomain = eligibleDomains.find(
+    (domain) => domain.id === form.senderDomainId,
+  );
   return (
     <>
       <PageTitle
@@ -897,7 +900,9 @@ export function Blast() {
                     }}
                   >
                     <Typography variant="caption" color="text.secondary">
-                      {form.fromName || form.from || "Sender"}
+                      {form.fromName
+                        ? `${form.fromName} · ${selectedDomain?.domain ?? "Sending domain"}`
+                        : selectedDomain?.domain ?? "Sending domain"}
                     </Typography>
                     <Typography
                       sx={{ fontSize: 14, fontWeight: 600, mt: 0.25 }}
@@ -1000,7 +1005,7 @@ export function Blast() {
                         flight.providers.length > 0,
                       ],
                       [
-                        `Sender · ${flight.sender.email}`,
+                        `Domain · ${flight.sender.domain} · ${flight.sender.aliasCount} ${flight.sender.aliasCount === 1 ? "alias" : "aliases"}`,
                         flight.sender.eligibleProviderCount > 0,
                       ],
                       ["HTML prepared", !!flight.previewHtml],
