@@ -869,7 +869,7 @@ function ProviderForm({
             <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
               Choose the domain this service is allowed to send from, then add
               the From addresses you want to use. More addresses do not increase
-              the service's sending limit.
+              the sending limit for this service.
             </Typography>
           </Box>
           <TextField
