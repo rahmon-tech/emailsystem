@@ -799,8 +799,8 @@ function ProviderForm({
               />
               {settings.messageStreamType === "transactional" && (
                 <Alert severity="info">
-                  This Postmark stream is set for test/transactional mail, so
-                  EmailSystem will not use it for campaigns.
+                  This Postmark stream is set for test emails, so EmailSystem
+                  will not use it for campaigns.
                 </Alert>
               )}
               {transport === "smtp" && (
@@ -1282,9 +1282,9 @@ function TestDialog({
               }
               label={
                 row.type === "mailgun"
-                  ? "Use non-delivery test mode (may be billed)"
+                  ? "Test without delivery (may be billed)"
                   : row.type === "brevo"
-                    ? "Validate format only (no delivery)"
+                    ? "Check format only (no delivery)"
                     : "Use Sandbox Mode (no delivery)"
               }
             />
@@ -1297,7 +1297,7 @@ function TestDialog({
                 {result.status === "accepted"
                   ? result.testMode
                     ? "The sending service validated the test without delivery"
-                    : "The sending service accepted the test"
+                    : "The sending service accepted the test email"
                   : result.status}
               </Typography>
               <Typography sx={{ fontSize: 13 }}>
@@ -1347,7 +1347,7 @@ function TestDialog({
           {busy
             ? "Testing…"
             : testMode
-              ? "Run Non-Delivery Test"
+              ? "Run test without delivery"
               : "Send Test Email"}
         </Button>
       </DialogActions>
