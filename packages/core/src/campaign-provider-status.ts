@@ -140,6 +140,9 @@ export async function campaignProviderStatus(
     },
   });
 
+  const routeSenders = campaign.experimentRun
+    ? poolSenders.filter((poolSender) => poolSender.id === sender.id)
+    : poolSenders;
   const experimentProviderIds = campaign.experimentRun
     ? new Set(
         campaign.experimentRun.profile.providerScopes.map(
@@ -151,16 +154,17 @@ export async function campaignProviderStatus(
     ...new Map(
       authorizations
         .filter((authorization) =>
-          poolSenders.some(
+          routeSenders.some(
             (poolSender) =>
               poolSender.authorizedDomainId === authorization.authorizedDomainId &&
               authorizationAllowsSender(authorization, poolSender),
           ),
         )
         .map((authorization) => {
-          const poolSender = poolSenders.find(
+          const poolSender = routeSenders.find(
             (candidate) =>
-              candidate.authorizedDomainId === authorization.authorizedDomainId,
+              candidate.authorizedDomainId === authorization.authorizedDomainId &&
+              authorizationAllowsSender(authorization, candidate),
           )!;
           return [
             `${authorization.providerConnection.id}:${poolSender.authorizedDomain.domain}`,
@@ -176,7 +180,11 @@ export async function campaignProviderStatus(
       !provider.deletedAt &&
       (!experimentProviderIds || experimentProviderIds.has(provider.id)),
   );
-  const providers = providerScopes.map(({ provider }) => provider);
+  const providers = [
+    ...new Map(
+      providerScopes.map(({ provider }) => [provider.id, provider]),
+    ).values(),
+  ];
   const cost = messageCost({ cc: snapshot.cc ?? [], bcc: snapshot.bcc ?? [] });
   const needsInlineTransport =
     snapshot.attachments?.some(
@@ -258,7 +266,7 @@ export async function campaignProviderStatus(
                   ? "This campaign\'s From address is not approved for the controlled experiment."
                   : null
     : null;
-  const senderBlock = poolSenders.some(
+  const senderBlock = routeSenders.some(
     (poolSender) => poolSender.authorizedDomain.status === "VERIFIED",
   )
     ? null
