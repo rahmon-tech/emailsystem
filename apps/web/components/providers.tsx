@@ -1078,26 +1078,18 @@ function ProviderForm({
                     to Delivered, Bounced, or Complained when your sending service
                     reports the final result.
                   </Typography>
-                  {row ? (
-                    <Typography
-                      component="code"
-                      sx={{
-                        fontSize: 12,
-                        overflowWrap: "anywhere",
-                        p: 1.25,
-                        borderRadius: 1.5,
-                        bgcolor: "background.paper",
-                      }}
-                    >
-                      {`${appUrl}/api/webhooks/${row.id}`}
-                    </Typography>
-                  ) : (
-                    <Alert severity="info">
-                      The permanent delivery-update URL appears here immediately
-                      after the first Save &amp; check connection. You can enter
-                      the signing credential now, or add it when the URL appears.
-                    </Alert>
-                  )}
+                  <TextField
+                    label="Delivery update URL"
+                    value={row ? `${appUrl}/api/webhooks/${row.id}` : ""}
+                    placeholder="Available after Save & check connection"
+                    fullWidth
+                    slotProps={{ htmlInput: { readOnly: true } }}
+                    helperText={
+                      row
+                        ? "Copy this URL into your sending service's delivery/event webhook settings."
+                        : "Save and check the connection once; the permanent URL will appear here immediately."
+                    }
+                  />
                   {(type === "ses"
                     ? ["snsTopicArn"]
                     : type === "sendgrid"
