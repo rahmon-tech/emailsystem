@@ -1,0 +1,40 @@
+name: Feature request
+description: Propose a scoped EmailBlast improvement
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What user or operational problem should this solve?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+      description: Describe the desired behavior without relying on provider-policy bypasses.
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Sending services / providers
+        - Campaign creation
+        - Worker / queue
+        - Delivery state / webhooks
+        - Activity
+        - Imports / recipients
+        - Security / operations
+        - Deployment
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: notes
+    attributes:
+      label: Additional context
+      description: Include provider documentation or screenshots when useful, with secrets removed.
