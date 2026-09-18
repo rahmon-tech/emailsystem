@@ -8,6 +8,7 @@ export function connection(type: Connection["type"]): Connection {
     settings: {
       fromEmail: "sender@example.com",
       fromName: "Sender",
+      senderAliases: [],
       replyTo: "",
       domain: "example.com",
       messageStream: "broadcast",
@@ -28,5 +29,7 @@ export function connection(type: Connection["type"]): Connection {
     perSecond: 1,
     perMinute: 30,
     concurrency: 1,
+    dailyBudget: 5000,
+    monthlyBudget: 150000,
   };
 }
