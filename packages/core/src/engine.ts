@@ -68,7 +68,11 @@ export async function processDelivery(
     cc: string[];
     bcc: string[];
     attachments?: { disposition?: string }[];
-    senderPool?: { enabled?: boolean; domainIds?: string[] };
+    senderPool?: {
+      enabled?: boolean;
+      domainIds?: string[];
+      domains?: string[];
+    };
   };
   const needsInlineTransport =
     snapshot.attachments?.some(
@@ -181,13 +185,103 @@ export async function processDelivery(
         const scopedProviderIds = experimentScope.providerIds
           ? new Set(experimentScope.providerIds)
           : null;
+        const preSettings = safetySettings.parse(user.safetySettings);
+        const preGovernor = await ensureGovernor(tx, initial.userId, clock);
+        const poolDomainIds = snapshot.senderPool?.domainIds ?? [];
+        const poolDomains = snapshot.senderPool?.domains ?? [];
+        let capacityDomainIds = poolDomainIds;
+        if (
+          poolDomainIds.length &&
+          poolDomains.length === poolDomainIds.length
+        ) {
+          const rollingDomainUsage = await preGovernor.inspect(
+            poolDomains.map((poolDomain) => ({
+              scope: "domain:" + poolDomain,
+              limit: preSettings.domainDaily,
+            })),
+            cost,
+          );
+          const sharedMonth = await sharedMonthlyUsage(
+            tx,
+            initial.userId,
+            poolDomains,
+            clock,
+          );
+          capacityDomainIds = poolDomainIds.filter((domainId, index) => {
+            const poolDomain = poolDomains[index];
+            const rolling = rollingDomainUsage.find(
+              (usage) => usage.scope === "domain:" + poolDomain,
+            );
+            const rollingOpen =
+              !rolling ||
+              rolling.limit === null ||
+              rolling.used + cost <= rolling.limit;
+            const monthUsed = sharedMonth.byDomain.get(poolDomain) ?? 0;
+            const monthlyOpen =
+              preSettings.domainMonthly === null ||
+              monthUsed + cost <= preSettings.domainMonthly;
+            return rollingOpen && monthlyOpen;
+          });
+        }
+
+        const routeProviders = await tx.providerConnection.findMany({
+          where: {
+            userId: initial.userId,
+            deletedAt: null,
+            enabled: true,
+            health: "HEALTHY",
+            OR: [
+              { cooldownUntil: null },
+              { cooldownUntil: { lte: new Date(now()) } },
+            ],
+          },
+        });
+        const routeDailyUsage = routeProviders.length
+          ? await preGovernor.inspect(
+              routeProviders.map((routeProvider) => ({
+                scope: "provider:" + routeProvider.id,
+                limit:
+                  routeProvider.dailyBudgetOverride ??
+                  preSettings.providerDaily,
+              })),
+              cost,
+            )
+          : [];
+        const routeMonthlyUsage = await providerMonthlyUsage(
+          tx,
+          initial.userId,
+          routeProviders.map((routeProvider) => routeProvider.id),
+          clock,
+        );
+        const capacityProviderIds = routeProviders
+          .filter((routeProvider) => {
+            const daily = routeDailyUsage.find(
+              (usage) => usage.scope === "provider:" + routeProvider.id,
+            );
+            return (
+              (!scopedProviderIds || scopedProviderIds.has(routeProvider.id)) &&
+              (!needsInlineTransport ||
+                supportsInlineAttachmentTransport(routeProvider)) &&
+              (routeProvider.quotaRemaining === null ||
+                routeProvider.quotaRemaining >= cost) &&
+              (!daily ||
+                daily.limit === null ||
+                daily.used + cost <= daily.limit) &&
+              (routeProvider.monthlyBudgetOverride === null ||
+                (routeMonthlyUsage.get(routeProvider.id) ?? 0) + cost <=
+                  routeProvider.monthlyBudgetOverride)
+            );
+          })
+          .map((routeProvider) => routeProvider.id);
+
         const senderSelection = await selectDeliverySender(
           tx,
           initial.userId,
           senderIdentityId,
           id,
           Boolean(snapshot.senderPool?.enabled) && !c.experimentRunId,
-          snapshot.senderPool?.domainIds,
+          capacityDomainIds.length ? capacityDomainIds : snapshot.senderPool?.domainIds,
+          capacityProviderIds,
         );
         if (!senderSelection) {
           await waitForSafety(
