@@ -124,7 +124,7 @@ export function ImageTestMessage({
       );
       setResult(
         response.safeError ??
-          `Provider ${response.status} this test. This is separate from campaign statistics.`,
+          `The sending service reported “${response.status}” for this test. Test emails are not included in campaign results.`,
       );
     } catch (reason) {
       setError((reason as Error).message);
@@ -139,8 +139,8 @@ export function ImageTestMessage({
         <Stack spacing={1}>
           <Alert severity={eligibleProviders.length ? "success" : "warning"}>
             {eligibleProviders.length
-              ? `Inline CID ready · ${eligibleProviders.length} of ${senderProviders.length} eligible provider${senderProviders.length === 1 ? "" : "s"} can send this Image-first message.`
-              : `Inline CID unavailable · 0 of ${senderProviders.length} eligible provider${senderProviders.length === 1 ? "" : "s"} can send this Image-first message.`}
+              ? `Embedded image ready · ${eligibleProviders.length} of ${senderProviders.length} sending service${senderProviders.length === 1 ? "" : "s"} can send this message.`
+              : `Embedded image unavailable · none of the ${senderProviders.length} available sending service${senderProviders.length === 1 ? "" : "s"} can send this message with the image embedded.`}
           </Alert>
           <Stack direction="row" sx={{ gap: 1, flexWrap: "wrap" }}>
             {senderProviders.map((provider) => (
@@ -167,7 +167,7 @@ export function ImageTestMessage({
         open={open}
         onClose={() => setOpen(false)}
         busy={busy}
-        title="Test this image-first message"
+        title="Send a test message"
         width={520}
         mobileFullScreen
       >
@@ -176,12 +176,13 @@ export function ImageTestMessage({
             <Failure error={error} />
             {!eligibleProviders.length && (
               <Alert severity="warning">
-                This sender has no healthy provider transport that supports inline CID images.
+                None of the available sending services support this message with
+                the image embedded.
               </Alert>
             )}
             <TextField
               select
-              label="Provider"
+              label="Sending service"
               value={providerId}
               onChange={(event) => setProviderId(event.target.value)}
               disabled={!eligibleProviders.length}
