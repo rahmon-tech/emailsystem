@@ -18,7 +18,7 @@ The web application stores a campaign and returns immediately. Independent worke
 
 ## Sending safety
 
-Open **Providers → Sending safety** to set rolling budgets. Defaults are 10,000 account units and 5,000 each for sender domain, provider connection and campaign. One To/CC/BCC recipient uses one unit. Adding providers never raises the shared account/domain budget. Larger campaigns queue across days; Activity shows usage and when capacity begins to return. Provider rate limits and actual quotas still apply.
+Provider connections default to a 5,000-unit rolling 24-hour cap and a 150,000-unit UTC calendar-month cap. **Providers → Sending safety** can add stricter shared account, sender-domain or campaign ceilings; those shared ceilings are blank by default rather than silently limiting aggregate provider capacity. One To/CC/BCC recipient uses one unit. Eligible connections on the selected verified domain contribute capacity independently, while provider quota/rate/concurrency, sender authorization, warm-up, suppressions and any configured shared ceilings remain authoritative. Larger campaigns queue as capacity becomes available.
 
 Complaint/hard-bounce thresholds can pause an account or campaign after a meaningful sample. Review the provider reports, record an administrator review, then explicitly resume. See [window, recovery and brake details](docs/ARCHITECTURE.md#central-sending-safety-governor). Sending safety controls reduce accidental over-sending and help preserve provider/account health.
 
