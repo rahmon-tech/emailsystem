@@ -163,7 +163,7 @@ export async function campaignProviderStatus(
               candidate.authorizedDomainId === authorization.authorizedDomainId,
           )!;
           return [
-            authorization.providerConnection.id,
+            `${authorization.providerConnection.id}:${poolSender.authorizedDomain.domain}`,
             {
               provider: authorization.providerConnection,
               domain: poolSender.authorizedDomain.domain,
@@ -203,6 +203,14 @@ export async function campaignProviderStatus(
       row.usage.find((usage) => usage.scope.startsWith("domain:")),
     ]),
   );
+  const domainMonthlySafety = new Map(
+    safetyRows.map((row) => [
+      row.domain,
+      row.monthlyUsage.find((usage) =>
+        usage.scope.startsWith("domain-month:"),
+      ),
+    ]),
+  );
   const telemetry = await providerPacingTelemetry(userId, providers, now);
   const telemetryById = new Map(telemetry.map((row) => [row.id, row]));
   const safetyByProvider = new Map(
@@ -220,6 +228,12 @@ export async function campaignProviderStatus(
   const commonSafetyBlock = safety?.usage.find(
     (usage) =>
       !usage.scope.startsWith("domain:") &&
+      usage.limit !== null &&
+      usage.used + cost > usage.limit,
+  );
+  const commonMonthlyBlock = safety?.monthlyUsage.find(
+    (usage) =>
+      usage.scope === "account-month" &&
       usage.limit !== null &&
       usage.used + cost > usage.limit,
   );
@@ -254,8 +268,10 @@ export async function campaignProviderStatus(
     senderBlock ??
     safety?.pausedReason ??
     (commonSafetyBlock
-      ? "A shared account or campaign safety budget is currently full."
-      : null);
+      ? "A shared account or campaign 24-hour safety budget is currently full."
+      : commonMonthlyBlock
+        ? "The shared account monthly safety budget is currently full."
+        : null);
 
   const rows = providerScopes.map(
     ({ provider, domain }): CampaignProviderStatusRow => {
@@ -263,6 +279,7 @@ export async function campaignProviderStatus(
       const providerSafety = safetyByProvider.get(provider.id);
       const monthlySafety = monthlySafetyByProvider.get(provider.id);
       const selectedDomainSafety = domainSafety.get(domain);
+      const selectedDomainMonthlySafety = domainMonthlySafety.get(domain);
       const safetyRemaining =
         providerSafety?.limit === null || providerSafety?.limit === undefined
           ? null
@@ -279,11 +296,22 @@ export async function campaignProviderStatus(
               0,
               selectedDomainSafety.limit - selectedDomainSafety.used,
             );
+      const domainMonthlyRemaining =
+        selectedDomainMonthlySafety?.limit === null ||
+        selectedDomainMonthlySafety?.limit === undefined
+          ? null
+          : Math.max(
+              0,
+              selectedDomainMonthlySafety.limit -
+                selectedDomainMonthlySafety.used,
+            );
       const unavailableReason = campaignBlockReason
         ? campaignBlockReason
         : domainRemaining !== null && domainRemaining < cost
           ? `${domain} has reached its shared 24-hour safety capacity.`
-          : streamType(provider.settings) === "transactional"
+          : domainMonthlyRemaining !== null && domainMonthlyRemaining < cost
+            ? `${domain} has reached its shared monthly safety capacity.`
+            : streamType(provider.settings) === "transactional"
             ? "Transactional-only stream is not campaign eligible."
             : needsInlineTransport && !supportsInlineAttachmentTransport(provider)
               ? "Provider transport does not support this campaign's inline CID assets."
