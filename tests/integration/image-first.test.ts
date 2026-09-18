@@ -121,7 +121,7 @@ test("preflight fails closed when a mixed inline/ordinary snapshot has no CID-ca
   const result = await preflight(userId, input());
   assert.equal(result.ready, false);
   assert.equal(result.providers.length, 0);
-  assert.match(result.problems.join(" "), /supports inline CID images/i);
+  assert.match(result.problems.join(" "), /supports embedded images/i);
 });
 
 test("preflight admits the same mixed snapshot when its transport is CID-capable", async () => {
@@ -194,7 +194,7 @@ test("test message rejects an unsupported CID transport before creating a provid
         false,
         testMessage(),
       ),
-    /support inline CID images/i,
+    /cannot send messages with an embedded image/i,
   );
 
   assert.equal(
