@@ -278,8 +278,11 @@ export function Providers() {
                 sx={{
                   p: { xs: 2, sm: 2.5 },
                   alignSelf: "start",
-                  transition: "border-color 160ms",
-                  "&:hover": { borderColor: "text.disabled" },
+                  transition: "box-shadow 160ms ease, transform 160ms ease",
+                  "&:hover": {
+                    boxShadow:
+                      "0 2px 4px rgb(22 31 49 / 5%), 0 10px 28px rgb(22 31 49 / 6%)",
+                  },
                 }}
               >
                 <Stack direction="row" sx={{ alignItems: "center", gap: 1.5 }}>
