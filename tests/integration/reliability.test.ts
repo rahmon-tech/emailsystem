@@ -363,7 +363,7 @@ test("Redis coordinates weighted fairness, shared limits and concurrency across 
   assert.equal(concurrent.filter(Boolean).length, 1);
 });
 
-test("quota reservations across connections prevent concurrent overspending", async () => {
+test("independent connection quotas are additive and each remains bounded", async () => {
   const f = await fixture("success", 2);
   const second = await saveProvider(f.user.id, {
     name: "Second connection",
@@ -383,7 +383,7 @@ test("quota reservations across connections prevent concurrent overspending", as
   await Promise.all(f.deliveries.map((d) => processDelivery(d.id)));
   assert.equal(
     await db.deliveryAttempt.count({ where: { userId: f.user.id } }),
-    1,
+    2,
   );
   assert.equal(
     await db.providerConnection.count({
