@@ -1117,6 +1117,7 @@ export function Blast() {
               ))}
               <Button
                 variant={flight?.ready ? "outlined" : "contained"}
+                sx={{ alignSelf: { xs: "center", sm: "flex-start" } }}
                 loading={busy === "preflight"}
                 startIcon={<FactCheckOutlined />}
                 disabled={!!busy || !importId}
@@ -1135,6 +1136,7 @@ export function Blast() {
               <Button
                 variant={flight?.ready ? "contained" : "outlined"}
                 size="large"
+                sx={{ alignSelf: { xs: "center", sm: "flex-start" } }}
                 startIcon={<SendOutlined />}
                 disabled={!!busy || !flight?.ready}
                 onClick={() => setConfirm(true)}
@@ -1143,6 +1145,7 @@ export function Blast() {
               </Button>
               <Button
                 startIcon={<ScienceOutlined />}
+                sx={{ alignSelf: { xs: "center", sm: "flex-start" } }}
                 disabled={!!busy || !form.senderIdentityId || !form.subject}
                 onClick={() => {
                   setTestOpen(true);
