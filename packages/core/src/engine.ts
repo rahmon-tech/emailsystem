@@ -24,12 +24,14 @@ import {
   senderDomain,
   waitForSafety,
   wakeSafetyWaiters,
+  monthWindowUtc,
+  providerMonthlyUsage,
 } from "./safety";
 import { safetySettings, messageCost } from "./safety-config";
 import type { Candidate } from "./dispatcher";
 import {
-  eligibleProvidersForSenderId,
   providerStillAuthorized,
+  selectDeliverySender,
 } from "./senders";
 import {
   experimentDispatchScope,
@@ -65,6 +67,7 @@ export async function processDelivery(
     cc: string[];
     bcc: string[];
     attachments?: { disposition?: string }[];
+    senderPool?: { enabled?: boolean };
   };
   const needsInlineTransport =
     snapshot.attachments?.some(
@@ -79,6 +82,9 @@ export async function processDelivery(
     | Awaited<ReturnType<typeof db.providerConnection.findFirstOrThrow>>
     | undefined;
   let candidate: Candidate | undefined;
+  let selectedSender:
+    | { id: string; email: string; displayName: string; replyTo: string }
+    | undefined;
   let quotaPeers: string[] = [];
   let transmitted = false;
   let permitAt = 0;
@@ -188,11 +194,31 @@ export async function processDelivery(
         const scopedProviderIds = experimentScope.providerIds
           ? new Set(experimentScope.providerIds)
           : null;
-        const authorized = await eligibleProvidersForSenderId(
+        const senderSelection = await selectDeliverySender(
           tx,
           initial.userId,
           senderIdentityId,
+          id,
+          Boolean(snapshot.senderPool?.enabled) && !c.experimentRunId,
         );
+        if (!senderSelection) {
+          await waitForSafety(
+            tx,
+            c,
+            [],
+            now() + 60000,
+            now(),
+            "No enabled verified sender alias is currently eligible for this domain.",
+          );
+          return false;
+        }
+        selectedSender = {
+          id: senderSelection.sender.id,
+          email: senderSelection.sender.email,
+          displayName: senderSelection.sender.displayName,
+          replyTo: senderSelection.sender.replyTo,
+        };
+        const authorized = senderSelection.providers;
         const eligible = authorized.filter(
           (p) =>
             (p.quotaRemaining === null || p.quotaRemaining >= cost) &&
@@ -234,11 +260,11 @@ export async function processDelivery(
             b.limit !== null &&
             b.used + cost > b.limit,
         );
-        const available = eligible.filter((p) => {
+        const dailyAvailable = eligible.filter((p) => {
           const b = usage.find((b) => b.scope === "provider:" + p.id)!;
-          return b.used + cost <= b.limit!;
+          return b.limit === null || b.used + cost <= b.limit;
         });
-        if (commonBlocked.length || !available.length) {
+        if (commonBlocked.length || !dailyAvailable.length) {
           const blocked = commonBlocked.length
             ? commonBlocked
             : usage.filter((b) => b.scope.startsWith("provider:"));
@@ -260,6 +286,29 @@ export async function processDelivery(
           );
           return false;
         }
+        const monthlyUsage = await providerMonthlyUsage(
+          tx,
+          initial.userId,
+          dailyAvailable.map((provider) => provider.id),
+          clock,
+        );
+        const available = dailyAvailable.filter(
+          (provider) =>
+            provider.monthlyBudgetOverride === null ||
+            (monthlyUsage.get(provider.id) ?? 0) + cost <=
+              provider.monthlyBudgetOverride,
+        );
+        if (!available.length) {
+          await waitForSafety(
+            tx,
+            c,
+            dailyAvailable.map((provider) => "provider-month:" + provider.id),
+            monthWindowUtc(now()).next,
+            now(),
+            "Monthly provider limit reached · sending resumes when the next UTC month begins",
+          );
+          return false;
+        }
         const candidates = available.map((p) => ({
           id: p.id,
           weight: p.weight,
@@ -270,7 +319,7 @@ export async function processDelivery(
           group: rateGroup(
             p.userId,
             p.type,
-            snapshot.from,
+            selectedSender!.email,
             (p.settings as ConnectionInput["settings"]).region,
           ),
         }));
@@ -285,7 +334,7 @@ export async function processDelivery(
           group: rateGroup(
             p.userId,
             p.type,
-            snapshot.from,
+            selectedSender!.email,
             (p.settings as ConnectionInput["settings"]).region,
           ),
         }));
@@ -354,7 +403,7 @@ export async function processDelivery(
               rateGroup(
                 p.userId,
                 p.type,
-                snapshot.from,
+                selectedSender!.email,
                 (p.settings as ConnectionInput["settings"]).region,
               ) === candidate!.group,
           )
@@ -426,11 +475,18 @@ export async function processDelivery(
         "Provider credentials could not be opened. Update and verify the connection.",
       );
     }
-    const message = deliveryMessage(
+    const baseMessage = deliveryMessage(
       initial.campaign.message,
       initial.email,
       initial.unsubscribeToken,
     );
+    if (!selectedSender) return;
+    const message = {
+      ...baseMessage,
+      from: selectedSender.email,
+      fromName: selectedSender.displayName,
+      replyTo: selectedSender.replyTo || baseMessage.replyTo,
+    };
     transmitted = await db.$transaction(
       async (tx) => {
         await lockSafety(tx, initial.userId);
@@ -459,7 +515,7 @@ export async function processDelivery(
             tx,
             initial.userId,
             p.id,
-            senderIdentityId,
+            selectedSender.id,
           )) ||
           (await tx.providerConnection.count({
             where: { userId: initial.userId, health: "POLICY_BLOCKED" },
@@ -486,13 +542,25 @@ export async function processDelivery(
         );
         if (currentUsage.some((b) => b.limit !== null && b.used > b.limit))
           return false;
+        if (p.monthlyBudgetOverride !== null) {
+          const monthlyUsage = await providerMonthlyUsage(
+            tx,
+            initial.userId,
+            [p.id],
+            clock,
+          );
+          if (
+            (monthlyUsage.get(p.id) ?? 0) > p.monthlyBudgetOverride
+          )
+            return false;
+        }
         if (!(await governor.commit(attemptId))) return false;
         const transmissionStartedAt = new Date(now());
         const experimentReservation = await reserveExperimentTransport(tx, {
           userId: initial.userId,
           runId: c.experimentRunId,
           campaignId: c.id,
-          senderIdentityId,
+          senderIdentityId: selectedSender.id,
           providerId: p.id,
           recipient: initial.email,
           attemptId,
@@ -543,7 +611,7 @@ export async function processDelivery(
                 c.experimentRunId,
                 initial.email,
               ),
-              senderIdentityId,
+              senderIdentityId: selectedSender.id,
               senderDomain: domain,
               messageUnits: cost,
               provider: {
