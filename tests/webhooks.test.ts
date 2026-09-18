@@ -181,3 +181,42 @@ test("SMTP2GO correlates authenticated native RFC message ID with the original a
   );
   assert.equal(event.attemptId, id);
 });
+
+test("Custom SMTP accepts authenticated generic delivery callbacks", async () => {
+  const c = connection("smtp");
+  c.credentials.webhookSecret = "custom-delivery-secret";
+  const authorization =
+    "Basic " +
+    Buffer.from("emailsystem:" + c.credentials.webhookSecret).toString("base64");
+  const raw = JSON.stringify({
+    event: "delivered",
+    messageId: "smtp-message-1",
+    recipient: "person@example.net",
+    eventId: "delivery-event-1",
+    attemptId: "13c4b3e5-f53b-4ba3-a015-3c42f46c037a",
+    timestamp: new Date().toISOString(),
+  });
+  assert.equal(
+    await authenticateWebhook(
+      c,
+      raw,
+      new Headers({ authorization }),
+      new URL("https://example.com/api/webhooks/provider"),
+    ),
+    true,
+  );
+  assert.equal(
+    await authenticateWebhook(
+      c,
+      raw,
+      new Headers({ authorization: "Basic bad" }),
+      new URL("https://example.com/api/webhooks/provider"),
+    ),
+    false,
+  );
+  const [event] = normalizeWebhook("smtp", JSON.parse(raw), "request");
+  assert.equal(event.kind, "delivered");
+  assert.equal(event.messageId, "smtp-message-1");
+  assert.equal(event.recipient, "person@example.net");
+  assert.equal(event.attemptId, "13c4b3e5-f53b-4ba3-a015-3c42f46c037a");
+});
