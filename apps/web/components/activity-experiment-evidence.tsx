@@ -81,7 +81,12 @@ function evidenceStatus(
   return { label: "Records verified", color: "success" as const };
 }
 
-const eventLabel = (kind: string) => kind.replaceAll(".", " ").replaceAll("-", " ");
+const eventLabel = (kind: string) =>
+  ({
+    "run.started": "Experiment started",
+    "transport.started": "Send started",
+    "transport.outcome": "Send result",
+  })[kind] ?? kind.replaceAll(".", " ").replaceAll("-", " ");
 const entryWord = (count: number) => (count === 1 ? "entry" : "entries");
 
 export function ActivityExperimentEvidence() {
