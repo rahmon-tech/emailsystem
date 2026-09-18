@@ -1,99 +1,172 @@
 # Native / systemd runtime
 
-EmailSystem supports a non-Docker runtime with PostgreSQL and Redis supplied by the host or another managed service. This path is useful on an existing VPS where the web and worker processes are supervised by systemd and the public reverse proxy is already managed separately.
+EmailSystem supports a non-Docker runtime when PostgreSQL, Redis, reverse proxying, and process supervision are already managed by the host.
 
-The native path does **not** replace the Docker Compose deployment. Choose one runtime model per installation and keep its database, Redis, proxy and process ownership explicit.
+The native runtime does not replace the Docker Compose deployment. Choose one runtime model per installation.
 
-## Fresh native checkout
+## Requirements
 
-Requirements: Node 24.19+ (the repository floor is 22.12), pnpm 11.19, PostgreSQL 17 and Redis 7.4.
+- Node.js 24.19+
+- pnpm 11.19
+- PostgreSQL 17
+- Redis 7.4
+- systemd or equivalent process supervisor
+- HTTPS reverse proxy
+
+## Install
 
 ```sh
 corepack enable
 corepack prepare pnpm@11.19.0 --activate
 pnpm install --frozen-lockfile
+
 cp .env.example .env
 chmod 600 .env
 ```
 
-Edit `.env` before continuing:
+For production set:
 
-- set `NODE_ENV=production` on a production host;
-- set `APP_URL` to the exact public URL, including a path prefix such as `/emailblast` when used;
-- make `NEXT_PUBLIC_BASE_PATH` exactly match the pathname of `APP_URL`;
-- set `DATABASE_URL` and `REDIS_URL` to addresses reachable from the native host process (for example `127.0.0.1` for host-local services);
-- generate `SESSION_SECRET` and `CREDENTIAL_ENCRYPTION_KEY` independently with `openssl rand -hex 32`;
-- keep provider secrets outside Git and out of shell arguments.
+- `NODE_ENV=production`;
+- `APP_URL` to the exact public URL;
+- `NEXT_PUBLIC_BASE_PATH` to the pathname of `APP_URL`, or blank at the domain root;
+- `DATABASE_URL` and `REDIS_URL` to addresses reachable by the host processes;
+- independent `SESSION_SECRET` and `CREDENTIAL_ENCRYPTION_KEY` values.
 
-Run the native bootstrap:
+Run the environment/bootstrap checks:
 
 ```sh
 pnpm bootstrap:native
 ```
 
-The command checks the repository-pinned Node/pnpm versions, validates the runtime URL/base-path/secrets, checks production `.env` permissions, verifies PostgreSQL with `SELECT 1`, verifies Redis with `PING`, and generates the Prisma client. It does **not** apply SQL migrations and does not create a user.
+This validates runtime versions, URLs, secret configuration, protected file permissions, PostgreSQL, Redis, and Prisma generation. It does not apply SQL migrations.
 
-For a brand-new empty database only, apply the repository migrations explicitly and create the first user:
+For a brand-new database only:
 
 ```sh
 pnpm db:migrate
 pnpm user:create
 ```
 
-Do not treat `pnpm db:migrate` as a routine restart/update command. For an existing production database, run it only when the selected release intentionally contains a required migration and after the normal backup/rehearsal checks.
+For an existing production database, apply migrations only when the selected release includes them and only after backup/rehearsal.
 
-## Native production build
+## Production build
 
-Build with the same path prefix that the public application uses:
+At the domain root:
+
+```sh
+pnpm build:native
+```
+
+For a path-prefixed installation:
 
 ```sh
 NEXT_PUBLIC_BASE_PATH=/emailblast pnpm build:native
 ```
 
-`build:native` runs the normal production build and then packages the current `.next/static` browser assets (plus `apps/web/public` when present) beside the Next.js standalone server. This is required for a standalone systemd runtime: serving new HTML with stale or missing browser chunks can leave the page visible while React controls do not hydrate.
-
-The resulting web entry point is:
+The standalone web entry point is:
 
 ```text
 apps/web/.next/standalone/apps/web/server.js
 ```
 
-A typical systemd web service should use the standalone application directory as its working directory and start that generated `server.js`. The worker remains the existing worker entry point:
+The worker entry point is:
 
 ```text
 node --import tsx apps/worker/main.ts
 ```
 
-Keep environment values in a protected EnvironmentFile or equivalent systemd environment source. Do not place credentials directly in unit command lines.
+## Example systemd services
 
-## Routine native update
+Store environment values in a protected EnvironmentFile rather than embedding credentials in unit files.
 
-Select an exact verified release commit, preserve the existing `.env` and provider-secret files, then:
+Web service example:
+
+```ini
+[Unit]
+Description=EmailSystem web
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/emailsystem/apps/web/.next/standalone/apps/web
+EnvironmentFile=/opt/emailsystem/.env
+Environment=PORT=3000
+ExecStart=/usr/bin/node server.js
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Worker example:
+
+```ini
+[Unit]
+Description=EmailSystem worker
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/emailsystem
+EnvironmentFile=/opt/emailsystem/.env
+ExecStart=/usr/bin/node --import tsx apps/worker/main.ts
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Adapt paths to the actual Node installation and checkout location.
+
+## Routine update
+
+Use an exact verified release SHA:
 
 ```sh
+cd /opt/emailsystem
+
+git fetch origin main
+git checkout --detach <verified-release-sha>
+
 pnpm install --frozen-lockfile
 pnpm bootstrap:native:check
+
 NEXT_PUBLIC_BASE_PATH=/emailblast pnpm build:native
-systemctl restart emailblast-worker
-systemctl restart emailblast-web
+
+# Apply only migrations included in the selected release, after backup:
+pnpm db:migrate
+
+systemctl restart emailsystem-worker.service
+systemctl restart emailsystem-web.service
 ```
 
-`bootstrap:native:check` performs the runtime/service checks but skips Prisma generation; `build:native` generates Prisma as part of the normal build. Neither command applies SQL migrations.
+Do not run `git clean` blindly on a production checkout that may contain intentionally host-only ignored/untracked files.
 
-After restart, verify both loopback and public readiness. For a path-prefixed installation such as Promptologoy:
+## Health verification
+
+Check both the loopback application and the public HTTPS route:
 
 ```sh
-curl -fsS http://127.0.0.1:3087/emailblast/health/live && echo
-curl -fsS http://127.0.0.1:3087/emailblast/health/ready && echo
-curl -fsS https://app.promptologoy.com/emailblast/health/ready && echo
+curl -fsS http://127.0.0.1:3000/emailblast/health/live
+curl -fsS http://127.0.0.1:3000/emailblast/health/ready
+
+curl -fsS https://mail.example.com/emailblast/health/live
+curl -fsS https://mail.example.com/emailblast/health/ready
 ```
 
-Liveness only proves that the web process responds. Readiness also checks PostgreSQL, Redis and a recent worker heartbeat.
+Adjust host, port, and base path to the installation.
 
-## Native troubleshooting
+Liveness only proves the web process responds. Readiness also checks PostgreSQL, Redis, and recent worker heartbeat.
 
-- HTML renders but menus/buttons do not react or a page remains on skeletons: verify the standalone runtime contains the current `apps/web/.next/static` output. Re-run `pnpm build:native` rather than manually mixing an old standalone server with new static assets.
-- `bootstrap:native` warns about `postgres` or `redis` hostnames: those are normally Compose service names. A native host process usually needs a host-resolvable address such as `127.0.0.1` or a managed-service hostname.
-- readiness fails while liveness succeeds: inspect the worker, PostgreSQL and Redis before changing Nginx.
-- changing `NEXT_PUBLIC_BASE_PATH` requires a fresh web build; do not strip that prefix in the reverse proxy.
-- never use `prisma db push` for production deployment.
+## Operational notes
+
+- changing `NEXT_PUBLIC_BASE_PATH` requires a fresh build;
+- do not strip the configured base path in the reverse proxy;
+- do not use `prisma db push` for production rollout;
+- keep web and worker versions aligned during deployment;
+- preserve the encryption key across restores;
+- keep previous build/database backups until acceptance succeeds.
