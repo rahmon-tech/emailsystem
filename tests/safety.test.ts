@@ -9,8 +9,15 @@ import {
 test("shared safety capacity defaults are opt-in while recipient-unit cost remains explicit", () => {
   const s = safetySettings.parse({});
   assert.deepEqual(
-    [s.accountDaily, s.domainDaily, s.providerDaily, s.campaignDaily],
-    [null, null, null, null],
+    [
+      s.accountDaily,
+      s.domainDaily,
+      s.accountMonthly,
+      s.domainMonthly,
+      s.providerDaily,
+      s.campaignDaily,
+    ],
+    [null, null, null, null, null, null],
   );
   assert.equal(messageCost({ cc: ["c1", "c2"], bcc: ["b1"] }), 4);
 });
@@ -19,6 +26,8 @@ test("safety settings reject zero, negatives, NaN, infinity, fractional and over
     for (const key of [
       "accountDaily",
       "domainDaily",
+      "accountMonthly",
+      "domainMonthly",
       "providerDaily",
       "campaignDaily",
     ])
