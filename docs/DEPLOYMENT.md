@@ -1,6 +1,6 @@
-# Production deployment
+# EmailBlast production deployment
 
-EmailSystem supports both Docker Compose and native/systemd production installations. Choose one runtime model per installation and keep database, Redis, reverse proxy, backups, and process ownership explicit.
+EmailBlast supports both Docker Compose and native/systemd production installations. Choose one runtime model per installation and keep database, Redis, reverse proxy, backups, and process ownership explicit.
 
 ## Production requirements
 
