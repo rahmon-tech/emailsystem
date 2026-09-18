@@ -2,38 +2,36 @@
 
 ## Repository truth
 
-Published `main` is exactly `128ba739299db8e3caad3599df9dd7dddfe437c6`.
+Published `main` is exactly `4b33adaa24cff03940ffddd2642b2a170481d844`.
 
-PR #87 — domain-first sender pools/provider-owned capacity/mobile UX reconciliation — is published. Quality #383 passed on the exact PR head and push-triggered Quality #384 / run `35333756671` passed the complete pipeline on the same exact published `main` SHA.
+PR #89 — multi-domain campaign pools and user-first sending UX — is published. Quality #455 / run `35363742131` passed the complete repository pipeline on the exact merged `main` SHA.
 
 Repository/CI acceptance is green. This proves the code/build/test/container state, not live provider credentials, DNS/TLS/webhook delivery or the current VPS process state.
 
 ## Final feature state
 
-The normal product flow is now Providers → Blast / Image-first → Activity.
+The normal product flow is now Sending services → Create campaign / Image-first → Activity.
 
 Provider setup owns:
 - verified sending domain;
-- up to ten sender aliases;
+- up to ten From addresses per domain;
 - connection-specific daily and monthly hard capacity;
 - per-second/per-minute/concurrency limits;
-- provider verification and delivery/webhook configuration.
+- connection verification and delivery-update/webhook configuration.
 
-Blast and Image-first choose a verified sending domain rather than a visible From address. Non-experiment deliveries use a deterministic eligible alias assignment behind that domain; retries keep the same sender assignment. Provider authorization is rechecked for the chosen alias immediately before transport. Experiment-bound campaigns remain pinned to their approved sender identity.
+Standard and Image-first campaigns can select one or more verified sending domains, with existing single-domain behavior preserved. Non-experiment deliveries rotate only across currently viable domain/From-address/sending-service routes. Disabled, blocked or terminally broken connections leave the active pool instead of poisoning healthy routes. Controlled experiments remain pinned to their approved sender and fail closed on provider policy enforcement.
 
-Eligible connections for the chosen domain contribute capacity independently. Their configured connection capacity is additive, while explicit account/domain/campaign ceilings, warm-up, suppressions, provider policy state, provider quota/rate/concurrency and adaptive cooldowns can remain stricter.
+Configured connection capacity is additive across independent connections. Shared account/domain/campaign rolling-24-hour and monthly ceilings can remain stricter, and live Activity status reflects the current usable route pool before resume/retry. Retry requeues only definitively failed recipients; UNKNOWN and already accepted outcomes remain untouched.
 
-Shared account/domain/campaign daily ceilings are opt-in. Provider connections default to 5,000 units per rolling 24 hours and 150,000 units per UTC month unless explicitly changed.
-
-The recipient import menu is independently scrollable. Mobile rich-editor focus no longer uses sub-16px editable text, and the toolbar is horizontally stable on touch devices. Blast exposes Image-first mode adjacent to the heading. Hard card outlines were reduced in favor of compact surface hierarchy.
+The mobile workspace header is sticky. MUI menus use bounded internal scrolling on mobile so long dropdowns do not scroll the whole page. User-facing copy is audited across the web surface to avoid exposing internal dispatch/transport/safety terminology where ordinary language is sufficient. Provider onboarding now saves the connection first, exposes its permanent delivery-update URL, then accepts the provider signing/event credential.
 
 ## Repository acceptance
 
 Exact published checkpoint:
 
-- `main`: `128ba739299db8e3caad3599df9dd7dddfe437c6`
-- PR-head Quality: #383
-- published-main Quality: #384 / run `35333756671`
+- `main`: `4b33adaa24cff03940ffddd2642b2a170481d844`
+- merged PR: #89
+- Quality: #455 / run `35363742131`
 - result: full pipeline green
 
 The full pipeline includes dependency audit, Prisma generation, fresh migrations, schema drift, upgrade rehearsal, lint, secret scan, strict TypeScript, unit tests, PostgreSQL/Redis integration tests, production Next.js build, Playwright browser E2E, screenshot emission and production-container validation.
@@ -58,4 +56,4 @@ The next server action is therefore an in-place native update: inspect current s
 
 ## Next action
 
-Complete the native/systemd VPS update and environment/provider acceptance. Do not invent additional product feature work unless a concrete defect is found during production acceptance.
+Complete the native/systemd VPS update to the verified `4b33adaa24cff03940ffddd2642b2a170481d844` release and perform environment/provider acceptance. Do not invent additional product feature work unless a concrete defect is found during production acceptance.
