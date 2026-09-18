@@ -218,7 +218,9 @@ export function SendingSafety() {
             ) : (
               <>
                 <Typography color="text.secondary" variant="body2">
-                  Rolling 24 hours. Each To, CC and BCC address uses one unit.
+                  Shared account/domain safeguards sit above the daily and
+                  monthly limits configured on each provider connection. Each
+                  To, CC and BCC address uses one unit.
                 </Typography>
                 {value.pausedReason && (
                   <Alert
@@ -239,11 +241,10 @@ export function SendingSafety() {
                     gap: 2.5,
                   }}
                 >
-                  {field("accountDaily", "Account daily budget")}
-                  {field("domainDaily", "Sender-domain daily budget")}
-                  {field("providerDaily", "Default provider daily budget")}
+                  {field("accountDaily", "Account daily safeguard")}
+                  {field("domainDaily", "Sender-domain daily safeguard")}
                   {value.campaignDaily !== null &&
-                    field("campaignDaily", "Default campaign daily budget")}
+                    field("campaignDaily", "Default campaign daily safeguard")}
                 </Box>
                 <FormControlLabel
                   control={
@@ -260,8 +261,9 @@ export function SendingSafety() {
                   label="Daily budget for new campaigns"
                 />
                 <Typography variant="caption" color="text.secondary">
-                  Larger campaigns queue across days. Adding providers never
-                  raises your account or domain budget.
+                  Provider connection limits are configured in Providers.
+                  These shared safeguards can still impose a stricter ceiling
+                  across all connections.
                 </Typography>
                 <TextField
                   select
@@ -334,42 +336,11 @@ export function SendingSafety() {
                     </Stack>
                   </AccordionDetails>
                 </Accordion>
-                {!!value.providers.length && (
-                  <Accordion disableGutters>
-                    <AccordionSummary expandIcon={<ExpandMore />}>
-                      Provider overrides
-                    </AccordionSummary>
-                    <AccordionDetails>
-                      <Stack spacing={2.5}>
-                        {value.providers.map((p, i) => (
-                          <TextField
-                            key={p.id}
-                            label={p.name + " daily budget"}
-                            type="number"
-                            value={p.dailyBudgetOverride ?? ""}
-                            helperText="Blank uses the default provider budget"
-                            onChange={(e) =>
-                              setValue({
-                                ...value,
-                                providers: value.providers.map((row, j) =>
-                                  j === i
-                                    ? {
-                                        ...row,
-                                        dailyBudgetOverride:
-                                          e.target.value === ""
-                                            ? null
-                                            : Number(e.target.value),
-                                      }
-                                    : row,
-                                ),
-                              })
-                            }
-                          />
-                        ))}
-                      </Stack>
-                    </AccordionDetails>
-                  </Accordion>
-                )}
+                <Typography variant="caption" color="text.secondary">
+                  Daily/monthly connection capacity belongs to each SMTP/API
+                  configuration in Providers; this dialog controls shared
+                  safeguards, warm-up and automatic pause behavior.
+                </Typography>
               </>
             )}
           </Stack>
