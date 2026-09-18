@@ -49,6 +49,15 @@ test("campaign provider status is tenant scoped and follows campaign transport s
       enabled: true,
     },
   });
+  const alternateSender = await db.senderIdentity.create({
+    data: {
+      userId: owner.id,
+      authorizedDomainId: domain.id,
+      localPart: "alternate",
+      email: "alternate@example.com",
+      enabled: true,
+    },
+  });
   const now = Date.now();
   const healthy = await db.providerConnection.create({
     data: {
@@ -94,6 +103,38 @@ test("campaign provider status is tenant scoped and follows campaign transport s
         verifiedAt: new Date(now),
       },
     });
+  const alternateOnly = await db.providerConnection.create({
+    data: {
+      userId: owner.id,
+      name: "Alternate sender only",
+      type: "mock",
+      transport: "api",
+      settings: { fromEmail: alternateSender.email },
+      credentials: {},
+      credentialHint: "test",
+      enabled: true,
+      health: "HEALTHY",
+      perSecond: 10,
+      perMinute: 80,
+      concurrency: 2,
+    },
+  });
+  await db.providerDomainAuthorization.create({
+    data: {
+      userId: owner.id,
+      providerConnectionId: alternateOnly.id,
+      authorizedDomainId: domain.id,
+      status: "VERIFIED",
+      scope: "ADDRESS_SPECIFIC",
+      verifiedAt: new Date(now),
+      senderAuthorizations: {
+        create: {
+          userId: owner.id,
+          senderIdentityId: alternateSender.id,
+        },
+      },
+    },
+  });
 
   const campaign = await db.campaign.create({
     data: {
@@ -147,8 +188,8 @@ test("campaign provider status is tenant scoped and follows campaign transport s
 
   const status = await read();
   assert.equal(status.campaignBlockReason, null);
-  assert.equal(status.scopedProviderCount, 2);
-  assert.equal(status.eligibleProviderCount, 1);
+  assert.equal(status.scopedProviderCount, 3);
+  assert.equal(status.eligibleProviderCount, 2);
   const healthyRow = status.providers.find((row) => row.id === healthy.id)!;
   assert.equal(healthyRow.eligible, true);
   assert.equal(healthyRow.configuredPerMinute, 100);
@@ -157,7 +198,11 @@ test("campaign provider status is tenant scoped and follows campaign transport s
   const coolingRow = status.providers.find((row) => row.id === cooling.id)!;
   assert.equal(coolingRow.eligible, false);
   assert.equal(coolingRow.pressure, "cooldown");
-  assert.match(coolingRow.unavailableReason ?? "", /cooling down/i);
+  assert.match(coolingRow.unavailableReason ?? "", /temporarily paused/i);
+  const alternateRow = status.providers.find(
+    (row) => row.id === alternateOnly.id,
+  )!;
+  assert.equal(alternateRow.eligible, true);
 
   const profile = await db.experimentProfile.create({
     data: {
@@ -168,7 +213,10 @@ test("campaign provider status is tenant scoped and follows campaign transport s
       maxAttempts: 20,
       maxDurationSeconds: 1800,
       providerScopes: {
-        create: [{ userId: owner.id, providerId: healthy.id }],
+        create: [
+          { userId: owner.id, providerId: healthy.id },
+          { userId: owner.id, providerId: alternateOnly.id },
+        ],
       },
       senderScopes: {
         create: [{ userId: owner.id, senderIdentityId: sender.id }],
@@ -206,7 +254,7 @@ test("campaign provider status is tenant scoped and follows campaign transport s
   const attemptBlocked = await read();
   assert.equal(
     attemptBlocked.campaignBlockReason,
-    "Experiment attempt ceiling reached; no further transport starts are allowed.",
+    "This controlled experiment has reached its allowed number of send attempts.",
   );
   assert.equal(attemptBlocked.eligibleProviderCount, 0);
   assert.equal(attemptBlocked.providers[0]?.eligible, false);
@@ -222,7 +270,7 @@ test("campaign provider status is tenant scoped and follows campaign transport s
   const killSwitchBlocked = await read();
   assert.equal(
     killSwitchBlocked.campaignBlockReason,
-    "Experiment transport is disabled by the account kill switch.",
+    "This controlled experiment has been stopped for the account.",
   );
   assert.equal(killSwitchBlocked.eligibleProviderCount, 0);
 
@@ -256,7 +304,7 @@ test("campaign provider status is tenant scoped and follows campaign transport s
   const senderScopeBlocked = await read();
   assert.equal(
     senderScopeBlocked.campaignBlockReason,
-    "Campaign sender is outside the approved experiment scope.",
+    "This campaign's From address is not approved for the controlled experiment.",
   );
   assert.equal(senderScopeBlocked.eligibleProviderCount, 0);
 
