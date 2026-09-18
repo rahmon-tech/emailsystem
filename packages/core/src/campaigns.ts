@@ -328,10 +328,10 @@ export async function preflight(userId: string, input: unknown) {
   );
   for (const contentId of referencedCids)
     if (!inlineIds.has(contentId))
-      problems.push(`Inline image cid:${contentId} has no matching attachment.`);
+      problems.push("An embedded image in the email is missing its uploaded image file.");
   for (const contentId of inlineIds)
     if (!referencedCids.has(contentId))
-      problems.push(`Inline attachment ${contentId} is not referenced by the email HTML.`);
+      problems.push("An uploaded embedded image is not used in the email.");
   const [reputation, tracking] = await Promise.all([
     inspectDestinations(userId, snapshot.html),
     trackingChoice(userId, data.tracking),
