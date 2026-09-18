@@ -112,22 +112,24 @@ export function PageTitle({
   title,
   description,
   action,
+  inlineAction = false,
 }: {
   title: string;
   description?: string;
   action?: React.ReactNode;
+  inlineAction?: boolean;
 }) {
   return (
     <Stack
-      direction={{ xs: "column", sm: "row" }}
+      direction={inlineAction ? "row" : { xs: "column", sm: "row" }}
       sx={{
         justifyContent: "space-between",
-        gap: 2,
-        alignItems: { xs: "stretch", sm: "center" },
-        mb: 3,
+        gap: inlineAction ? 1.5 : 2,
+        alignItems: inlineAction ? "flex-start" : { xs: "stretch", sm: "center" },
+        mb: { xs: 2.25, sm: 3 },
       }}
     >
-      <Box>
+      <Box sx={{ minWidth: 0, flex: 1 }}>
         <Typography
           component="h1"
           variant="h4"
@@ -141,7 +143,9 @@ export function PageTitle({
           </Typography>
         )}
       </Box>
-      {action}
+      {action && (
+        <Box sx={{ flexShrink: 0, pt: inlineAction ? 0.1 : 0 }}>{action}</Box>
+      )}
     </Stack>
   );
 }
