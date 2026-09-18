@@ -38,10 +38,10 @@ test("image-first composer manages inline image lifecycle, copy recipients, ordi
     await page.goto(appPath("/blast/image"));
 
     await expect(
-      page.getByRole("heading", { name: "Image-first blast", exact: true }),
+      page.getByRole("heading", { name: "Blast", exact: true }),
     ).toBeVisible();
     await expect(
-      page.getByRole("link", { name: "Standard composer", exact: true }),
+      page.getByRole("link", { name: "Standard", exact: true }),
     ).toBeVisible();
 
     await page.getByLabel("Recipient import").click();
