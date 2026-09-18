@@ -1,0 +1,57 @@
+name: Bug report
+description: Report a reproducible EmailBlast defect
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a problem. Remove credentials, recipient data, and private infrastructure details before submitting.
+  - type: input
+    id: version
+    attributes:
+      label: Commit or version
+      description: Exact Git SHA or release where you observed the problem.
+      placeholder: e.g. abc1234
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Sending services / providers
+        - Campaign creation
+        - Worker / queue
+        - Delivery state / webhooks
+        - Activity
+        - Imports / recipients
+        - Authentication / security
+        - Deployment
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Reproduction steps
+      description: Use test data only. Do not include credentials or recipient/customer data.
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: OS, Node/pnpm versions, Docker/native runtime, browser if relevant.
