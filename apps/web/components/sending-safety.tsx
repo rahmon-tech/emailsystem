@@ -278,7 +278,7 @@ export function SendingSafety() {
                   {field("accountMonthly", "All sending · monthly")}
                   {field("domainMonthly", "Each domain · monthly")}
                   {value.campaignDaily !== null &&
-                    field("campaignDaily", "Default campaign daily safeguard")}
+                    field("campaignDaily", "New campaigns · 24 hours")}
                 </Box>
                 <FormControlLabel
                   control={
@@ -292,7 +292,7 @@ export function SendingSafety() {
                       }
                     />
                   }
-                  label="Daily budget for new campaigns"
+                  label="Set a default 24-hour limit for new campaigns"
                 />
                 <Typography variant="caption" color="text.secondary">
                   Each sending service keeps its own limits. These account and
