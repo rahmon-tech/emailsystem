@@ -6,9 +6,9 @@ import { saveProvider } from "@emailsystem/core/providers";
 import { createCampaign } from "@emailsystem/core/campaigns";
 import { db } from "@emailsystem/db";
 
-const password = "Activity-provider-browser-password-2026";
+const password = `Fixture-${crypto.randomUUID()}-Aa9!`;
 
-test("Activity shows live campaign provider availability", async ({ page }) => {
+test("Activity shows live sending connection availability", async ({ page }) => {
   const email = `activity-provider-${crypto.randomUUID()}@example.com`;
   const user = await createUser(email, password);
   try {
@@ -44,25 +44,25 @@ test("Activity shows live campaign provider availability", async ({ page }) => {
     await page.goto(appPath(`/activity?campaignId=${campaign.id}`));
 
     const panel = page.getByRole("region", {
-      name: "Campaign provider availability",
+      name: "Sending connection availability",
     });
     await expect(panel).toBeVisible();
     await expect(
-      panel.getByText("Activity provider browser mock", { exact: true }),
+      panel.getByText(/Activity provider browser mock · example\.com/),
     ).toBeVisible();
-    await expect(panel.getByText("1 of 1 eligible", { exact: true })).toBeVisible();
-    await expect(panel.getByText("Eligible", { exact: true })).toBeVisible();
+    await expect(panel.getByText("1 of 1 ready", { exact: true })).toBeVisible();
+    await expect(panel.getByText("Ready", { exact: true })).toBeVisible();
 
     await db.providerConnection.update({
       where: { id: provider.id },
       data: { cooldownUntil: new Date(Date.now() + 60_000) },
     });
 
-    await expect(panel.getByText("0 of 1 eligible", { exact: true })).toBeVisible({
+    await expect(panel.getByText("0 of 1 ready", { exact: true })).toBeVisible({
       timeout: 13_000,
     });
     await expect(panel.getByText("Unavailable", { exact: true })).toBeVisible();
-    await expect(panel.getByText("Cooling down", { exact: true })).toBeVisible();
+    await expect(panel.getByText("Temporarily paused", { exact: true })).toBeVisible();
   } finally {
     // The E2E worker may have created both delivery attempts and provider
     // events while the campaign was live. Campaign deletion cascades the
