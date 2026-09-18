@@ -2,9 +2,13 @@
 
 ## Existing multi-project VPS: `/emailblast`
 
-The target for this installation is `https://app.promptologoy.com/emailblast`. This is a prepared deployment configuration, not a claim that the VPS is installed. The coding workspace could not reach the supplied VPS over SSH. Complete the read-only server inspection through an authorized remote connection before changing routing.
+The public target is `https://app.promptologoy.com/emailblast`.
 
-Inspect the OS, available memory/disk, Docker/Compose versions, running containers/services, listening ports, the existing HTTPS virtual host and its certificate. Preserve the current root project. Back up its proxy configuration and record the root site's status before adding the scoped route. Select the verified release commit from GitHub in an isolated directory such as `/opt/emailblast`; the private repository requires authorized access.
+A prior server checkpoint established that this host already has a **native/systemd** EmailSystem installation in `/opt/emailblast`; do not replace it with the Docker first-install path during an ordinary update. The recorded services are `emailblast-web.service` and `emailblast-worker.service`, with the web process on loopback port 3087 and PostgreSQL reachable on `127.0.0.1:55432`.
+
+Treat that as a historical checkpoint, not proof of current live health. Before updating, re-check the services, listening ports, disk/memory, current Git SHA, protected `.env`, PostgreSQL/Redis connectivity, Nginx route/TLS and both root-site and `/emailblast` status. Preserve the current root project and back up the EmailSystem database/environment before applying migrations.
+
+For this existing host, follow the native update path in `NATIVE_RUNTIME.md`: select the verified release commit, install locked dependencies, run `pnpm bootstrap:native:check`, build with `NEXT_PUBLIC_BASE_PATH=/emailblast pnpm build:native`, apply only required repository migrations after backup, restart only the EmailSystem worker/web services, and verify loopback plus public readiness. Do not switch runtime models during the update.
 
 For a host with Docker already installed, run from the selected checkout:
 
