@@ -593,6 +593,18 @@ export const settingsSchema = z
       .toLowerCase()
       .regex(/^[a-zA-Z0-9][a-zA-Z0-9.-]*\.[a-zA-Z]{2,}$/)
       .optional(),
+    senderAliases: z
+      .array(
+        z
+          .string()
+          .trim()
+          .toLowerCase()
+          .min(1)
+          .max(64)
+          .regex(/^[a-z0-9](?:[a-z0-9._+-]{0,62}[a-z0-9])?$/),
+      )
+      .max(10)
+      .default([]),
     replyTo: z
       .string()
       .trim()
