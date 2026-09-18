@@ -427,8 +427,8 @@ test("login, provider setup, HTML import, preview, test, campaign controls, reco
           page.getByText("Browser verification", { exact: true }),
         ).toBeVisible();
       else
-        await expect(page.getByLabel("Sender identity")).toContainText(
-          "sender@example.com",
+        await expect(page.getByLabel("Sending domain")).toContainText(
+          "example.com",
         );
       if (route === "/blast") {
         await page.getByLabel("Recipient import").click();
