@@ -32,7 +32,7 @@
     "secrets:scan:history": "node --import tsx scripts/secret-scan.ts --history"
   },
   "dependencies": {
-    "@aws-sdk/client-sesv2": "3.1127.0",
+    "@aws-sdk/client-sesv2": "3.1133.0",
     "@codemirror/lang-html": "6.4.12",
     "@emotion/cache": "11.14.0",
     "@emotion/react": "11.14.0",
