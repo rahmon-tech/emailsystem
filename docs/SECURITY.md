@@ -1,5 +1,12 @@
 # Security and operations
 
+## Reporting vulnerabilities
+
+Please do not publish credentials, exploit details, recipient data, or other sensitive material in a public issue. Use GitHub's private security-reporting channel when available. If private reporting is unavailable, open a minimal issue requesting a private contact method without including the sensitive details.
+
+Include the affected version/commit, impact, reproduction conditions, and any relevant logs with secrets and personal data removed.
+
+
 ## Implemented controls
 
 - Passwords use salted scrypt (N=32768, r=8, p=1), at least 12 characters. A server-side user creation command is provided; there is no public registration.
@@ -39,7 +46,7 @@ The Compose bridge allows outbound internet access for providers. PostgreSQL and
 
 ## Review evidence
 
-Automated checks include the production high/critical dependency audit, encrypted credential tampering/AAD binding, password hashing, unsubscribe forgery, formula injection, HTML isolation, signature/replay checks, bounded retry rules, tenant boundaries and concurrent lifecycle tests. Dependency update automation does not replace review: proposed upgrades must still pass the full Quality pipeline. Review GitHub Actions and CURRENT_WORK for the actual executed gates. Automated mocks do not establish live-provider permissions or deployment security for an unseen VPS.
+Automated checks include the production high/critical dependency audit, encrypted credential tampering/AAD binding, password hashing, unsubscribe forgery, formula injection, HTML isolation, signature/replay checks, bounded retry rules, tenant boundaries and concurrent lifecycle tests. Dependency update automation does not replace review: proposed upgrades must still pass the full Quality pipeline. Review GitHub Actions for the actual executed gates. Automated mocks do not establish live-provider permissions or deployment security for an unseen VPS.
 
 # Tracking privacy and HTML acceptance
 
