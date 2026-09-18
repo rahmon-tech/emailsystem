@@ -112,7 +112,7 @@ export async function getConnection(userId: string, id: string) {
   const row = await db.providerConnection.findFirst({
     where: { id, userId, deletedAt: null },
   });
-  if (!row) throw new AppError(404, "NOT_FOUND", "Provider not found.");
+  if (!row) throw new AppError(404, "NOT_FOUND", "Sending service not found.");
   return row;
 }
 export async function saveProvider(
@@ -126,7 +126,7 @@ export async function saveProvider(
     throw new AppError(
       403,
       "MOCK_DISABLED",
-      "Development provider is disabled.",
+      "The development-only sending service is disabled.",
     );
   const previous = id ? await getConnection(userId, id) : null;
   const providerId = id ?? randomUUID();
@@ -137,7 +137,7 @@ export async function saveProvider(
     throw new AppError(
       422,
       "TYPE",
-      "Create a separate connection to change provider or transport.",
+      "Create a new connection to change the sending service or connection method.",
     );
   const credentials = { ...parsed.credentials };
   if (previous) {
@@ -188,7 +188,7 @@ export async function saveProvider(
         throw new AppError(
           409,
           "STALE",
-          "Provider changed. Reload before saving.",
+          "This connection changed. Reload the page before saving again.",
         );
     } else
       await tx.providerConnection.create({
@@ -222,7 +222,7 @@ export async function upsertBootstrapProvider(
     throw new AppError(
       422,
       "BOOTSTRAP_PROVIDER",
-      "Development providers cannot be production-bootstrapped.",
+      "Development-only sending services cannot be used for production setup.",
     );
   const previous = await db.providerConnection.findUnique({
     where: { userId_bootstrapKey: { userId, bootstrapKey } },
@@ -325,7 +325,7 @@ async function saveVerification(
       throw new AppError(
         409,
         "STALE",
-        "Provider changed while verification was running.",
+        "This connection changed while it was being checked. Run the connection check again.",
       );
     await tx.providerVerification.create({
       data: { providerId: id, status: v.status, checks: json(v.checks) },
@@ -363,7 +363,7 @@ export async function testProvider(
     throw new AppError(
       422,
       "INLINE_TRANSPORT",
-      "This provider transport does not support inline CID images.",
+      "This sending service cannot send messages with an embedded image.",
     );
   const selected = await senderForProviderTest(
     userId,
@@ -381,7 +381,7 @@ export async function testProvider(
       where: { userId, email: recipient.toLowerCase() },
     })
   )
-    throw new AppError(422, "SUPPRESSED", "This test recipient is suppressed.");
+    throw new AppError(422, "SUPPRESSED", "This test recipient is on the do-not-send list.");
   const test = await db.$transaction(
     async (tx) => {
       await lockSafety(tx, userId);
@@ -401,7 +401,7 @@ export async function testProvider(
           throw new AppError(
             429,
             "SAFETY_BUDGET",
-            "Monthly provider limit reached. Try the test after the next UTC month begins.",
+            "This sending service has reached its monthly limit. Try again when the next month begins (UTC).",
           );
       }
       const reservation = await governor.reserve(
@@ -419,13 +419,13 @@ export async function testProvider(
         throw new AppError(
           429,
           "SAFETY_BUDGET",
-          "Daily safety limit reached. Try the test after capacity becomes available.",
+          "The 24-hour sending limit has been reached. Try again when capacity becomes available.",
         );
       if (!(await governor.commit(token)))
         throw new AppError(
           409,
           "SAFETY_BUDGET",
-          "Test reservation expired. Try again.",
+          "The test could not start in time. Try again.",
         );
       return tx.providerTestDelivery.create({
         data: {
