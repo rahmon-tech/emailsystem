@@ -176,11 +176,19 @@ export async function preflight(userId: string, input: unknown) {
   const sender = senderSelection.sender;
   const poolSenders =
     "senders" in senderSelection ? senderSelection.senders : [sender];
+  const providerPool =
+    data.experimentRunId && data.senderDomainId
+      ? (
+          await resolveSender(userId, {
+            senderIdentityId: sender.id,
+          })
+        ).providers
+      : senderSelection.providers;
   const providers = needsInlineTransport
-    ? senderSelection.providers.filter((provider) =>
+    ? providerPool.filter((provider) =>
         supportsInlineAttachmentTransport(provider),
       )
-    : senderSelection.providers;
+    : providerPool;
   if (!providers.length)
     problems.push(
       needsInlineTransport
