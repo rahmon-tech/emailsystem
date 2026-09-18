@@ -28,7 +28,7 @@ async function signIn(page: Page) {
   await page.getByLabel("Password").fill(password);
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await expect(page).toHaveURL(/\/blast$/);
-  await expect(page.getByRole("heading", { name: "Blast" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Create campaign" })).toBeVisible();
 }
 
 test("iPhone Blast stays centered and session survives hard reload", async ({
@@ -50,7 +50,7 @@ test("iPhone Blast stays centered and session survives hard reload", async ({
   // client refresh request can run.
   await page.reload({ waitUntil: "networkidle" });
   await expect(page).toHaveURL(/\/blast$/);
-  await expect(page.getByRole("heading", { name: "Blast" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Create campaign" })).toBeVisible();
 
   const geometry = await page.evaluate(() => {
     const root = document.documentElement;
@@ -71,7 +71,7 @@ test("iPhone Blast stays centered and session survives hard reload", async ({
   expect(Math.abs(geometry.left - geometry.right)).toBeLessThanOrEqual(2);
   expect(geometry.width).toBeLessThan(geometry.viewport);
 
-  for (const name of ["Run pre-flight", "Send campaign", "Send a test email"]) {
+  for (const name of ["Check campaign", "Send campaign", "Send a test email"]) {
     const button = page.getByRole("button", { name, exact: true });
     await expect(button).toBeVisible();
     await expect(button).toContainText(name);
