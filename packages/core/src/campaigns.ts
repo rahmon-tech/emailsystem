@@ -21,6 +21,7 @@ import {
 import { resolveSender, resolveSenderDomain } from "./senders";
 import { absoluteAppUrl } from "./server-paths";
 import { validateExperimentCampaignScope } from "./experiments";
+import { campaignProviderStatus } from "./campaign-provider-status";
 
 const contentIdInput = z
   .string()
@@ -272,15 +273,30 @@ export async function preflight(userId: string, input: unknown) {
       ? Infinity
       : Math.max(0, budget.limit - budget.used);
   const accountBudget = safety.usage.find((budget) => budget.scope === "account");
+  const accountMonthlyBudget = safety.monthlyUsage.find(
+    (budget) => budget.scope === "account-month",
+  );
   const domainBudgets = safetyRows.map((row) =>
     row.usage.find((budget) => budget.scope.startsWith("domain:")),
+  );
+  const domainMonthlyBudgets = safetyRows.map((row) =>
+    row.monthlyUsage.find((budget) =>
+      budget.scope.startsWith("domain-month:"),
+    ),
   );
   if (
     (accountBudget?.limit !== null &&
       accountBudget !== undefined &&
       accountBudget.limit < cost) ||
+    (accountMonthlyBudget?.limit !== null &&
+      accountMonthlyBudget !== undefined &&
+      accountMonthlyBudget.limit < cost) ||
     (campaignLimit !== null && campaignLimit < cost) ||
     domainBudgets.every(
+      (budget) =>
+        budget !== undefined && budget.limit !== null && budget.limit < cost,
+    ) ||
+    domainMonthlyBudgets.every(
       (budget) =>
         budget !== undefined && budget.limit !== null && budget.limit < cost,
     )
@@ -290,6 +306,13 @@ export async function preflight(userId: string, input: unknown) {
     );
   if (safety.pausedReason) problems.push(safety.pausedReason);
   const domainPoolAvailable = domainBudgets.reduce(
+    (total, budget) =>
+      total === Infinity || budget?.limit === null
+        ? Infinity
+        : total + remaining(budget),
+    0,
+  );
+  const domainMonthlyPoolAvailable = domainMonthlyBudgets.reduce(
     (total, budget) =>
       total === Infinity || budget?.limit === null
         ? Infinity
@@ -384,7 +407,9 @@ export async function preflight(userId: string, input: unknown) {
       campaignUnits: count * cost,
       availableUnits: Math.min(
         remaining(accountBudget),
+        remaining(accountMonthlyBudget),
         domainPoolAvailable,
+        domainMonthlyPoolAvailable,
         campaignLimit ?? Infinity,
         safety.providerUsage
           .filter((b) =>
@@ -600,6 +625,18 @@ export async function controlCampaign(
   id: string,
   action: "pause" | "resume" | "cancel" | "retry",
 ) {
+  if (action === "resume" || action === "retry") {
+    const live = await campaignProviderStatus(userId, id);
+    if (!live.eligibleProviderCount)
+      throw new AppError(
+        409,
+        "CAPACITY",
+        live.campaignBlockReason ??
+          live.providers.find((provider) => provider.unavailableReason)
+            ?.unavailableReason ??
+          "No currently eligible provider/domain route is available for this campaign.",
+      );
+  }
   return db.$transaction(async (tx) => {
     await lockSafety(tx, userId);
     await lockCampaign(tx, id, userId);
