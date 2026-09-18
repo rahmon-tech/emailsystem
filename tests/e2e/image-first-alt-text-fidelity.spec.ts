@@ -31,7 +31,7 @@ test("image-first refreshes generated alt text on replacement but preserves auth
     await expect(page).toHaveURL(/\/blast$/);
     await page.goto(appPath("/blast/image"));
     await expect(
-      page.getByRole("heading", { name: "Blast", exact: true }),
+      page.getByRole("heading", { name: "Create campaign", exact: true }),
     ).toBeVisible();
 
     const imageInput = page.getByLabel("Primary email image");
