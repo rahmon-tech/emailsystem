@@ -35,11 +35,11 @@ type ProviderStatus = {
 };
 
 function pressureLabel(row: ProviderRow) {
-  if (row.pressure === "blocked") return "Policy review";
-  if (row.pressure === "cooldown") return "Cooling down";
-  if (row.pressure === "slowed") return `${row.slowdown}× slowdown`;
-  if (row.pressure === "disabled") return "Disabled";
-  return "Normal pace";
+  if (row.pressure === "blocked") return "Needs review";
+  if (row.pressure === "cooldown") return "Temporarily paused";
+  if (row.pressure === "slowed") return "Sending slower";
+  if (row.pressure === "disabled") return "Turned off";
+  return "Ready";
 }
 
 export function ActivityProviderStatus() {
@@ -86,17 +86,17 @@ export function ActivityProviderStatus() {
           <SpeedOutlined sx={{ fontSize: 18 }} />
           <Box>
             <Typography sx={{ fontSize: 13, fontWeight: 700 }}>
-              Live provider availability
+              Sending connections
             </Typography>
             <Typography variant="caption" color="text.secondary">
-              Live provider + domain routes after authorization, 24-hour/monthly capacity, quota, cooldown and capability checks.
+              Shows which provider and domain connections this campaign can use right now.
             </Typography>
           </Box>
         </Stack>
         <Chip
           size="small"
           sx={{ ml: { sm: "auto" } }}
-          label={`${status.eligibleProviderCount} of ${status.scopedProviderCount} routes eligible`}
+          label={`${status.eligibleProviderCount} of ${status.scopedProviderCount} ready`}
         />
       </Stack>
 
@@ -106,7 +106,7 @@ export function ActivityProviderStatus() {
 
       {!status.providers.length ? (
         <Typography variant="body2" color="text.secondary">
-          No sender-authorized providers are inside this campaign&apos;s current scope.
+          No sending connection is currently available for this campaign.
         </Typography>
       ) : (
         <Stack spacing={1}>
@@ -124,21 +124,24 @@ export function ActivityProviderStatus() {
                     {provider.name} · {provider.domain}
                   </Typography>
                   <Typography variant="caption" color="text.secondary">
-                    Configured {provider.configuredPerMinute.toLocaleString()}/min · effective {provider.effectivePerMinute.toLocaleString()}/min
+                    {provider.effectivePerMinute.toLocaleString()} emails/min
+                    {provider.effectivePerMinute !== provider.configuredPerMinute
+                      ? ` · limit ${provider.configuredPerMinute.toLocaleString()}/min`
+                      : ""}
                   </Typography>
                   <Typography
                     variant="caption"
                     color="text.secondary"
                     sx={{ display: "block", mt: 0.25 }}
                   >
-                    Daily remaining{" "}
+                    24h capacity{" "}
                     {provider.safetyRemaining === null
-                      ? "unbounded"
-                      : provider.safetyRemaining.toLocaleString()}{" "}
-                    · Month{" "}
+                      ? "no extra limit"
+                      : `${provider.safetyRemaining.toLocaleString()} left`}{" "}
+                    · This month{" "}
                     {provider.monthlyLimit === null
-                      ? "unbounded"
-                      : `${provider.monthlyUsed.toLocaleString()} / ${provider.monthlyLimit.toLocaleString()}`}
+                      ? "no extra limit"
+                      : `${provider.monthlyUsed.toLocaleString()} of ${provider.monthlyLimit.toLocaleString()} used`}
                   </Typography>
                   {provider.unavailableReason && (
                     <Typography
@@ -156,7 +159,7 @@ export function ActivityProviderStatus() {
                 >
                   <Chip
                     size="small"
-                    label={provider.eligible ? "Eligible" : "Unavailable"}
+                    label={provider.eligible ? "Ready" : "Unavailable"}
                   />
                   <Chip
                     size="small"
@@ -171,7 +174,7 @@ export function ActivityProviderStatus() {
                   color="text.secondary"
                   sx={{ display: "block", mt: 0.5 }}
                 >
-                  Next provider slot {new Date(provider.nextAllowedAt).toLocaleTimeString()}
+                  Can try again at {new Date(provider.nextAllowedAt).toLocaleTimeString()}
                 </Typography>
               )}
             </Box>
