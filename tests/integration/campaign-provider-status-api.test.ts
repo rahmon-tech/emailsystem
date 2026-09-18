@@ -129,7 +129,6 @@ test("campaign provider status is tenant scoped and follows campaign transport s
       verifiedAt: new Date(now),
       senderAuthorizations: {
         create: {
-          userId: owner.id,
           senderIdentityId: alternateSender.id,
         },
       },
