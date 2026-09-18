@@ -63,11 +63,30 @@ export function Status({
           ? "primary.main"
           : "text.secondary";
   const displayNames: Record<string, string> = {
+    HEALTHY: "Ready",
+    QUEUED: "Waiting to send",
+    PROCESSING: "Sending",
+    PROVIDER_ACCEPTED: "Accepted by sending service",
     PROVIDER_ACCEPTED_AWAITING_CONFIRMATION:
-      "Accepted · awaiting delivery confirmation",
+      "Accepted · waiting for delivery update",
     SMTP_ACCEPTED_AWAITING_CONFIRMATION:
-      "SMTP accepted · awaiting confirmation",
-    SMTP_ACCEPTED_UNCONFIRMED: "SMTP accepted · delivery unconfirmed",
+      "Accepted by mail server · waiting for delivery update",
+    SMTP_ACCEPTED_UNCONFIRMED:
+      "Accepted by mail server · final delivery unknown",
+    DEFERRED: "Waiting to retry",
+    SOFT_BOUNCED: "Temporary bounce",
+    HARD_BOUNCED: "Bounced",
+    SUPPRESSED: "Skipped · do-not-send",
+    UNKNOWN: "Delivery unclear",
+    AUTH_ERROR: "Sign-in problem",
+    MISSING_PERMISSION: "Permission needed",
+    SENDER_UNVERIFIED: "Sending address not verified",
+    POLICY_BLOCKED: "Blocked by sending service",
+    THROTTLED: "Sending slowed",
+    RATE_LIMITED: "Sending limit reached",
+    COOLDOWN: "Temporarily paused",
+    COMPLETED_WITH_ERRORS: "Finished with some problems",
+    RECONNECTING: "Reconnecting",
   };
   const rawName = value.toLowerCase().replaceAll("_", " ");
   const name =
