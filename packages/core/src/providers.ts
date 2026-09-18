@@ -121,14 +121,41 @@ export async function saveProvider(
   id?: string,
   dependencies: Dependencies = {},
 ) {
-  const parsed = connectionSchema.parse(input);
+  const previous = id ? await getConnection(userId, id) : null;
+  let candidate = input;
+  if (
+    previous &&
+    input &&
+    typeof input === "object" &&
+    !Array.isArray(input)
+  ) {
+    const record = input as Record<string, unknown>;
+    const supplied =
+      record.credentials &&
+      typeof record.credentials === "object" &&
+      !Array.isArray(record.credentials)
+        ? (record.credentials as Record<string, unknown>)
+        : {};
+    const existing = unlocked(previous).credentials;
+    const credentials: Record<string, unknown> = { ...existing };
+    for (const [key, value] of Object.entries(supplied)) {
+      if (
+        typeof value === "string" &&
+        value.trim() === "" &&
+        existing[key]
+      )
+        continue;
+      credentials[key] = value;
+    }
+    candidate = { ...record, credentials };
+  }
+  const parsed = connectionSchema.parse(candidate);
   if (parsed.type === "mock" && config().ALLOW_MOCK_PROVIDER !== "true")
     throw new AppError(
       403,
       "MOCK_DISABLED",
       "The development-only sending service is disabled.",
     );
-  const previous = id ? await getConnection(userId, id) : null;
   const providerId = id ?? randomUUID();
   if (
     previous &&
@@ -140,20 +167,6 @@ export async function saveProvider(
       "Create a new connection to change the sending service or connection method.",
     );
   const credentials = { ...parsed.credentials };
-  if (previous) {
-    const old = unlocked(previous).credentials;
-    for (const key of [
-      "webhookSecret",
-      "webhookPublicKey",
-      "snsTopicArn",
-      "managementApiKey",
-      "accountToken",
-      "smtpUsername",
-      "smtpPassword",
-      "smtpApiKey",
-    ] as const)
-      if (!credentials[key] && old[key]) credentials[key] = old[key];
-  }
   const hasSecret = Object.values(credentials).some(Boolean);
   const data = {
     name: parsed.name,
