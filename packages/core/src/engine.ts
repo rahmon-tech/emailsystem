@@ -146,7 +146,7 @@ export async function processDelivery(
               deliveryId: id,
               maskedEmail: maskEmail(initial.email),
               kind: "SUPPRESSED",
-              message: "Recipient or audit-copy address is suppressed.",
+              message: "Recipient or copy address is on the do-not-send list.",
             },
           });
           return false;
@@ -588,7 +588,7 @@ export async function processDelivery(
         data: { enabled: false, health: "CONFIG_ERROR" },
       });
       throw new Error(
-        "Provider credentials could not be opened. Update and verify the connection.",
+        "The saved credentials for this sending service could not be used. Update the connection and check it again.",
       );
     }
     const baseMessage = deliveryMessage(
@@ -797,7 +797,7 @@ export async function processDelivery(
         status: "unknown",
         error: {
           category: "unknown",
-          message: "Send outcome requires reconciliation.",
+          message: "The final delivery result is unclear and must be checked before retrying.",
         },
       };
     }
@@ -874,7 +874,7 @@ export async function processDelivery(
                 state: "DEFERRED",
                 nextAttemptAt: new Date(Date.now() + 1000),
                 safeError:
-                  "This provider was removed from the campaign pool after an enforcement failure. Retrying with another eligible connection.",
+                  "This sending service was removed from this campaign after a provider-side block. Trying another available connection.",
               },
             });
         } else if (
@@ -901,7 +901,7 @@ export async function processDelivery(
                 state: "DEFERRED",
                 nextAttemptAt: new Date(Date.now() + 1000),
                 safeError:
-                  "This connection was disabled after a terminal provider configuration failure. Retrying with another eligible connection.",
+                  "This connection was turned off after a permanent setup error. Trying another available connection.",
               },
             });
         }
@@ -1145,7 +1145,7 @@ export async function recoverStalled() {
         data: {
           state: "UNKNOWN",
           safeError:
-            "Worker stopped during sending. Reconciliation is required before any retry.",
+            "Sending was interrupted. EmailSystem must confirm the previous result before retrying.",
         },
       });
       if (n.count) {
@@ -1164,7 +1164,7 @@ export async function recoverStalled() {
             deliveryId: d.id,
             maskedEmail: maskEmail(d.email),
             kind: "UNKNOWN",
-            message: "Interrupted attempt stopped for reconciliation.",
+            message: "An interrupted send is waiting for its final result to be confirmed.",
           },
         });
       }
