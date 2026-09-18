@@ -67,7 +67,7 @@ export async function processDelivery(
     cc: string[];
     bcc: string[];
     attachments?: { disposition?: string }[];
-    senderPool?: { enabled?: boolean };
+    senderPool?: { enabled?: boolean; domainIds?: string[] };
   };
   const needsInlineTransport =
     snapshot.attachments?.some(
@@ -75,9 +75,9 @@ export async function processDelivery(
     ) ?? false;
   const senderIdentityId = initial.campaign.senderIdentityId;
   if (!senderIdentityId) return;
-  const cost = messageCost(snapshot),
-    domain = senderDomain(snapshot.from),
-    attemptId = randomUUID();
+  const cost = messageCost(snapshot);
+  let domain = senderDomain(snapshot.from);
+  const attemptId = randomUUID();
   let provider:
     | Awaited<ReturnType<typeof db.providerConnection.findFirstOrThrow>>
     | undefined;
@@ -146,20 +146,6 @@ export async function processDelivery(
           });
           return false;
         }
-        const all = await tx.providerConnection.findMany({
-          where: { userId: initial.userId, deletedAt: null },
-        });
-        if (all.some((p) => p.health === "POLICY_BLOCKED")) {
-          await tx.campaign.update({
-            where: { id: c.id },
-            data: {
-              state: "PAUSED",
-              safeError:
-                "Provider enforcement reported. Review the blocked connection before resuming.",
-            },
-          });
-          return false;
-        }
         const experimentScope = await experimentDispatchScope(tx, {
           userId: initial.userId,
           runId: c.experimentRunId,
@@ -200,6 +186,7 @@ export async function processDelivery(
           senderIdentityId,
           id,
           Boolean(snapshot.senderPool?.enabled) && !c.experimentRunId,
+          snapshot.senderPool?.domainIds,
         );
         if (!senderSelection) {
           await waitForSafety(
@@ -208,7 +195,7 @@ export async function processDelivery(
             [],
             now() + 60000,
             now(),
-            "No enabled verified sender alias is currently eligible for this domain.",
+            "No enabled verified sender alias is currently eligible in this campaign domain pool.",
           );
           return false;
         }
@@ -218,6 +205,7 @@ export async function processDelivery(
           displayName: senderSelection.sender.displayName,
           replyTo: senderSelection.sender.replyTo,
         };
+        domain = senderDomain(selectedSender.email);
         const authorized = senderSelection.providers;
         const eligible = authorized.filter(
           (p) =>
@@ -752,22 +740,21 @@ export async function processDelivery(
             where: { id: provider!.id, revision: provider!.revision },
             data: { health: "POLICY_BLOCKED", enabled: false },
           });
-          await tx.campaign.updateMany({
-            where: {
-              id: initial.campaignId,
-              state: { in: ["QUEUED", "SENDING"] },
-            },
-            data: {
-              state: "PAUSED",
-              safeError:
-                "Provider enforcement reported. Review the provider account before resuming.",
-            },
-          });
+          if (pending)
+            await tx.delivery.update({
+              where: { id },
+              data: {
+                state: "DEFERRED",
+                nextAttemptAt: new Date(Date.now() + 1000),
+                safeError:
+                  "This provider was removed from the campaign pool after an enforcement failure. Retrying with another eligible connection.",
+              },
+            });
         } else if (
           ["authentication", "authorization", "sender_configuration"].includes(
             outcome.error.category,
           )
-        )
+        ) {
           await tx.providerConnection.updateMany({
             where: { id: provider!.id, revision: provider!.revision },
             data: {
@@ -780,6 +767,17 @@ export async function processDelivery(
               enabled: false,
             },
           });
+          if (pending)
+            await tx.delivery.update({
+              where: { id },
+              data: {
+                state: "DEFERRED",
+                nextAttemptAt: new Date(Date.now() + 1000),
+                safeError:
+                  "This connection was disabled after a terminal provider configuration failure. Retrying with another eligible connection.",
+              },
+            });
+        }
         else if (["temporary", "rate_limit"].includes(outcome.error.category))
           await tx.providerConnection.updateMany({
             where: { id: provider!.id, revision: provider!.revision },
