@@ -195,6 +195,72 @@ test("provider monthly cap pauses only exhausted connections and resumes next UT
   assert.equal(sends, 3);
 });
 
+test("shared monthly account ceiling blocks additional claims until the next UTC month", async () => {
+  const f = await fixture(2, {
+    accountDaily: 1000,
+    domainDaily: 1000,
+    accountMonthly: 1,
+    domainMonthly: 1000,
+    providerDaily: 1000,
+    campaignDaily: 1000,
+  });
+  const clock = Date.UTC(2026, 8, 18, 12, 0, 0);
+  let sends = 0;
+  const send = async () => {
+    sends += 1;
+    return {
+      status: "accepted" as const,
+      providerMessageId: crypto.randomUUID(),
+    };
+  };
+  await processDelivery(f.deliveries[0].id, send, () => clock);
+  await processDelivery(f.deliveries[1].id, send, () => clock);
+  assert.equal(sends, 1);
+  const summary = await campaignSummary(f.user.id, f.campaign.id);
+  assert.match(summary.safety.waitReason ?? "", /Monthly account\/domain safety limit/);
+  const accountMonth = summary.safety.monthlyUsage.find(
+    (budget) => budget.scope === "account-month",
+  )!;
+  assert.equal(accountMonth.used, 1);
+  assert.equal(accountMonth.limit, 1);
+});
+
+test("retry requeues only definitively failed recipients and preserves unknown outcomes", async () => {
+  const f = await fixture(2, {
+    accountDaily: 1000,
+    domainDaily: 1000,
+    providerDaily: 1000,
+    campaignDaily: 1000,
+  });
+  await processDelivery(f.deliveries[0].id, async () => ({
+    status: "rejected" as const,
+    error: { category: "permanent" as const, message: "Permanent rejection" },
+  }));
+  await processDelivery(f.deliveries[1].id, async () => ({
+    status: "unknown" as const,
+    error: { category: "unknown" as const, message: "Uncertain outcome" },
+  }));
+  await finishCampaigns();
+  assert.equal(
+    (await db.campaign.findUniqueOrThrow({ where: { id: f.campaign.id } })).state,
+    "COMPLETED_WITH_ERRORS",
+  );
+  await controlCampaign(f.user.id, f.campaign.id, "retry");
+  const states = await db.delivery.findMany({
+    where: { campaignId: f.campaign.id },
+    orderBy: { id: "asc" },
+    select: { state: true },
+  });
+  assert.deepEqual(
+    states.map((row) => row.state).sort(),
+    ["DEFERRED", "UNKNOWN"],
+  );
+  assert.equal(
+    (await db.campaign.findUniqueOrThrow({ where: { id: f.campaign.id } })).state,
+    "QUEUED",
+  );
+});
+
 test("Redis flush rebuild retains transmitted UNKNOWN and accepted costs including CC/BCC", async () => {
   const f = await fixture(2, {}, true);
   await processDelivery(f.deliveries[0].id, async () => ({
