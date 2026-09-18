@@ -32,6 +32,7 @@ while the backend handles queues, workers, provider selection, rate limits, retr
 - CSV, TXT, XLSX, and pasted-recipient imports.
 - Recipient normalization, deduplication, and account-wide suppressions.
 - Rich-text and raw HTML email composition.
+- Dedicated **Image-first** campaign composer for emails built around one primary embedded image.
 - HTML sanitization, previews, attachments, scheduling, and pre-flight validation.
 - Durable campaign, delivery, attempt, event, and audit records in PostgreSQL.
 - Redis/BullMQ background workers for queueing and coordination.
@@ -63,6 +64,85 @@ while the backend handles queues, workers, provider selection, rate limits, retr
 Built-in services use application-owned provider metadata so users do not need to manually enter standard API endpoints or SMTP hosts.
 
 See [Provider setup](docs/PROVIDERS.md) for credentials, verification behavior, SMTP modes, and webhook configuration.
+
+---
+
+## Image-first campaigns
+
+EmailBlast includes a dedicated **Image-first** composer at `/blast/image` for campaigns where one main visual is the email.
+
+This is not a separate delivery engine. Image-first campaigns reuse the same recipient imports, verified sending identities, multi-provider routing, pre-flight validation, background workers, safety controls, webhooks, Activity reporting, retries, and durable delivery state as standard campaigns.
+
+### How Image-first works
+
+1. **Choose recipients**  
+   Use an existing import or upload a CSV, TXT, or XLSX file. The same normalization, deduplication, suppression, and campaign-delivery pipeline applies.
+
+2. **Choose one or more verified sending domains**  
+   Image-first campaigns can use the same multi-domain and multi-provider routing logic as standard campaigns. Only currently eligible From addresses and sending services are considered.
+
+3. **Upload the primary image**  
+   Supported formats are **PNG, JPEG, GIF, and WebP**.
+
+4. **Embed the image inside the email**  
+   The primary image is stored in the campaign message as an inline attachment with its own Content-ID and referenced through `cid:<content-id>`. It is not dependent on a third-party image host for the main visual.
+
+5. **Provide alt text / plain-text fallback**  
+   Alt text is required. It is also used as the plain-text fallback when the image cannot be displayed, so an image-centered message still has a meaningful text alternative.
+
+6. **Optionally make the whole image clickable**  
+   A normal `http://` or `https://` destination can wrap the primary image. When click tracking is enabled, the existing EmailBlast tracking flow applies; when tracking is off, the link remains direct.
+
+7. **Add the normal campaign metadata**  
+   Image-first supports subject, preview text, CC, BCC, tags, scheduling, and additional file attachments.
+
+8. **Preview the actual prepared structure**  
+   EmailBlast creates the HTML around the CID image and renders the same prepared message structure used for campaign pre-flight.
+
+9. **Run provider-aware pre-flight**  
+   Pre-flight verifies the recipient list, sender/domain state, message structure, and whether the currently eligible sending services can handle the embedded-image campaign before the send button is enabled.
+
+10. **Send a controlled test first**  
+    Image-first has its own test-message flow so the exact image/message structure can be checked against a selected eligible provider without adding that test to campaign statistics.
+
+11. **Queue and send normally**  
+    Once launched, the campaign becomes ordinary durable EmailBlast work: workers claim deliveries, enforce pacing/capacity/safety, call the selected provider, persist attempts, and reconcile downstream events.
+
+### Image-first message structure
+
+Conceptually, the prepared message looks like:
+
+```text
+multipart email
+├── plain-text alternative
+├── HTML body
+│    └── <img src="cid:image-...">
+├── inline primary image
+│    ├── Content-ID: image-...
+│    └── disposition: inline
+└── optional normal attachments
+```
+
+The generated HTML keeps the primary image responsive, capped at a 1200-pixel presentation width, and can wrap the entire visual in an optional destination link.
+
+### Limits
+
+The current Image-first composer applies these client-side campaign limits:
+
+- primary image types: PNG, JPEG, GIF, WebP;
+- primary image maximum: **5 MB**;
+- primary image + normal attachments: **maximum 5 files total**;
+- primary image + normal attachments: **maximum 5 MB total**;
+- recipient upload: **under 10 MB**;
+- image destination: optional, but must be a complete HTTP(S) URL.
+
+Normal server-side validation and provider-specific capability checks remain authoritative.
+
+### Why this mode exists
+
+Image-first is useful for newsletters, announcements, posters, invitations, product launches, event creatives, visual promotions, and other campaigns where the message is intentionally centered around one designed image.
+
+It still preserves EmailBlast's main engineering boundaries: the campaign is durable, provider policy is respected, delivery state remains truthful, suppressions still apply, and the browser does not need to remain open while delivery continues.
 
 ---
 
