@@ -95,16 +95,16 @@ function DomainSenders({
       <AccordionDetails>
         <Stack spacing={2}>
           <Typography variant="body2" color="text.secondary">
-            Add aliases in bulk. Domain-based campaigns distribute deliveries
-            consistently across enabled aliases; retries keep a stable assignment.
-            Aliases never increase provider capacity.
+            Add the From addresses you want to use on this domain. Campaigns can
+            rotate between enabled addresses, while retries keep the same address
+            when possible. Adding addresses does not increase your sending limit.
           </Typography>
           <TextField
-            label="Alias names"
+            label="From address names"
             placeholder="info, support, hello, sales"
             value={localParts}
             onChange={(event) => setLocalParts(event.target.value)}
-            helperText={`${parts.length} unique-looking entr${parts.length === 1 ? "y" : "ies"}; separate with commas, spaces, or new lines.`}
+            helperText={`Enter the part before @, such as info or support. ${parts.length} entr${parts.length === 1 ? "y" : "ies"} selected.`}
             multiline
             minRows={2}
           />
@@ -127,7 +127,7 @@ function DomainSenders({
             sx={{ alignSelf: "flex-start" }}
             onClick={() => setLocalParts(suggestedAliases.join(", "))}
           >
-            Use 10 suggested aliases
+            Use 10 suggested addresses
           </Button>
           <Button
             variant="outlined"
@@ -144,7 +144,7 @@ function DomainSenders({
             }
             sx={{ alignSelf: "flex-start" }}
           >
-            Add sender aliases
+            Add From addresses
           </Button>
           {!!domain.senders.length && <Divider />}
           {domain.senders.map((sender) => (
@@ -160,8 +160,8 @@ function DomainSenders({
               <Stack sx={{ minWidth: 0 }}>
                 <Typography noWrap>{sender.email}</Typography>
                 <Typography variant="caption" color="text.secondary">
-                  {sender.availableProviderIds.length} eligible provider
-                  {sender.availableProviderIds.length === 1 ? "" : "s"}
+                  {sender.availableProviderIds.length} sending service
+                  {sender.availableProviderIds.length === 1 ? "" : "s"} available
                   {sender.displayName ? ` · ${sender.displayName}` : ""}
                 </Typography>
               </Stack>
@@ -193,7 +193,9 @@ function DomainSenders({
                 </Typography>
                 <Status value={provider.status} />
                 <Typography variant="caption" color="text.secondary">
-                  {provider.scope.toLowerCase().replaceAll("_", " ")}
+                  {provider.scope === "DOMAIN_WIDE"
+                    ? "Entire domain"
+                    : "Approved addresses only"}
                 </Typography>
               </Stack>
               {provider.safeDetail && (
@@ -205,9 +207,8 @@ function DomainSenders({
           ))}
           {!domain.providers.length && (
             <Typography variant="caption" color="warning.main">
-              No provider is associated yet. Configure and verify a provider
-              using an address on this domain; this screen never claims
-              authorization without provider evidence.
+              No sending service is connected to this domain yet. Add and verify
+              a sending service using an address on this domain first.
             </Typography>
           )}
         </Stack>
@@ -243,12 +244,12 @@ export function SenderSettings() {
           void run(refresh);
         }}
       >
-        Domains & aliases
+        Sending addresses
       </Button>
       <ResponsiveDialog
         open={open}
         onClose={() => setOpen(false)}
-        title="Domains & aliases"
+        title="Sending addresses"
         width={720}
         mobileFullScreen
       >
@@ -256,8 +257,7 @@ export function SenderSettings() {
           <Stack spacing={2.5}>
             <Failure error={error} />
             <Typography variant="body2" color="text.secondary">
-              Domains come from provider configuration. Manage the aliases
-              available behind each verified domain here.
+              Manage the From addresses available on each verified sending domain.
             </Typography>
             {data?.domains.map((item, index) => (
               <DomainSenders
@@ -270,8 +270,8 @@ export function SenderSettings() {
             ))}
             {data && !data.domains.length && (
               <Typography variant="body2" color="text.secondary">
-                No sending domains yet. Saving a provider creates its domain
-                and configured aliases here, pending provider authorization evidence.
+                No sending domains yet. Add and verify a sending service first;
+                its domain and From addresses will appear here.
               </Typography>
             )}
           </Stack>
