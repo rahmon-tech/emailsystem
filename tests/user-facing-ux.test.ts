@@ -38,6 +38,10 @@ test("user-facing web copy does not regress to system-oriented wording", () => {
     "Run pre-flight",
     "Pre-flight",
     "Add provider",
+    "Provider accepted",
+    "provider accepted",
+    "non-delivery test mode",
+    "Run Non-Delivery Test",
   ])
     assert.equal(
       source.includes(phrase),
