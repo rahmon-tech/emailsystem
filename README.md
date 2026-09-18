@@ -749,11 +749,18 @@ pnpm install --frozen-lockfile
 
 #### 3. Create PostgreSQL database/user
 
-Create a dedicated PostgreSQL role and database. Example:
+Create a dedicated PostgreSQL role and database:
+
+```sh
+sudo -u postgres psql
+```
+
+Then in PostgreSQL:
 
 ```sql
 CREATE ROLE emailsystem LOGIN PASSWORD 'replace-with-a-strong-random-password';
 CREATE DATABASE emailsystem OWNER emailsystem;
+\q
 ```
 
 Do not reuse that example password. Generate a strong random value and keep it in the protected production environment file.
@@ -914,6 +921,8 @@ Save it as:
 /etc/systemd/system/emailblast-worker.service
 ```
 
+Service unit names such as `postgresql.service` and `redis-server.service` vary between Linux distributions. Adjust the `After=` lines to match the services installed on the host.
+
 If Node is installed somewhere other than `/usr/bin/node`, use the actual result of:
 
 ```sh
@@ -1037,6 +1046,10 @@ Native PostgreSQL example:
 ```sh
 mkdir -p backups
 chmod 700 backups
+
+set -a
+. ./.env
+set +a
 
 pg_dump "$DATABASE_URL" -Fc \
   > "backups/emailblast-$(date -u +%Y%m%dT%H%M%SZ).dump"
