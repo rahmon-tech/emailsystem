@@ -18,7 +18,7 @@ import {
   createTrackedSnapshot,
   trackingSummary,
 } from "./tracking";
-import { resolveSender } from "./senders";
+import { resolveSender, resolveSenderDomain } from "./senders";
 import { absoluteAppUrl } from "./server-paths";
 import { validateExperimentCampaignScope } from "./experiments";
 
@@ -89,6 +89,7 @@ export const messageInput = z
   .object({
     name: headerText.min(1),
     importId: z.uuid(),
+    senderDomainId: z.uuid().optional(),
     senderIdentityId: z.uuid().optional(),
     experimentRunId: z.uuid().optional(),
     from: z
@@ -117,10 +118,13 @@ export const messageInput = z
     tags: z.array(headerText.max(40)).max(10).default([]),
   })
   .strict()
-  .refine((value) => value.senderIdentityId || value.from, {
-    message: "Choose a sender identity.",
-    path: ["senderIdentityId"],
-  });
+  .refine(
+    (value) => value.senderDomainId || value.senderIdentityId || value.from,
+    {
+      message: "Choose a verified sending domain.",
+      path: ["senderDomainId"],
+    },
+  );
 export async function preflight(userId: string, input: unknown) {
   const data = messageInput.parse(input);
   const problems: string[] = [];
@@ -163,11 +167,15 @@ export async function preflight(userId: string, input: unknown) {
     (await db.suppression.count({ where: { userId, email: { in: copies } } }))
   )
     problems.push("A CC/BCC address is suppressed.");
-  const senderSelection = await resolveSender(userId, {
-    senderIdentityId: data.senderIdentityId,
-    from: data.from,
-  });
+  const senderSelection = data.senderDomainId
+    ? await resolveSenderDomain(userId, data.senderDomainId)
+    : await resolveSender(userId, {
+        senderIdentityId: data.senderIdentityId,
+        from: data.from,
+      });
   const sender = senderSelection.sender;
+  const poolSenders =
+    "senders" in senderSelection ? senderSelection.senders : [sender];
   const providers = needsInlineTransport
     ? senderSelection.providers.filter((provider) =>
         supportsInlineAttachmentTransport(provider),
@@ -261,6 +269,13 @@ export async function preflight(userId: string, input: unknown) {
       enabled: tracking.enabled,
       appUrl: tracking.enabled ? config().APP_URL : null,
     },
+    senderPool: data.senderDomainId
+      ? {
+          domainId: sender.authorizedDomain.id,
+          enabled: poolSenders.length > 1 && !data.experimentRunId,
+          aliasCount: poolSenders.length,
+        }
+      : undefined,
   };
   return {
     ready: !problems.length,
@@ -271,6 +286,11 @@ export async function preflight(userId: string, input: unknown) {
       ...(copies.length
         ? [
             `${copies.length} CC/BCC copies will be sent for every recipient and count toward provider limits.`,
+          ]
+        : []),
+      ...(data.senderDomainId && poolSenders.length > 1 && !data.experimentRunId
+        ? [
+            `${poolSenders.length} enabled verified aliases are available on this domain. Deliveries are distributed consistently across the alias pool; provider limits are unchanged.`,
           ]
         : []),
     ],
@@ -286,15 +306,36 @@ export async function preflight(userId: string, input: unknown) {
           .filter((b) =>
             effectiveProviders.some((p) => b.scope === "provider:" + p.id),
           )
-          .reduce((total, b) => total + Math.max(0, b.limit! - b.used), 0),
+          .reduce(
+            (total, b) =>
+              b.limit === null
+                ? Infinity
+                : total + Math.max(0, b.limit - b.used),
+            0,
+          ),
+        safety.providerMonthlyUsage
+          .filter((b) =>
+            effectiveProviders.some(
+              (p) => b.scope === "provider-month:" + p.id,
+            ),
+          )
+          .reduce(
+            (total, b) =>
+              b.limit === null
+                ? Infinity
+                : total + Math.max(0, b.limit - b.used),
+            0,
+          ),
       ),
       campaignDaily: campaignLimit,
     },
     providers: effectiveProviders.map((p) => ({ id: p.id, name: p.name })),
     sender: {
       id: sender.id,
+      domainId: sender.authorizedDomain.id,
       email: sender.email,
       domain: sender.authorizedDomain.domain,
+      aliasCount: poolSenders.length,
       eligibleProviderCount: effectiveProviders.length,
     },
     experiment,
