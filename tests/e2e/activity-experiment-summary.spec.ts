@@ -6,7 +6,7 @@ import { saveProvider } from "@emailsystem/core/providers";
 import { createCampaign } from "@emailsystem/core/campaigns";
 import { db } from "@emailsystem/db";
 
-const password = "Activity-experiment-browser-password-2026";
+const password = `Fixture-${crypto.randomUUID()}-Aa9!`;
 
 test("Activity shows live bounded experiment status and tenant-safe evidence export", async ({
   page,
@@ -96,7 +96,7 @@ test("Activity shows live bounded experiment status and tenant-safe evidence exp
     await expect(page).toHaveURL(/\/blast$/);
     await page.goto(appPath(`/activity?campaignId=${campaign.id}`));
 
-    const card = page.getByRole("region", { name: "Authorized experiment" });
+    const card = page.getByRole("region", { name: "Controlled experiment" });
     await expect(card).toBeVisible();
     await expect(card.getByText("Browser resilience profile", { exact: false })).toBeVisible();
     await expect(card.getByText("AUTH-BROWSER-2026", { exact: false })).toBeVisible();
@@ -105,7 +105,7 @@ test("Activity shows live bounded experiment status and tenant-safe evidence exp
     await expect(card.getByText("running", { exact: true })).toBeVisible();
     await expect(page.getByText("controlled-browser@example.net")).toHaveCount(0);
 
-    const evidence = card.getByRole("link", { name: "Export evidence", exact: true });
+    const evidence = card.getByRole("link", { name: "Download records", exact: true });
     await expect(evidence).toHaveAttribute(
       "href",
       new RegExp(`/api/experiment-runs/${run.id}/evidence$`),
