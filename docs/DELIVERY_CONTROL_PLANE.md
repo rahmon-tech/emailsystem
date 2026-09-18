@@ -18,9 +18,11 @@ EmailSystem absorbs campaigns quickly and releases actual transport attempts at 
 
 ### Sender-domain pacing
 
-- All provider connections used by the same tenant + sender domain share a provider-independent pacing ceiling.
-- Adding providers must not automatically multiply sender-domain burst rate.
-- Smooth pacing is preferred for production traffic; configured ceilings remain hard upper bounds.
+- All eligible provider connections used by the same tenant + sender domain participate in one provider-independent coordination lane.
+- By default, that lane derives its ceiling from the sum of the eligible connections' configured per-second/per-minute/concurrency capacity, so genuinely independent connections can contribute throughput.
+- An explicit sender-domain ceiling may be lower than the derived aggregate, and warm-up/adaptive pressure may reduce effective pace further.
+- Adding a connection never expands sender authorization, recipient scope, suppressions, provider policy state or any configured account/domain/campaign safety ceiling.
+- Smooth pacing is preferred for production traffic; every configured provider/shared ceiling remains a hard upper bound.
 - Campaign, sender-domain, account, provider, warm-up and adaptive controls may all participate in the final transport-start decision.
 - Queue discovery speed remains separate from transport-start speed.
 
