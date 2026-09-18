@@ -38,7 +38,14 @@ export type SafetySummary = {
     limit: number | null;
     nextReleaseAt: number | null;
   }[];
+  monthlyUsage: {
+    scope: string;
+    used: number;
+    limit: number | null;
+    nextReleaseAt: number | null;
+  }[];
   domain: string;
+  domains?: string[];
   pausedReason: string | null;
   waitReason: string | null;
   nextReleaseAt: number | null;
@@ -139,6 +146,8 @@ export function SendingSafety() {
     key:
       | "accountDaily"
       | "domainDaily"
+      | "accountMonthly"
+      | "domainMonthly"
       | "providerDaily"
       | "campaignDaily"
       | "complaintRate"
@@ -149,6 +158,8 @@ export function SendingSafety() {
     const nullableBudget = [
       "accountDaily",
       "domainDaily",
+      "accountMonthly",
+      "domainMonthly",
       "providerDaily",
       "campaignDaily",
     ].includes(key);
@@ -263,8 +274,10 @@ export function SendingSafety() {
                     gap: 2.5,
                   }}
                 >
-                  {field("accountDaily", "Account daily safeguard")}
-                  {field("domainDaily", "Sender-domain daily safeguard")}
+                  {field("accountDaily", "Account · rolling 24h")}
+                  {field("domainDaily", "Sender domain · rolling 24h")}
+                  {field("accountMonthly", "Account · UTC month")}
+                  {field("domainMonthly", "Sender domain · UTC month")}
                   {value.campaignDaily !== null &&
                     field("campaignDaily", "Default campaign daily safeguard")}
                 </Box>
@@ -359,9 +372,9 @@ export function SendingSafety() {
                   </AccordionDetails>
                 </Accordion>
                 <Typography variant="caption" color="text.secondary">
-                  Daily/monthly connection capacity belongs to each SMTP/API
-                  configuration in Providers; this dialog controls shared
-                  safeguards, warm-up and automatic pause behavior.
+                  Provider connection capacity still belongs to each SMTP/API
+                  connection. These optional account/domain ceilings are shared
+                  across healthy connections and never increase provider limits.
                 </Typography>
               </>
             )}
@@ -442,9 +455,19 @@ export function SafetyMetrics({
   refresh: () => void;
 }) {
   const [review, setReview] = useState(false);
-  const metrics = safety.usage.filter(
+  const dailyMetrics = safety.usage.filter(
     (b) => b.scope === "account" || b.scope.startsWith("domain:"),
   );
+  const monthlyMetrics = (safety.monthlyUsage ?? []).filter(
+    (b) => b.scope === "account-month" || b.scope.startsWith("domain-month:"),
+  );
+  const metrics = [
+    ...dailyMetrics.map((budget) => ({ ...budget, period: "24h" as const })),
+    ...monthlyMetrics.map((budget) => ({
+      ...budget,
+      period: "month" as const,
+    })),
+  ];
   const next =
     safety.nextReleaseAt ??
     metrics
@@ -468,9 +491,9 @@ export function SafetyMetrics({
           <Tooltip
             key={b.scope}
             title={
-              b.scope === "account"
-                ? "Shared across all your campaigns and providers. Includes attempts with an unknown outcome."
-                : `Shared by all your senders on ${safety.domain}.`
+              b.scope.startsWith("account")
+                ? "Shared across all campaigns and providers. Includes durable transport starts/reservations and provider tests."
+                : "Shared by all eligible senders on this specific sending domain."
             }
           >
             <Box sx={{ minWidth: 0 }}>
@@ -479,7 +502,11 @@ export function SafetyMetrics({
                 sx={{ justifyContent: "space-between", gap: 1, mb: 1 }}
               >
                 <Typography variant="caption">
-                  {b.scope === "account" ? "Account · 24h" : "Domain · 24h"}
+                  {b.scope.startsWith("account")
+                    ? `Account · ${b.period === "month" ? "UTC month" : "24h"}`
+                    : `${b.scope
+                        .replace("domain-month:", "")
+                        .replace("domain:", "")} · ${b.period === "month" ? "UTC month" : "24h"}`}
                 </Typography>
                 <Typography
                   variant="caption"
@@ -503,7 +530,7 @@ export function SafetyMetrics({
         ))}
       </Box>
       <Typography variant="caption" color="text.secondary">
-        Provider rate limits also apply.
+        Provider daily/monthly and rate limits also apply.
         {next
           ? ` Capacity releases from ${new Date(next).toLocaleString()}.`
           : ""}
