@@ -107,12 +107,12 @@ export async function resolveSenderDomain(userId: string, domainId: string) {
     where: { id: domainId, userId },
   });
   if (!domain)
-    throw new AppError(422, "SENDER_DOMAIN", "Choose an authorized sending domain.");
+    throw new AppError(422, "SENDER_DOMAIN", "Choose a sending domain connected to one of your sending services.");
   if (domain.status !== "VERIFIED")
     throw new AppError(
       422,
       "DOMAIN_UNVERIFIED",
-      "This sending domain is not verified through a provider.",
+      "This sending domain has not been verified by a sending service yet.",
     );
   const identities = await db.senderIdentity.findMany({
     where: { userId, authorizedDomainId: domain.id, enabled: true },
@@ -126,7 +126,7 @@ export async function resolveSenderDomain(userId: string, domainId: string) {
     throw new AppError(
       422,
       "SENDER_DOMAIN",
-      "This domain has no enabled sender alias with an eligible provider.",
+      "This domain has no enabled From address with an available sending service.",
     );
   const providers = [
     ...new Map(
@@ -205,15 +205,15 @@ export async function resolveSender(
     throw new AppError(
       422,
       "SENDER",
-      "Choose an authorized sender identity. Arbitrary From addresses are not allowed.",
+      "Choose a verified From address from your sending settings.",
     );
   if (!sender.enabled)
-    throw new AppError(422, "SENDER_DISABLED", "This sender is disabled.");
+    throw new AppError(422, "SENDER_DISABLED", "This From address is turned off.");
   if (sender.authorizedDomain.status !== "VERIFIED")
     throw new AppError(
       422,
       "DOMAIN_UNVERIFIED",
-      "This sender domain is not verified through a provider.",
+      "This sending domain has not been verified by a sending service yet.",
     );
   return { sender, providers: eligibleProvidersForSender(sender) };
 }
@@ -264,7 +264,7 @@ export async function senderForProviderTest(
     throw new AppError(
       422,
       "SENDER",
-      "Choose a sender associated with this provider before testing.",
+      "Choose a From address connected to this sending service before testing.",
     );
   return { sender, authorization };
 }
@@ -700,7 +700,7 @@ export async function addSenderIdentities(
         additions.length >
       1000
     )
-      throw new AppError(422, "SENDER_LIMIT", "Sender identity limit reached.");
+      throw new AppError(422, "SENDER_LIMIT", "You have reached the maximum number of From addresses.");
     await tx.senderIdentity.createMany({
       data: additions.map((localPart) => ({
         userId,
@@ -725,7 +725,7 @@ export async function setSenderEnabled(
     data: { enabled },
   });
   if (!changed.count)
-    throw new AppError(404, "NOT_FOUND", "Sender identity not found.");
+    throw new AppError(404, "NOT_FOUND", "From address not found.");
   return { enabled };
 }
 
