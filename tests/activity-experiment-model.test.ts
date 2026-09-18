@@ -14,13 +14,13 @@ test("experiment Activity labels approved configuration without claiming metadat
       contentMode: "hosted-image",
     }),
     [
-      "Pacing: bounded burst",
-      "Window: 12s",
-      "Burst: 4",
-      "Concurrency: 3",
-      "Encoding: base64",
-      "Charset: UTF-8",
-      "Requested content: hosted image",
+      "Sending pattern: small groups",
+      "Group window: 12s",
+      "Group size: 4",
+      "Emails at once: 3",
+      "Email format: base64",
+      "Character support: UTF-8",
+      "Message type: Web-hosted image",
     ],
   );
 });
@@ -34,10 +34,10 @@ test("experiment Activity omits unset optional controls and formats smooth pacin
       contentMode: "html",
     }),
     [
-      "Pacing: smooth",
-      "Encoding: provider default",
-      "Charset: UTF-8",
-      "Requested content: html",
+      "Sending pattern: steady",
+      "Email format: Automatic",
+      "Character support: UTF-8",
+      "Message type: HTML email",
     ],
   );
 });
