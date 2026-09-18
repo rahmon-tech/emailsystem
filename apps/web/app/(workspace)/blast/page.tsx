@@ -5,7 +5,7 @@ import { sessionCookie, userFromTokens } from "@emailsystem/core/auth";
 import { absoluteAppUrl } from "@emailsystem/core/server-paths";
 import { Blast } from "../../../components/blast";
 import { SavedImports } from "../../../components/saved-imports";
-export const metadata = { title: "Blast" };
+export const metadata = { title: "Create campaign" };
 export const dynamic = "force-dynamic";
 export default async function Page() {
   const store = await cookies();
