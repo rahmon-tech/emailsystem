@@ -457,7 +457,6 @@ export function Blast() {
                             },
                           },
                         },
-                        MenuListProps: { sx: { py: 0.5 } },
                       },
                     },
                   }}
