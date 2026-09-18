@@ -352,6 +352,20 @@ export function Activity() {
               label="Campaign"
               value={selected}
               onChange={(e) => selectCampaign(e.target.value)}
+              slotProps={{
+                select: {
+                  MenuProps: {
+                    slotProps: {
+                      paper: {
+                        sx: {
+                          maxHeight: 320,
+                          overscrollBehavior: "contain",
+                        },
+                      },
+                    },
+                  },
+                },
+              }}
               sx={{ display: { xs: "block", lg: "none" } }}
             >
               {campaigns.map((c) => (
