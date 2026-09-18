@@ -629,9 +629,26 @@ const labels: Record<string, string> = {
   sessionToken: "Session token (optional)",
   username: "SMTP username",
   password: "SMTP password",
-  webhookSecret: "Delivery update signing key",
-  webhookPublicKey: "Delivery update public key",
-  snsTopicArn: "SNS topic ARN",
+  webhookSecret: "Webhook secret",
+  webhookPublicKey: "SendGrid Event Webhook public key",
+  snsTopicArn: "Amazon SNS topic ARN",
+};
+const emailSystemManagedWebhookSecret = (type: ProviderType) =>
+  ["brevo", "postmark", "mailjet", "smtp2go", "elastic", "smtp", "mock"].includes(type);
+const providerWebhookSecretLabel = (type: ProviderType) =>
+  type === "resend"
+    ? "Resend webhook signing secret"
+    : type === "mailgun"
+      ? "Mailgun webhook signing key"
+      : labels.webhookSecret;
+const generateWebhookSecret = () => {
+  const bytes = new Uint8Array(32);
+  crypto.getRandomValues(bytes);
+  const value = btoa(String.fromCharCode(...bytes))
+    .replaceAll("+", "-")
+    .replaceAll("/", "_")
+    .replaceAll("=", "");
+  return `eswh_${value}`;
 };
 function ProviderForm({
   type,
@@ -690,7 +707,11 @@ function ProviderForm({
       timeout: row?.settings.timeout ?? 20000,
       mockMode: row?.settings.mockMode ?? "success",
     }),
-    [secrets, setSecrets] = useState<Record<string, string>>({}),
+    [secrets, setSecrets] = useState<Record<string, string>>(() =>
+      !row && emailSystemManagedWebhookSecret(type)
+        ? { webhookSecret: generateWebhookSecret() }
+        : {},
+    ),
     [weight, setWeight] = useState(String(row?.weight ?? 1)),
     [second, setSecond] = useState(String(row?.perSecond ?? 1)),
     [minute, setMinute] = useState(String(row?.perMinute ?? 30)),
@@ -1063,7 +1084,7 @@ function ProviderForm({
           >
             <Stack spacing={1.5}>
               <Typography sx={{ fontWeight: 700 }}>
-                Delivery updates
+                Delivery webhook
               </Typography>
               {d.webhook === "none" ? (
                 <Alert severity="info">
@@ -1074,64 +1095,147 @@ function ProviderForm({
               ) : (
                 <>
                   <Typography variant="body2" color="text.secondary">
-                    Use this callback so EmailSystem can change an accepted email
-                    to Delivered, Bounced, or Complained when your sending service
-                    reports the final result.
+                    EmailSystem provides the webhook URL. Add that URL to {d.name}
+                    so it can report Delivered, Bounced, Complaint, and other
+                    delivery events back to this connection.
                   </Typography>
-                  <TextField
-                    label="Delivery update URL"
-                    value={row ? `${appUrl}/api/webhooks/${row.id}` : ""}
-                    placeholder="Available after Save & check connection"
-                    fullWidth
-                    slotProps={{ htmlInput: { readOnly: true } }}
-                    helperText={
-                      row
-                        ? "Copy this URL into your sending service's delivery/event webhook settings."
-                        : "Save and check the connection once; the permanent URL will appear here immediately."
-                    }
-                  />
-                  {(type === "ses"
-                    ? ["snsTopicArn"]
-                    : type === "sendgrid"
-                      ? ["webhookPublicKey"]
-                      : ["webhookSecret"]
-                  ).map((key) => (
-                    <TextField
-                      key={key}
-                      label={labels[key]}
-                      type="password"
-                      autoComplete="new-password"
-                      value={secrets[key] ?? ""}
-                      onChange={(e) =>
-                        setSecrets({ ...secrets, [key]: e.target.value })
-                      }
-                      helperText={
-                        row
-                          ? "Leave blank to keep the saved delivery credential unchanged."
-                          : "Optional while connecting. Add it now if your sending service already gave it to you."
-                      }
-                    />
-                  ))}
-                  {type === "smtp" && (
-                    <Alert severity="warning">
-                      Custom SMTP cannot prove final inbox delivery by SMTP alone.
-                      Your SMTP service must support delivery callbacks and send
-                      JSON containing event/status, messageId (or message_id),
-                      recipient/email, and timestamp/time to the URL above. Use
-                      HTTP Basic username emailsystem and the signing key entered
-                      here. Without callbacks, EmailSystem will safely keep the
-                      result as accepted instead of guessing Delivered.
+                  {row ? (
+                    <>
+                      <TextField
+                        label="Webhook URL (provided by EmailSystem)"
+                        value={`${appUrl}/api/webhooks/${row.id}`}
+                        fullWidth
+                        slotProps={{ htmlInput: { readOnly: true } }}
+                        helperText={`Copy this exact URL into ${d.name}'s webhook, event, or callback settings.`}
+                      />
+                      <Button
+                        size="small"
+                        sx={{ alignSelf: "flex-start" }}
+                        onClick={() =>
+                          void navigator.clipboard.writeText(
+                            `${appUrl}/api/webhooks/${row.id}`,
+                          )
+                        }
+                      >
+                        Copy webhook URL
+                      </Button>
+                    </>
+                  ) : (
+                    <Alert severity="info">
+                      Save this connection once and EmailSystem will create its
+                      permanent webhook URL automatically. It will look like{" "}
+                      <strong>{appUrl}/api/webhooks/…</strong>. You do not create
+                      or supply this URL yourself.
                     </Alert>
                   )}
-                  <Typography variant="caption" color="text.secondary">
-                    {["resend", "mailgun", "sendgrid"].includes(type)
-                      ? "Register the delivery-update URL with this service, then paste the verification/signing key it gives you here."
-                      : type === "ses"
-                        ? "Connect this URL through Amazon SNS, then use the exact topic ARN for this SES account and region."
-                        : type === "elastic"
-                          ? "Register this URL in Elastic Email, then append ?key=YOUR_WEBHOOK_SECRET using the same secret entered here."
-                          : "Register this URL in your sending service and use HTTP Basic authentication with username emailsystem and the secret entered here."}
-                  </Typography>
+
+                  {emailSystemManagedWebhookSecret(type) ? (
+                    <>
+                      <TextField
+                        label="Callback secret (generated by EmailSystem)"
+                        type="password"
+                        autoComplete="new-password"
+                        value={secrets.webhookSecret ?? ""}
+                        slotProps={{ htmlInput: { readOnly: true } }}
+                        helperText={
+                          row && !secrets.webhookSecret
+                            ? "The saved secret is hidden. Leave it unchanged, or generate a new one to rotate the callback authentication."
+                            : "EmailSystem generated this secret. Copy it into the sending service's webhook authentication settings."
+                        }
+                      />
+                      <Stack direction="row" sx={{ gap: 1, flexWrap: "wrap" }}>
+                        <Button
+                          size="small"
+                          disabled={!secrets.webhookSecret}
+                          onClick={() =>
+                            void navigator.clipboard.writeText(
+                              secrets.webhookSecret ?? "",
+                            )
+                          }
+                        >
+                          Copy callback secret
+                        </Button>
+                        <Button
+                          size="small"
+                          onClick={() =>
+                            setSecrets({
+                              ...secrets,
+                              webhookSecret: generateWebhookSecret(),
+                            })
+                          }
+                        >
+                          {row ? "Generate new secret" : "Regenerate secret"}
+                        </Button>
+                      </Stack>
+                    </>
+                  ) : (
+                    (type === "ses"
+                      ? ["snsTopicArn"]
+                      : type === "sendgrid"
+                        ? ["webhookPublicKey"]
+                        : ["webhookSecret"]
+                    ).map((key) => (
+                      <TextField
+                        key={key}
+                        label={
+                          key === "webhookSecret"
+                            ? providerWebhookSecretLabel(type)
+                            : labels[key]
+                        }
+                        type="password"
+                        autoComplete="new-password"
+                        value={secrets[key] ?? ""}
+                        onChange={(e) =>
+                          setSecrets({ ...secrets, [key]: e.target.value })
+                        }
+                        helperText={
+                          type === "resend"
+                            ? "After registering the EmailSystem webhook URL in Resend, copy Resend's whsec_… signing secret here."
+                            : type === "mailgun"
+                              ? "Paste the Webhook Signing Key from Mailgun here. Mailgun uses it to sign delivery events."
+                              : type === "sendgrid"
+                                ? "Enable SendGrid Signed Event Webhook verification, then paste its public key here."
+                                : type === "ses"
+                                  ? "Subscribe the EmailSystem webhook URL through Amazon SNS, then paste the exact SNS topic ARN here."
+                                  : row
+                                    ? "Leave blank to keep the saved delivery credential unchanged."
+                                    : "Add the verification value supplied by the sending service."
+                        }
+                      />
+                    ))
+                  )}
+
+                  {type === "smtp" && (
+                    <Alert severity="warning">
+                      Plain SMTP has no universal delivery webhook. This works only
+                      when the SMTP service you use also supports delivery/event
+                      callbacks. Give that service the EmailSystem webhook URL,
+                      use HTTP Basic username <strong>emailsystem</strong> and the
+                      generated callback secret as the password, and configure it
+                      to POST delivery events. EmailSystem accepts common JSON
+                      fields such as event/status, messageId/message_id,
+                      recipient/email, and timestamp/time. If your SMTP service
+                      sends a different format, it needs a provider-specific
+                      adapter; EmailSystem will not guess that an accepted email
+                      was delivered.
+                    </Alert>
+                  )}
+
+                  {type === "elastic" ? (
+                    <Typography variant="caption" color="text.secondary">
+                      In Elastic Email, use the EmailSystem webhook URL as the
+                      notification URL and append <strong>?key=YOUR_SECRET</strong>,
+                      using the generated callback secret above.
+                    </Typography>
+                  ) : ["brevo", "postmark", "mailjet", "smtp2go"].includes(type) ? (
+                    <Typography variant="caption" color="text.secondary">
+                      Configure HTTP Basic authentication for the webhook with
+                      username <strong>emailsystem</strong> and the generated
+                      callback secret as the password. If the provider asks for
+                      credentials inside the webhook URL, use the same username
+                      and secret there.
+                    </Typography>
+                  ) : null}
                 </>
               )}
             </Stack>
