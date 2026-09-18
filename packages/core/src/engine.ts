@@ -185,6 +185,27 @@ export async function processDelivery(
         const scopedProviderIds = experimentScope.providerIds
           ? new Set(experimentScope.providerIds)
           : null;
+        if (
+          c.experimentRunId &&
+          scopedProviderIds?.size &&
+          (await tx.providerConnection.count({
+            where: {
+              id: { in: [...scopedProviderIds] },
+              userId: initial.userId,
+              health: "POLICY_BLOCKED",
+            },
+          }))
+        ) {
+          await tx.campaign.updateMany({
+            where: { id: c.id, state: { in: ["QUEUED", "SENDING"] } },
+            data: {
+              state: "PAUSED",
+              safeError:
+                "A sending service approved for this controlled experiment was blocked. Review it before continuing the experiment.",
+            },
+          });
+          return false;
+        }
         const preSettings = safetySettings.parse(user.safetySettings);
         const preGovernor = await ensureGovernor(tx, initial.userId, clock);
         const poolDomainIds = snapshot.senderPool?.domainIds ?? [];
@@ -625,9 +646,6 @@ export async function processDelivery(
             p.id,
             deliverySender.id,
           )) ||
-          (await tx.providerConnection.count({
-            where: { userId: initial.userId, health: "POLICY_BLOCKED" },
-          })) ||
           (await tx.suppression.count({
             where: {
               userId: initial.userId,
@@ -860,16 +878,29 @@ export async function processDelivery(
             where: { id: provider!.id, revision: provider!.revision },
             data: { health: "POLICY_BLOCKED", enabled: false },
           });
-          if (pending)
+          if (initial.campaign.experimentRunId) {
+            await tx.campaign.updateMany({
+              where: {
+                id: initial.campaignId,
+                state: { in: ["QUEUED", "SENDING"] },
+              },
+              data: {
+                state: "PAUSED",
+                safeError:
+                  "A sending service approved for this controlled experiment was blocked. Review it before continuing the experiment.",
+              },
+            });
+          } else if (pending) {
             await tx.delivery.update({
               where: { id },
               data: {
                 state: "DEFERRED",
                 nextAttemptAt: new Date(Date.now() + 1000),
                 safeError:
-                  "This sending service was removed from the campaign after it rejected further sending. Trying another available service.",
+                  "This sending service became unavailable. Trying another available service.",
               },
             });
+          }
         } else if (
           ["authentication", "authorization", "sender_configuration"].includes(
             outcome.error.category,
