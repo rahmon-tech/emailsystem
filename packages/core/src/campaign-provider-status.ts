@@ -83,7 +83,7 @@ export async function campaignProviderStatus(
     return {
       scopedProviderCount: 0,
       eligibleProviderCount: 0,
-      campaignBlockReason: "Campaign has no sender identity.",
+      campaignBlockReason: "This campaign has no From address.",
       providers: [],
     };
 
@@ -239,38 +239,38 @@ export async function campaignProviderStatus(
   );
   const experimentBlock = campaign.experimentRun
     ? campaign.user.experimentKillSwitchAt
-      ? "Experiment transport is disabled by the account kill switch."
+      ? "This controlled experiment has been stopped for the account."
       : campaign.experimentRun.state !== "RUNNING"
-        ? "Experiment run is not active."
+        ? "This controlled experiment is not active."
         : campaign.experimentRun.startsAt &&
             campaign.experimentRun.startsAt.getTime() > now
           ? "This experiment is not inside its approved start window yet."
           : !campaign.experimentRun.expiresAt
-            ? "This experiment run has not been started with a bounded expiry."
+            ? "This controlled experiment has not been started with an end time."
             : campaign.experimentRun.expiresAt.getTime() <= now
-              ? "This experiment run is outside its approved time window."
+              ? "This controlled experiment is outside its approved time window."
               : campaign.experimentRun.attemptsUsed >=
                   campaign.experimentRun.maxAttempts
-                ? "Experiment attempt ceiling reached; no further transport starts are allowed."
+                ? "This controlled experiment has reached its allowed number of send attempts."
                 : !campaign.experimentRun.profile.senderScopes.some(
                       (scope) => scope.senderIdentityId === sender.id,
                     )
-                  ? "Campaign sender is outside the approved experiment scope."
+                  ? "This campaign\'s From address is not approved for the controlled experiment."
                   : null
     : null;
   const senderBlock = poolSenders.some(
     (poolSender) => poolSender.authorizedDomain.status === "VERIFIED",
   )
     ? null
-    : "No enabled verified sending domain remains in this campaign pool.";
+    : "None of the selected sending domains is currently available.";
   const campaignBlockReason =
     experimentBlock ??
     senderBlock ??
     safety?.pausedReason ??
     (commonSafetyBlock
-      ? "A shared account or campaign 24-hour safety budget is currently full."
+      ? "The 24-hour sending limit for this account or campaign has been reached."
       : commonMonthlyBlock
-        ? "The shared account monthly safety budget is currently full."
+        ? "The monthly sending limit for this account has been reached."
         : null);
 
   const rows = providerScopes.map(
@@ -308,27 +308,27 @@ export async function campaignProviderStatus(
       const unavailableReason = campaignBlockReason
         ? campaignBlockReason
         : domainRemaining !== null && domainRemaining < cost
-          ? `${domain} has reached its shared 24-hour safety capacity.`
+          ? `${domain} has reached its 24-hour sending limit.`
           : domainMonthlyRemaining !== null && domainMonthlyRemaining < cost
-            ? `${domain} has reached its shared monthly safety capacity.`
+            ? `${domain} has reached its monthly sending limit.`
             : streamType(provider.settings) === "transactional"
-            ? "Transactional-only stream is not campaign eligible."
+            ? "This connection is configured for test/transactional mail, not campaigns."
             : needsInlineTransport && !supportsInlineAttachmentTransport(provider)
               ? "Provider transport does not support this campaign's inline CID assets."
               : !provider.enabled
-                ? "Provider is disabled."
+                ? "This sending service is turned off."
                 : provider.health !== "HEALTHY"
-                  ? `Provider health is ${provider.health.toLowerCase().replaceAll("_", " ")}.`
+                  ? `This sending service is unavailable (${provider.health.toLowerCase().replaceAll("_", " ")}).`
                   : provider.cooldownUntil && provider.cooldownUntil.getTime() > now
-                    ? "Provider is cooling down."
+                    ? "This sending service is temporarily paused."
                     : provider.quotaRemaining !== null &&
                         provider.quotaRemaining < cost
-                      ? "Provider quota is below one message unit."
+                      ? "This sending service has no remaining provider quota for another email."
                       : safetyRemaining !== null && safetyRemaining < cost
-                        ? "Provider daily safety budget is currently full."
+                        ? "This sending service has reached its 24-hour limit."
                         : monthlySafetyRemaining !== null &&
                             monthlySafetyRemaining < cost
-                          ? "Provider monthly safety budget is currently full."
+                          ? "This sending service has reached its monthly limit."
                           : null;
       return {
         ...pacing,
