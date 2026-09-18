@@ -384,7 +384,6 @@ export function ImageBlast() {
                           },
                         },
                       },
-                      MenuListProps: { sx: { py: 0.5 } },
                     },
                   },
                 }}
