@@ -14,6 +14,14 @@ The pump enqueues at most 250 delivery IDs at a time. Worker concurrency is boun
 
 Pause and cancel serialize with claims through the same campaign row lock. Pause stops new claims. Cancel changes only unclaimed deliveries. In-flight attempts retain their actual result. Cancelling during preparation continues materializing cancelled recipient rows so the exported total remains truthful.
 
+## Image-first campaign path
+
+The dedicated `/blast/image` composer is a product/UI path, not a second delivery system. It prepares a normal campaign payload whose primary visual is an inline CID attachment referenced by the generated HTML.
+
+The composer requires meaningful alt text, uses that text as the plain-text fallback, allows an optional HTTP(S) destination around the image, and can include ordinary file attachments alongside the inline primary image. Image-first campaigns also support scheduling, tags, CC/BCC, optional click tracking, controlled test sends, and selection of one or more verified sending domains.
+
+Pre-flight remains authoritative for recipient readiness, sender/domain authorization, provider eligibility, message/attachment validation and embedded-image compatibility. After campaign creation, Image-first and standard campaigns use the same PostgreSQL campaign/delivery records, BullMQ worker pipeline, provider selection, pacing/concurrency/safety controls, transport-attempt semantics, authenticated delivery events, Activity surface, and UNKNOWN duplicate-prevention boundary.
+
 ## Delivery semantics
 
 A provider HTTP/SMTP success means `PROVIDER_ACCEPTED`. Only authenticated events establish `DELIVERED`. Hard bounce, complaint and unsubscribe suppression take precedence over late positive notifications. Provider-owned deferrals never requeue an already accepted message.
