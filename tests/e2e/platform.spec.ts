@@ -195,7 +195,7 @@ test("login, provider setup, HTML import, preview, test, campaign controls, reco
     .getByRole("button", { name: "Send Test Email", exact: true })
     .click();
   await expect(
-    page.getByText("Provider accepted the test", { exact: true }),
+    page.getByText("The sending service accepted the test email", { exact: true }),
   ).toBeVisible();
   await page.getByRole("button", { name: "Close", exact: true }).click();
   await page.screenshot({
