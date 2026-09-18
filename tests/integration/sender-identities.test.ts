@@ -450,3 +450,99 @@ test("domain-first preflight combines only providers authorized for the selected
   );
   assert.equal(betaFlight.safety.availableUnits, 25);
 });
+
+
+test("multi-domain campaign drops an unavailable domain and continues through a healthy route", async () => {
+  const user = await userFixture("multi-domain-failover");
+  const alphaProvider = await saveProvider(user.id, {
+    name: "Alpha route",
+    type: "mock",
+    transport: "api",
+    settings: {
+      fromEmail: "info@alpha-pool.example",
+      senderDomain: "alpha-pool.example",
+      senderAliases: ["info", "support"],
+    },
+    credentials: {},
+    dailyBudget: 100,
+    monthlyBudget: 1000,
+    perSecond: 100,
+    perMinute: 6000,
+    concurrency: 10,
+  });
+  const betaProvider = await saveProvider(user.id, {
+    name: "Beta route",
+    type: "mock",
+    transport: "api",
+    settings: {
+      fromEmail: "hello@beta-pool.example",
+      senderDomain: "beta-pool.example",
+      senderAliases: ["hello", "news"],
+    },
+    credentials: {},
+    dailyBudget: 100,
+    monthlyBudget: 1000,
+    perSecond: 100,
+    perMinute: 6000,
+    concurrency: 10,
+  });
+  assert(alphaProvider && betaProvider);
+  const catalog = await listSenders(user.id);
+  const alpha = catalog.domains.find(
+    (domain) => domain.domain === "alpha-pool.example",
+  )!;
+  const beta = catalog.domains.find(
+    (domain) => domain.domain === "beta-pool.example",
+  )!;
+  const imported = await importRecipients(
+    user.id,
+    Buffer.from("one@example.net\ntwo@example.net\nthree@example.net"),
+    "multi-domain.txt",
+  );
+  const input = {
+    name: "Multi-domain failover",
+    senderDomainIds: [alpha.id, beta.id],
+    importId: imported.id,
+    subject: "Pool",
+    html: "<p>Pool.</p>",
+    startKey: crypto.randomUUID(),
+  };
+  const flight = await preflight(user.id, input);
+  assert(flight.ready);
+  assert.equal(flight.sender.domainCount, 2);
+  assert.deepEqual(new Set(flight.sender.domains), new Set([
+    "alpha-pool.example",
+    "beta-pool.example",
+  ]));
+  assert.deepEqual(
+    new Set(flight.providers.map((provider) => provider.id)),
+    new Set([alphaProvider.id, betaProvider.id]),
+  );
+
+  const campaign = await createCampaign(user.id, input);
+  await prepareCampaign(campaign.id);
+  await db.providerConnection.update({
+    where: { id: alphaProvider.id },
+    data: { enabled: false, health: "DISABLED" },
+  });
+  const deliveries = await db.delivery.findMany({
+    where: { campaignId: campaign.id },
+    orderBy: { id: "asc" },
+  });
+  for (const delivery of deliveries)
+    await processDelivery(delivery.id, async () => ({
+      status: "accepted" as const,
+      providerMessageId: crypto.randomUUID(),
+    }));
+  const attempts = await db.deliveryAttempt.findMany({
+    where: {
+      userId: user.id,
+      delivery: { campaignId: campaign.id },
+      transmissionStartedAt: { not: null },
+    },
+    select: { providerId: true, senderDomain: true },
+  });
+  assert.equal(attempts.length, 3);
+  assert(attempts.every((attempt) => attempt.providerId === betaProvider.id));
+  assert(attempts.every((attempt) => attempt.senderDomain === "beta-pool.example"));
+});
