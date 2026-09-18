@@ -21,6 +21,10 @@ type ProviderRow = {
   unavailableReason: string | null;
   quotaRemaining: number | null;
   safetyRemaining: number | null;
+  monthlySafetyRemaining: number | null;
+  monthlyUsed: number;
+  monthlyLimit: number | null;
+  domain: string;
 };
 
 type ProviderStatus = {
@@ -85,14 +89,14 @@ export function ActivityProviderStatus() {
               Live provider availability
             </Typography>
             <Typography variant="caption" color="text.secondary">
-              Campaign scope, sender authorization, capability, quota and safety budget are applied before pacing chooses a transport slot.
+              Live provider + domain routes after authorization, 24-hour/monthly capacity, quota, cooldown and capability checks.
             </Typography>
           </Box>
         </Stack>
         <Chip
           size="small"
           sx={{ ml: { sm: "auto" } }}
-          label={`${status.eligibleProviderCount} of ${status.scopedProviderCount} eligible`}
+          label={`${status.eligibleProviderCount} of ${status.scopedProviderCount} routes eligible`}
         />
       </Stack>
 
@@ -108,7 +112,7 @@ export function ActivityProviderStatus() {
         <Stack spacing={1}>
           {status.providers.map((provider) => (
             <Box
-              key={provider.id}
+              key={`${provider.id}:${provider.domain}`}
               sx={{ py: 1.25, borderTop: 1, borderColor: "divider" }}
             >
               <Stack
@@ -117,10 +121,24 @@ export function ActivityProviderStatus() {
               >
                 <Box sx={{ minWidth: 0, flex: 1 }}>
                   <Typography sx={{ fontSize: 13, fontWeight: 650 }}>
-                    {provider.name}
+                    {provider.name} · {provider.domain}
                   </Typography>
                   <Typography variant="caption" color="text.secondary">
                     Configured {provider.configuredPerMinute.toLocaleString()}/min · effective {provider.effectivePerMinute.toLocaleString()}/min
+                  </Typography>
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    sx={{ display: "block", mt: 0.25 }}
+                  >
+                    Daily remaining{" "}
+                    {provider.safetyRemaining === null
+                      ? "unbounded"
+                      : provider.safetyRemaining.toLocaleString()}{" "}
+                    · Month{" "}
+                    {provider.monthlyLimit === null
+                      ? "unbounded"
+                      : `${provider.monthlyUsed.toLocaleString()} / ${provider.monthlyLimit.toLocaleString()}`}
                   </Typography>
                   {provider.unavailableReason && (
                     <Typography
