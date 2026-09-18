@@ -1,5 +1,10 @@
 "use client";
 import { SafetyMetrics, type SafetySummary } from "./sending-safety";
+import { SavedCampaigns } from "./saved-campaigns";
+import { ActivityPacing } from "./activity-pacing";
+import { ActivityExperiment } from "./activity-experiment";
+import { ActivityExperimentEvidence } from "./activity-experiment-evidence";
+import { ActivityProviderStatus } from "./activity-provider-status";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import {
@@ -321,6 +326,11 @@ export function Activity() {
           </Stack>
         }
       />
+      <SavedCampaigns />
+      <ActivityPacing />
+      <ActivityExperiment />
+      <ActivityExperimentEvidence />
+      <ActivityProviderStatus />
       <Failure error={error} />
       {loading ? (
         <Loading />
