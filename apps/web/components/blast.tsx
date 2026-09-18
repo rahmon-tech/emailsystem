@@ -282,9 +282,16 @@ export function Blast() {
       <PageTitle
         title="Blast"
         description="Prepare, preview, and launch your next email."
+        inlineAction
         action={
-          <Button component={Link} href="/blast/image" variant="outlined">
-            Image-first mode
+          <Button
+            component={Link}
+            href="/blast/image"
+            variant="outlined"
+            size="small"
+            sx={{ whiteSpace: "nowrap" }}
+          >
+            Image-first
           </Button>
         }
       />
@@ -304,12 +311,12 @@ export function Blast() {
             xs: "1fr",
             lg: "minmax(0,1.15fr) minmax(0,1fr)",
           },
-          gap: 2.5,
+          gap: 2,
           alignItems: "start",
         }}
       >
-        <Stack spacing={2.5}>
-          <Card sx={{ p: { xs: 2, sm: 2.5 } }}>
+        <Stack spacing={2}>
+          <Card sx={{ p: { xs: 1.75, sm: 2.25 } }}>
             <Stack
               direction="row"
               spacing={1.5}
@@ -477,7 +484,7 @@ export function Blast() {
               )}
             </Collapse>
           </Card>
-          <Card sx={{ p: { xs: 2, sm: 2.5 } }}>
+          <Card sx={{ p: { xs: 1.75, sm: 2.25 } }}>
             <Stack
               direction="row"
               spacing={1.5}
@@ -492,7 +499,7 @@ export function Blast() {
               </Typography>
               <Typography variant="h6">Message</Typography>
             </Stack>
-            <Stack spacing={2.5}>
+            <Stack spacing={2}>
               <TextField
                 label="Campaign name"
                 value={form.name}
@@ -951,7 +958,7 @@ export function Blast() {
           <Card
             component="section"
             aria-label="Pre-flight"
-            sx={{ p: { xs: 2, sm: 2.5 } }}
+            sx={{ p: { xs: 1.75, sm: 2.25 } }}
           >
             <Stack spacing={2}>
               <Stack direction="row" sx={{ alignItems: "center", gap: 1.5 }}>
