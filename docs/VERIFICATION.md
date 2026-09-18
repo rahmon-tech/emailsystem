@@ -1,18 +1,18 @@
 # Implementation and verification report
 
-This report separates repository/CI evidence from provider-account evidence and deployment-host evidence. A green CI run does not prove live provider credentials, inbox placement, DNS/TLS/webhook reachability or VPS installation.
+This report separates repository/CI proof from live provider and deployment-host proof.
 
-## Published assembled checkpoint
+## Current published checkpoint
 
 Published `main` is exactly:
 
-`5ea40e51cbbc7848b02c3945d064e0c7e86ce580`
+`128ba739299db8e3caad3599df9dd7dddfe437c6`
 
-The former #78 → #79 → #82 → #83 → #84 stack was published by non-forced fast-forward from `ce87caa214f60247cb06a0089dcd405ed719b855`. Commit comparison was ahead-only, so the already-verified implementation ancestry was preserved.
+PR #87 introduced the final domain-first sender/provider/capacity/mobile-UX reconciliation.
 
-Quality #345 / run `35284283698` was triggered by the `main` publication push and passed completely on that exact SHA.
+Quality #383 passed on the exact PR head. Push-triggered Quality #384 / run `35333756671` then passed on the exact same published `main` SHA.
 
-It passed:
+The successful pipeline covered:
 
 - locked dependency installation;
 - high/critical production dependency audit;
@@ -31,109 +31,50 @@ It passed:
 - production-container validation;
 - diagnostics/artifact handling and teardown.
 
-This is the final repository/CI development acceptance checkpoint for the assembled published state.
+## Verified domain-first behavior
 
-## Published milestone history
+Repository tests now prove:
 
-The final Activity/evidence/documentation slices are now contained in `main`:
+- provider configuration owns a sending domain and a bounded alias pool;
+- provider connection daily/monthly capacity is persisted and enforced;
+- multiple eligible connections on the same selected domain contribute capacity independently;
+- providers authorized only for another domain do not leak into that domain's campaign pool;
+- shared account/domain/campaign ceilings can impose stricter limits but are blank by default;
+- sender-domain short-window pacing coordinates the aggregate eligible connection rate rather than collapsing all connections to the lowest sibling limit;
+- warm-up/adaptive pressure can still lower effective pace;
+- non-experiment delivery alias assignment is deterministic per delivery and retries keep a stable assignment;
+- alias selection never widens provider authorization;
+- address-specific authorization cannot be bypassed by another alias;
+- experiment-bound campaigns remain pinned to their approved sender identity;
+- recipient-import menus have bounded independent scrolling;
+- touch/mobile editor text and toolbar behavior avoid focus zoom/width wobble;
+- standard Blast and Image-first use the same domain-first sending contract.
 
-### PR #78 — experiment configuration and operator control
+## Delivery truth
 
-Exact head: `e135ad5a196d5a67d65b8d475f53eef2e4f4da48`
+Generic SMTP verification proves DNS/TLS/authentication and server acceptance capability only. Without a provider-specific event source, final delivery remains unconfirmed.
 
-Quality #319 / run `35239476640` passed fully.
+Provider webhooks/events remain the authoritative path for delivery/bounce/complaint confirmation where supported. A green repository test does not prove that a real provider account currently has working credentials, verified sender/domain state, production quota or reachable webhook configuration.
 
-### PR #79 — minimized Activity evidence review
+## Deployment truth
 
-Exact head: `0cd6e8ac24901cff948e88015d41b0fcc3a993ef`
+The last recorded VPS checkpoint predates this published release and used the native/systemd runtime in `/opt/emailblast`.
 
-Quality #320 passed fully.
+That checkpoint showed:
+- `emailblast-web.service` and `emailblast-worker.service` active;
+- web listening on loopback port 3087 after startup;
+- PostgreSQL reachable at `127.0.0.1:55432`;
+- migrations applied;
+- readiness returning `{"status":"ready"}`.
 
-### PR #82 — canonical checkpoint reconciliation
-
-Exact head: `c4fc22e56f906ab4f8811ace783a77ee8d16d0fd`
-
-Quality #328 / run `35264063476` passed fully.
-
-### PR #83 — bounded Activity evidence verification
-
-Exact head: `93e35f5125d3ec212565bc2d6d5b07ffc2aea333`
-
-Quality #342 / run `35267311307` passed fully.
-
-The normal 10-second Activity evidence refresh uses bounded/index-supported summary reads and does not take the experiment transport/control lock. Authoritative full-chain verification is operator-explicit. Tenant/privacy/tamper proof remains intact, and campaign-keyed state prevents stale overlapping verification responses from contaminating another campaign.
-
-### PR #84 — final pre-publication canonical documentation reconciliation
-
-Exact head: `5ea40e51cbbc7848b02c3945d064e0c7e86ce580`
-
-Quality #344 / run `35280902536` passed fully before publication. The same exact commit is now published `main`, and push-triggered Quality #345 passed fully afterward.
-
-## Verified product boundaries
-
-The repository has CI proof for:
-
-- tenant-scoped provider credentials/configuration models, sender identities and provider-domain authorization logic;
-- imports, immutable campaign snapshots, scheduling, campaign preparation and background dispatch;
-- weighted/fair provider selection plus provider quotas/rates/concurrency and shared account/domain/campaign ceilings;
-- warm-up profiles, adaptive slowdown, durable pressure reconstruction and gradual recovery;
-- provider `Retry-After` parsing, delivery retry timing, provider cooldown and Activity `nextAllowedAt` visibility;
-- fail-closed provider policy/enforcement handling;
-- suppression/unsubscribe and complaint/hard-bounce safety brakes;
-- truthful provider acceptance versus downstream-delivery state;
-- tracking/privacy/reputation controls and structured redacted observability;
-- ordinary HTML/text + attachment/CID semantics and Image-first behavior through the existing message path;
-- authorized experiment profiles/runs, bounded scope/windows/usage, kill switch and transport-start checks;
-- run-wide experiment concurrency, smooth pacing and bounded-burst pacing;
-- explicit UTF-8/transfer-encoding controls where deterministic raw-MIME ownership exists;
-- deterministic `cid-inline` runtime binding and deterministic `html` snapshot evidence;
-- run-start reproducibility evidence, temporary failover vs policy-stop proof and SHA-256 evidence export;
-- evidence/message retention with whole-ledger purge and sensitive terminal snapshot scrubbing;
-- Activity experiment summary/configuration/stop/evidence UX;
-- bounded live evidence review plus operator-explicit full-chain verification;
-- native bootstrap/preflight, Docker/standalone packaging and the full Quality workflow.
+The live host must still be re-inspected before applying this release. Repository CI does not prove current Nginx/TLS health, process state, backups, provider credentials or live webhooks.
 
 ## Intentionally unclaimed behavior
 
-`text`, `hosted-image`, `attachment-only` and `image-dominant` remain experiment metadata only. They are not reported as effective runtime behavior because no separate deterministic existing owner has been proven for those labels without redesigning the message path.
+`text`, `hosted-image`, `attachment-only` and `image-dominant` remain experiment metadata only. They are not reported as effective runtime behavior without a deterministic existing runtime owner.
 
-Repository/CI verification also does **not** prove:
+## Acceptance boundary
 
-- any live provider credential is currently valid;
-- a provider account has a particular quota, permission, reputation or production state;
-- a sender/domain is currently verified at that provider;
-- provider acceptance equals inbox delivery;
-- DNS, TLS, webhooks or reverse proxy are reachable in the intended environment;
-- PostgreSQL/Redis persistence and backups are correctly installed on the target host;
-- web/worker process supervision is correctly configured on the target host;
-- a real recipient/provider smoke test has passed.
+Development/publication acceptance is satisfied by exact published `main` SHA `128ba739299db8e3caad3599df9dd7dddfe437c6` and push-triggered Quality #384 / run `35333756671`.
 
-## Development acceptance boundary
-
-The development/publication acceptance boundary is satisfied by exact published `main` SHA `5ea40e51cbbc7848b02c3945d064e0c7e86ce580` and push-triggered Quality #345 / run `35284283698`.
-
-Further repository feature work should be driven by a new product requirement or a concrete defect, not by the old pre-publication checklist.
-
-## Deployment/provider acceptance boundary
-
-The next phase is environment-specific acceptance.
-
-The complete EmailSystem runtime is self-hosted web + independent worker + PostgreSQL + Redis. Vercel is not the acceptance target for the whole system.
-
-The real environment must verify:
-
-- Node/pnpm or Docker prerequisites;
-- PostgreSQL and Redis persistence;
-- migrations and restore/rollback procedure;
-- web + worker process supervision/restart;
-- reverse proxy/TLS/base path;
-- production secrets/provider credentials;
-- sender/domain authorization;
-- authenticated webhook reachability;
-- health/readiness;
-- logging/monitoring;
-- backups/restore;
-- provider-account quota/permission reality;
-- a small controlled legitimate smoke test.
-
-See `CURRENT_WORK.md`, `DELIVERY_CONTROL_PLANE.md`, `PROVIDERS.md`, `DEPLOYMENT.md`, `ARCHITECTURE.md` and `SECURITY.md` for the governing boundaries.
+The remaining work is live environment/provider acceptance: update the existing native/systemd installation, verify persistence/migrations/process supervision/reverse proxy/TLS/readiness, then verify real provider/domain/webhook behavior with a tightly controlled legitimate smoke test.
