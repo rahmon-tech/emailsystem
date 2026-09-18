@@ -598,13 +598,75 @@ export async function prepareCampaign(id: string) {
 export async function controlCampaign(
   userId: string,
   id: string,
-  action: "pause" | "resume" | "cancel",
+  action: "pause" | "resume" | "cancel" | "retry",
 ) {
   return db.$transaction(async (tx) => {
     await lockSafety(tx, userId);
     await lockCampaign(tx, id, userId);
     const c = await tx.campaign.findFirst({ where: { id, userId } });
     if (!c) throw new AppError(404, "NOT_FOUND", "Campaign not found.");
+    if (action === "retry") {
+      if (c.experimentRunId)
+        throw new AppError(
+          409,
+          "EXPERIMENT_STATE",
+          "Experiment-bound campaigns cannot be manually retried outside their approved run.",
+        );
+      if (!["FAILED", "COMPLETED_WITH_ERRORS"].includes(c.state))
+        throw new AppError(
+          409,
+          "STATE",
+          "Retry failed is available only after a campaign finishes with failed recipients.",
+        );
+      const user = await tx.user.findUniqueOrThrow({ where: { id: userId } });
+      if (user.safetyPausedReason || c.safetyPausedReason)
+        throw new AppError(
+          409,
+          "SAFETY_REVIEW",
+          "Administrator safety review is required before retrying failed recipients.",
+        );
+      const failed = await tx.delivery.count({
+        where: { campaignId: id, userId, state: "FAILED" },
+      });
+      if (!failed)
+        throw new AppError(
+          409,
+          "STATE",
+          "This campaign has no definitively failed recipients to retry.",
+        );
+      await tx.delivery.updateMany({
+        where: { campaignId: id, userId, state: "FAILED" },
+        data: {
+          state: "DEFERRED",
+          nextAttemptAt: new Date(),
+          safeError: null,
+          claimId: null,
+          claimedAt: null,
+        },
+      });
+      const updated = await tx.campaign.update({
+        where: { id },
+        data: {
+          state: "QUEUED",
+          completedAt: null,
+          safeError: null,
+          safetyWaitUntil: null,
+          safetyWaitReason: null,
+        },
+      });
+      await tx.auditEvent.create({
+        data: { userId, action: "campaign.retry", resourceId: id },
+      });
+      await tx.activityEvent.create({
+        data: {
+          userId,
+          campaignId: id,
+          kind: "QUEUED",
+          message: `${failed} definitively failed recipient${failed === 1 ? "" : "s"} requeued. Unknown and already accepted outcomes were left untouched.`,
+        },
+      });
+      return updated;
+    }
     if (action === "resume") {
       const user = await tx.user.findUniqueOrThrow({ where: { id: userId } });
       if (user.safetyPausedReason || c.safetyPausedReason)
@@ -612,16 +674,6 @@ export async function controlCampaign(
           409,
           "SAFETY_REVIEW",
           "Administrator safety review is required before resuming.",
-        );
-      if (
-        await tx.providerConnection.count({
-          where: { userId, health: "POLICY_BLOCKED" },
-        })
-      )
-        throw new AppError(
-          409,
-          "POLICY",
-          "Resolve the provider enforcement block before resuming.",
         );
       if (c.experimentRunId) {
         const run = await tx.experimentRun.findFirst({
