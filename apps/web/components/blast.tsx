@@ -61,8 +61,10 @@ type Flight = {
   tracking: { enabled: boolean; appUrl: string | null };
   sender: {
     id: string;
+    domainId: string;
     email: string;
     domain: string;
+    aliasCount: number;
     eligibleProviderCount: number;
   };
   reputation: { hostname: string; state: string }[];
@@ -98,6 +100,7 @@ export function Blast() {
     [editRecipients, setEditRecipients] = useState(false),
     [form, setForm] = useState({
       name: "",
+      senderDomainId: "",
       senderIdentityId: "",
       from: "",
       fromName: "",
@@ -162,25 +165,39 @@ export function Blast() {
           setProviders(p);
           setImports(i);
           setSenderCatalog(senderData);
-          const first = senderData.domains
-            .flatMap((domain) => domain.senders)
-            .find(
-              (sender) =>
-                sender.enabled && sender.availableProviderIds.length > 0,
-            );
-          if (first) {
+          const firstDomain = senderData.domains.find(
+            (domain) =>
+              domain.status === "VERIFIED" &&
+              domain.senders.some(
+                (sender) =>
+                  sender.enabled && sender.availableProviderIds.length > 0,
+              ),
+          );
+          const first = firstDomain?.senders.find(
+            (sender) =>
+              sender.enabled && sender.availableProviderIds.length > 0,
+          );
+          if (firstDomain && first) {
             setForm((s) =>
-              s.senderIdentityId
+              s.senderDomainId
                 ? s
                 : {
                     ...s,
+                    senderDomainId: firstDomain.id,
                     senderIdentityId: first.id,
                     from: first.email,
                     fromName: first.displayName,
                     replyTo: first.replyTo,
                   },
             );
-            setTestProvider(first.availableProviderIds[0] ?? "");
+            const domainProviders = [
+              ...new Set(
+                firstDomain.senders.flatMap(
+                  (sender) => sender.availableProviderIds,
+                ),
+              ),
+            ];
+            setTestProvider(domainProviders[0] ?? "");
           }
         }
       })
@@ -242,24 +259,42 @@ export function Blast() {
     });
   };
   const selected = imports.find((i) => i.id === importId);
-  const hasEligibleSender = senderCatalog?.domains.some((domain) =>
-    domain.senders.some(
-      (sender) => sender.enabled && sender.availableProviderIds.length > 0,
-    ),
-  );
+  const eligibleDomains =
+    senderCatalog?.domains
+      .map((domain) => {
+        const senders = domain.senders.filter(
+          (sender) => sender.enabled && sender.availableProviderIds.length > 0,
+        );
+        return {
+          ...domain,
+          senders,
+          providerIds: [
+            ...new Set(senders.flatMap((sender) => sender.availableProviderIds)),
+          ],
+        };
+      })
+      .filter(
+        (domain) => domain.status === "VERIFIED" && domain.senders.length > 0,
+      ) ?? [];
+  const hasEligibleSender = eligibleDomains.length > 0;
   return (
     <>
       <PageTitle
         title="Blast"
         description="Prepare, preview, and launch your next email."
+        action={
+          <Button component={Link} href="/blast/image" variant="outlined">
+            Image-first mode
+          </Button>
+        }
       />
       <Failure
         error={["preflight", "test", "send"].includes(errorAction) ? "" : error}
       />
       {loaded && !hasEligibleSender && (
         <Alert severity="info" sx={{ mb: 3 }}>
-          Verify a provider and sender identity before sending.{" "}
-          <Link href="/providers">Manage providers and senders</Link>
+          Verify a provider and sending domain before sending.{" "}
+          <Link href="/providers">Manage providers and aliases</Link>
         </Alert>
       )}
       <Box
@@ -411,6 +446,21 @@ export function Blast() {
                   select
                   label="Recipient import"
                   value={importId}
+                  slotProps={{
+                    select: {
+                      MenuProps: {
+                        slotProps: {
+                          paper: {
+                            sx: {
+                              maxHeight: 320,
+                              overscrollBehavior: "contain",
+                            },
+                          },
+                        },
+                        MenuListProps: { sx: { py: 0.5 } },
+                      },
+                    },
+                  }}
                   onChange={(e) => {
                     setImportId(e.target.value);
                     setEditRecipients(false);
@@ -452,41 +502,36 @@ export function Blast() {
               />
               <TextField
                 select
-                label="Sender identity"
-                value={form.senderIdentityId}
+                label="Sending domain"
+                value={form.senderDomainId}
                 onChange={(event) => {
-                  const sender = senderCatalog?.domains
-                    .flatMap((domain) => domain.senders)
-                    .find((item) => item.id === event.target.value);
-                  if (!sender) return;
+                  const domain = eligibleDomains.find(
+                    (item) => item.id === event.target.value,
+                  );
+                  const sender = domain?.senders[0];
+                  if (!domain || !sender) return;
                   setForm((current) => ({
                     ...current,
+                    senderDomainId: domain.id,
                     senderIdentityId: sender.id,
                     from: sender.email,
                     fromName: sender.displayName,
                     replyTo: sender.replyTo,
                   }));
-                  setTestProvider(sender.availableProviderIds[0] ?? "");
+                  setTestProvider(domain.providerIds[0] ?? "");
                   invalid();
                 }}
                 required
-                helperText="Only enabled identities with at least one eligible provider appear."
+                helperText="Aliases and eligible providers are handled automatically for the selected verified domain."
               >
-                {senderCatalog?.domains.flatMap((domain) =>
-                  domain.senders
-                    .filter(
-                      (sender) =>
-                        sender.enabled &&
-                        sender.availableProviderIds.length > 0,
-                    )
-                    .map((sender) => (
-                      <MenuItem key={sender.id} value={sender.id}>
-                        {sender.email} · {sender.availableProviderIds.length}{" "}
-                        provider
-                        {sender.availableProviderIds.length === 1 ? "" : "s"}
-                      </MenuItem>
-                    )),
-                )}
+                {eligibleDomains.map((domain) => (
+                  <MenuItem key={domain.id} value={domain.id}>
+                    {domain.domain} · {domain.senders.length} alias
+                    {domain.senders.length === 1 ? "" : "es"} ·{" "}
+                    {domain.providerIds.length} provider
+                    {domain.providerIds.length === 1 ? "" : "s"}
+                  </MenuItem>
+                ))}
               </TextField>
               <TextField
                 label="Subject"
@@ -510,9 +555,9 @@ export function Blast() {
                 <AccordionDetails>
                   <Stack spacing={2}>
                     <Typography variant="body2" color="text.secondary">
-                      Display name: {form.fromName || "None"} · Reply-to:{" "}
-                      {form.replyTo || "uses sender address"}. Edit these in
-                      Providers → Senders.
+                      Sender aliases, display names and Reply-To values are
+                      managed with the selected domain in Providers → Domains &
+                      aliases.
                     </Typography>
 
                     <FormControlLabel
@@ -1117,13 +1162,10 @@ export function Blast() {
             >
               {providers
                 .filter((provider) => {
-                  const sender = senderCatalog?.domains
-                    .flatMap((domain) => domain.senders)
-                    .find((item) => item.id === form.senderIdentityId);
-                  return (
-                    provider.enabled &&
-                    !!sender?.availableProviderIds.includes(provider.id)
+                  const domain = eligibleDomains.find(
+                    (item) => item.id === form.senderDomainId,
                   );
+                  return provider.enabled && !!domain?.providerIds.includes(provider.id);
                 })
                 .map((p) => (
                   <MenuItem key={p.id} value={p.id}>
