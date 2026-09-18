@@ -512,17 +512,10 @@ export async function processDelivery(
           );
           return false;
         }
-        quotaPeers = all
-          .filter(
-            (p) =>
-              rateGroup(
-                p.userId,
-                p.id,
-                selectedSender!.email,
-                (p.settings as ConnectionInput["settings"]).region,
-              ) === candidate!.group,
-          )
-          .map((p) => p.id);
+        // Each connection owns its own provider allowance. The rate-group
+        // key already includes the chosen connection ID, so only that
+        // connection's remaining allowance is consumed.
+        quotaPeers = [chosen];
         await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${initial.userId + ":quota:" + candidate.group},0))::text`;
         if (
           await tx.providerConnection.count({
