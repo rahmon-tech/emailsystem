@@ -174,8 +174,9 @@ export async function preflight(userId: string, input: unknown) {
         from: data.from,
       });
   const sender = senderSelection.sender;
-  const poolSenders =
-    "senders" in senderSelection ? senderSelection.senders : [sender];
+  const poolSenders = data.senderDomainId
+    ? (senderSelection as Awaited<ReturnType<typeof resolveSenderDomain>>).senders
+    : [sender];
   const providerPool =
     data.experimentRunId && data.senderDomainId
       ? (
