@@ -88,13 +88,14 @@ const theme = createTheme({
     MuiPaper: { defaultProps: { elevation: 0 } },
     MuiCard: {
       styleOverrides: {
-        root: ({ theme }) => ({
-          border: `1px solid ${theme.palette.divider}`,
-          boxShadow: "0 2px 4px rgb(22 31 49 / 2%)",
+        root: {
+          border: 0,
+          boxShadow:
+            "0 1px 2px rgb(22 31 49 / 4%), 0 6px 20px rgb(22 31 49 / 3%)",
           overflow: "hidden",
           minWidth: 0,
           maxWidth: "100%",
-        }),
+        },
       },
     },
     MuiAccordion: {
