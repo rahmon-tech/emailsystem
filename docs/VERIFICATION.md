@@ -1,81 +1,104 @@
-# Implementation and verification report
+# Verification and release checks
 
-This report separates repository/CI proof from live provider and deployment-host proof.
+EmailSystem separates repository verification from live-provider and production-host verification.
 
-## Current published checkpoint
+A green CI run proves that the selected source tree passed the automated repository checks. It does not prove that a third-party provider account, DNS record, TLS certificate, production database, or live webhook is currently healthy.
 
-Published `main` is exactly:
+## Continuous integration
 
-`4b33adaa24cff03940ffddd2642b2a170481d844`
-
-PR #89 introduced multi-domain campaign pools, route-aware failover/capacity, safer retry/resume behavior and the user-first mobile/provider/Activity UX reconciliation.
-
-Quality #455 / run `35363742131` passed on the exact merged `main` SHA.
-
-The successful pipeline covered:
+The GitHub Actions workflow verifies:
 
 - locked dependency installation;
 - high/critical production dependency audit;
-- Prisma generation;
-- fresh PostgreSQL migrations;
-- migration/schema drift verification;
+- Prisma client generation;
+- migrations against a fresh PostgreSQL database;
+- migration/schema drift;
 - upgrade rehearsal;
-- lint;
-- repository secret scan;
-- strict TypeScript;
+- source linting;
+- current-tree and Git-history secret scanning;
+- strict TypeScript checks;
 - unit tests;
 - PostgreSQL/Redis integration tests;
 - production Next.js build;
-- Playwright Chromium/browser E2E;
-- screenshot/visual review emission;
-- production-container validation;
-- diagnostics/artifact handling and teardown.
+- Playwright browser E2E;
+- screenshot/visual-review generation;
+- production container build/startup;
+- readiness checks and diagnostics.
 
-## Verified sending-pool behavior
+The workflow uses isolated PostgreSQL/Redis services and development/mock provider behavior where appropriate. It never claims live inbox delivery.
 
-Repository tests now prove:
+## Local verification
 
-- provider configuration owns a sending domain and bounded From-address pool;
-- standard and Image-first campaigns can select multiple verified domains while preserving single-domain compatibility;
-- only currently viable domain/From-address/sending-service routes enter the active campaign pool;
-- disabled or terminally broken connections can be skipped while healthy selected routes continue;
-- controlled experiments remain pinned to their approved sender and fail closed on provider policy enforcement;
-- provider connection daily/monthly capacity is persisted and enforced;
-- independent eligible connections contribute configured capacity additively;
-- shared account/domain/campaign rolling-24-hour and monthly ceilings can impose stricter limits;
-- live resume/retry checks use current route availability rather than stale campaign assumptions;
-- manual retry requeues only definitively FAILED deliveries and leaves UNKNOWN/already accepted outcomes untouched;
-- address-specific authorization cannot be widened through another From address;
-- recipient/menu dropdowns use bounded independent scrolling on mobile;
-- the mobile workspace header remains sticky;
-- user-facing web copy is regression-tested against internal system-oriented terminology;
-- provider delivery-update setup supports the URL-first, signing-key-second flow.
+Install locked dependencies first:
 
-## Delivery truth
+```sh
+corepack enable
+corepack prepare pnpm@11.19.0 --activate
+pnpm install --frozen-lockfile
+```
 
-Generic SMTP verification proves DNS/TLS/authentication and server acceptance capability only. Without a provider-specific event source, final delivery remains unconfirmed.
+Run static and unit checks:
 
-Provider webhooks/events remain the authoritative path for delivery/bounce/complaint confirmation where supported. A green repository test does not prove that a real provider account currently has working credentials, verified sender/domain state, production quota or reachable webhook configuration.
+```sh
+pnpm audit:prod
+pnpm db:generate
+pnpm lint
+pnpm secrets:scan
+pnpm secrets:scan:history
+pnpm typecheck
+pnpm test
+```
 
-## Deployment truth
+Integration tests require an isolated database whose name clearly identifies it as a test database, plus Redis:
 
-The last recorded VPS checkpoint predates this published release and used the native/systemd runtime in `/opt/emailblast`.
+```sh
+pnpm db:migrate
+ALLOW_MOCK_PROVIDER=true pnpm test:integration
+```
 
-That checkpoint showed:
-- `emailblast-web.service` and `emailblast-worker.service` active;
-- web listening on loopback port 3087 after startup;
-- PostgreSQL reachable at `127.0.0.1:55432`;
-- migrations applied;
-- readiness returning `{"status":"ready"}`.
+Build and browser verification:
 
-The live host must still be re-inspected before applying this release. Repository CI does not prove current Nginx/TLS health, process state, backups, provider credentials or live webhooks.
+```sh
+pnpm build
+ALLOW_MOCK_PROVIDER=true pnpm test:e2e
+```
 
-## Intentionally unclaimed behavior
+## Delivery-state verification
 
-`text`, `hosted-image`, `attachment-only` and `image-dominant` remain experiment metadata only. They are not reported as effective runtime behavior without a deterministic existing runtime owner.
+Repository tests verify the distinction between:
 
-## Acceptance boundary
+- queued work;
+- transport start;
+- provider acceptance/rejection;
+- unknown transport outcome;
+- authenticated delivery/bounce/complaint events;
+- final durable delivery state.
 
-Development/publication acceptance is satisfied by exact published `main` SHA `4b33adaa24cff03940ffddd2642b2a170481d844` and Quality #455 / run `35363742131`.
+Generic SMTP acceptance is not treated as proof of mailbox delivery. Confirmed delivery requires an authoritative provider event or another explicitly supported downstream signal.
 
-The remaining work is live environment/provider acceptance: update the existing native/systemd installation, verify persistence/migrations/process supervision/reverse proxy/TLS/readiness, then verify real sending-domain/delivery-update behavior with a tightly controlled legitimate smoke test.
+## Release acceptance
+
+Before publishing or deploying a release:
+
+1. select the exact commit SHA;
+2. require a green CI run for that SHA;
+3. review migrations and environment changes;
+4. back up the production database and protected keys;
+5. deploy the exact verified SHA;
+6. restart web and worker processes together;
+7. verify local and public liveness/readiness;
+8. verify provider/webhook configuration with controlled test recipients when live acceptance is required.
+
+## What CI does not prove
+
+Automated repository verification cannot prove:
+
+- provider account permissions or quota;
+- sender/domain DNS verification;
+- provider production-access approval;
+- external webhook reachability from a specific provider account;
+- reverse-proxy/TLS correctness on an unseen host;
+- inbox placement;
+- compliance with an operator's recipient-consent obligations.
+
+Those remain environment-specific operational checks.
