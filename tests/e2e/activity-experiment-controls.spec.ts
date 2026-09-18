@@ -99,14 +99,14 @@ test("Activity shows approved experiment configuration and can stop the bound ru
     const card = page.getByRole("region", { name: "Controlled experiment" });
     await expect(card).toBeVisible();
     await expect(card.getByText("Sending pattern: steady", { exact: true })).toBeVisible();
-    await expect(card.getByText("Send interval: 2s", { exact: true })).toBeVisible();
+    await expect(card.getByText("Time between sends: 2s", { exact: true })).toBeVisible();
     await expect(card.getByText("Emails at once: 2", { exact: true })).toBeVisible();
     await expect(
-      card.getByText("Email encoding: provider default", { exact: true }),
+      card.getByText("Email format: Automatic", { exact: true }),
     ).toBeVisible();
-    await expect(card.getByText("Text format: UTF-8", { exact: true })).toBeVisible();
+    await expect(card.getByText("Character support: UTF-8", { exact: true })).toBeVisible();
     await expect(
-      card.getByText("Message type: html", { exact: true }),
+      card.getByText("Message type: HTML email", { exact: true }),
     ).toBeVisible();
     await expect(page.getByText("controlled-controls@example.net")).toHaveCount(0);
 
