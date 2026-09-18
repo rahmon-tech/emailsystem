@@ -345,21 +345,19 @@ Read the full [architecture documentation](docs/ARCHITECTURE.md).
 
 ```text
 apps/
-  web/                  Next.js application
-  worker/               background worker
+  web/                  Next.js application and HTTP/UI surface
+  worker/               background BullMQ worker
 
 packages/
-  core/                 delivery and campaign business logic
-  db/                   Prisma schema and database access
-  providers/            provider catalog and transports
-  email/                rendering and email processing
-  queue/                queue and coordination helpers
-  config/               shared configuration
+  core/                 campaign, delivery, safety and domain logic
+  db/                   Prisma schema, generated client and migrations
+  providers/            provider catalog, verification, API/SMTP adapters
+  email-renderer/       HTML normalization, rendering and message snapshots
 
-docs/                   architecture, security and operations
-deploy/                 reverse-proxy examples
-scripts/                bootstrap, verification and maintenance
-tests/                  unit, integration and browser tests
+docs/                   architecture, providers, security and operations
+deploy/                 Caddy and Nginx reverse-proxy examples
+scripts/                bootstrap, maintenance, verification and release helpers
+tests/                  unit, PostgreSQL/Redis integration and browser E2E tests
 ```
 
 ---
@@ -536,24 +534,520 @@ Read [Verification](docs/VERIFICATION.md) for the boundary between repository pr
 
 ---
 
-## Production deployment
+## Production installation
 
-EmailBlast supports two production models.
+EmailBlast can be deployed in three practical ways:
 
-### Docker Compose
+| Installation | Best for | What EmailBlast manages |
+| --- | --- | --- |
+| **Docker Compose + built-in Caddy** | New dedicated VPS | web, worker, PostgreSQL, Redis, HTTPS proxy |
+| **Docker Compose + existing proxy** | VPS already running Nginx/Caddy/other apps | web, worker, PostgreSQL, Redis; your existing proxy stays in control |
+| **Native VPS / no Docker** | Hosts where you prefer system packages + systemd | Node web/worker processes; PostgreSQL/Redis/proxy are installed on the host |
 
-Recommended for a dedicated installation where EmailBlast owns its application stack.
+For every production installation, point a domain/subdomain at the VPS first and keep ports **80/443** available to the HTTPS proxy.
 
-### Native / systemd
+### Option A — Docker Compose on a fresh VPS
 
-Useful when PostgreSQL, Redis, reverse proxying, and service supervision are already managed by an existing server.
+This is the simplest complete installation because the repository already defines PostgreSQL 17, Redis 7.4, web, worker, persistent volumes, and Caddy.
 
-Read:
+#### 1. Install Git and Docker
+
+Install Docker Engine with the Docker Compose plugin using Docker's official instructions for your Linux distribution. Confirm:
+
+```sh
+git --version
+docker --version
+docker compose version
+```
+
+#### 2. Clone EmailBlast
+
+```sh
+git clone https://github.com/rahmon-tech/emailsystem.git
+cd emailsystem
+```
+
+For a release deployment, check out an exact CI-verified commit instead of relying on a moving branch:
+
+```sh
+git fetch origin main
+git checkout --detach <verified-release-sha>
+```
+
+#### 3. Generate the production environment
+
+The repository includes a production environment generator. It creates independent database, session, and credential-encryption secrets without printing them.
+
+For a root-domain install:
+
+```sh
+docker run --rm \
+  -u "$(id -u):$(id -g)" \
+  -v "$PWD:/app" \
+  -w /app \
+  node:24.19.0-bookworm-slim \
+  node --experimental-strip-types scripts/setup-env.ts mail.example.com
+```
+
+For a path-prefixed install such as `https://example.com/emailblast`:
+
+```sh
+docker run --rm \
+  -u "$(id -u):$(id -g)" \
+  -v "$PWD:/app" \
+  -w /app \
+  node:24.19.0-bookworm-slim \
+  node --experimental-strip-types scripts/setup-env.ts example.com /emailblast
+```
+
+The generated `.env` is mode `0600`. Keep an encrypted backup of it because `CREDENTIAL_ENCRYPTION_KEY` is required to decrypt saved provider credentials.
+
+#### 4. Validate and build
+
+```sh
+docker compose config --quiet
+docker compose build
+```
+
+#### 5. Start PostgreSQL and Redis
+
+```sh
+docker compose up -d postgres redis
+```
+
+Wait until both are healthy:
+
+```sh
+docker compose ps
+```
+
+#### 6. Apply database migrations
+
+```sh
+docker compose run --rm web \
+  node node_modules/prisma/build/index.js migrate deploy
+```
+
+#### 7. Create the first application user
+
+```sh
+docker compose run --rm -it web \
+  node --import tsx scripts/create-user.ts
+```
+
+The command asks for the account email and password interactively; the password is not placed in shell history.
+
+#### 8. Start the full stack
+
+```sh
+docker compose up -d --wait web worker proxy
+```
+
+Caddy obtains TLS automatically for the `DOMAIN` stored in `.env`.
+
+#### 9. Verify production health
+
+```sh
+curl --fail https://mail.example.com/health/live
+curl --fail https://mail.example.com/health/ready
+```
+
+For a path-prefixed install:
+
+```sh
+curl --fail https://example.com/emailblast/health/live
+curl --fail https://example.com/emailblast/health/ready
+```
+
+`live` proves the web process is responding. `ready` additionally verifies PostgreSQL, Redis, and a recent worker heartbeat.
+
+### Option B — Docker on a VPS that already has Nginx/Caddy
+
+Use this when the server already hosts other applications and you do **not** want EmailBlast's bundled Caddy to own ports 80/443.
+
+Generate `.env` as above, then use the shared-host Compose overlay:
+
+```sh
+docker compose -p emailblast \
+  -f compose.yaml \
+  -f compose.shared.yaml \
+  config --quiet
+
+docker compose -p emailblast \
+  -f compose.yaml \
+  -f compose.shared.yaml \
+  up -d postgres redis
+
+docker compose -p emailblast \
+  -f compose.yaml \
+  -f compose.shared.yaml \
+  run --rm web node node_modules/prisma/build/index.js migrate deploy
+
+docker compose -p emailblast \
+  -f compose.yaml \
+  -f compose.shared.yaml \
+  run --rm -it web node --import tsx scripts/create-user.ts
+
+docker compose -p emailblast \
+  -f compose.yaml \
+  -f compose.shared.yaml \
+  up -d --wait web worker
+```
+
+By default the web container is published only on loopback at:
+
+```text
+127.0.0.1:3087
+```
+
+Point the existing reverse proxy at that loopback address. A path-prefixed Nginx example is provided in [`deploy/nginx-emailblast.conf`](deploy/nginx-emailblast.conf).
+
+Do not expose PostgreSQL, Redis, or the application loopback port directly to the internet.
+
+### Option C — VPS installation without Docker
+
+This mode runs the application directly with Node.js and systemd. PostgreSQL, Redis, and the reverse proxy are ordinary host services.
+
+A practical Ubuntu/Debian-style host needs:
+
+- Git
+- Node.js 24.19+
+- pnpm 11.19
+- PostgreSQL 17
+- Redis 7.4
+- Nginx or Caddy
+- systemd
+
+Install PostgreSQL and Redis from their supported distribution/vendor repositories, then verify:
+
+```sh
+node --version
+psql --version
+redis-server --version
+```
+
+#### 1. Create the application directory
+
+```sh
+sudo mkdir -p /opt/emailblast
+sudo chown "$USER":"$USER" /opt/emailblast
+
+git clone https://github.com/rahmon-tech/emailsystem.git /opt/emailblast
+cd /opt/emailblast
+
+git fetch origin main
+git checkout --detach <verified-release-sha>
+```
+
+#### 2. Enable pnpm and install dependencies
+
+```sh
+corepack enable
+corepack prepare pnpm@11.19.0 --activate
+pnpm install --frozen-lockfile
+```
+
+#### 3. Create PostgreSQL database/user
+
+Create a dedicated PostgreSQL role and database. Example:
+
+```sql
+CREATE ROLE emailsystem LOGIN PASSWORD 'replace-with-a-strong-random-password';
+CREATE DATABASE emailsystem OWNER emailsystem;
+```
+
+Do not reuse that example password. Generate a strong random value and keep it in the protected production environment file.
+
+#### 4. Configure Redis
+
+EmailBlast expects Redis to be persistent enough for production coordination. Enable AOF persistence and use a non-evicting policy:
+
+```text
+appendonly yes
+appendfsync everysec
+maxmemory-policy noeviction
+```
+
+Restart Redis after changing its configuration and verify:
+
+```sh
+redis-cli ping
+```
+
+Expected:
+
+```text
+PONG
+```
+
+#### 5. Create the production environment
+
+```sh
+cp .env.example .env
+chmod 600 .env
+```
+
+Generate two independent application secrets:
+
+```sh
+openssl rand -hex 32
+openssl rand -hex 32
+```
+
+Configure `.env` for host services:
+
+```dotenv
+NODE_ENV=production
+APP_URL=https://mail.example.com
+NEXT_PUBLIC_BASE_PATH=
+
+DATABASE_URL=postgresql://emailsystem:YOUR_DATABASE_PASSWORD@127.0.0.1:5432/emailsystem
+REDIS_URL=redis://127.0.0.1:6379
+
+SESSION_SECRET=FIRST_RANDOM_64_HEX_VALUE
+CREDENTIAL_ENCRYPTION_KEY=SECOND_RANDOM_64_HEX_VALUE
+
+ALLOW_MOCK_PROVIDER=false
+WORKER_CONCURRENCY=4
+```
+
+For `https://example.com/emailblast`, use:
+
+```dotenv
+APP_URL=https://example.com/emailblast
+NEXT_PUBLIC_BASE_PATH=/emailblast
+```
+
+#### 6. Validate the native runtime
+
+```sh
+pnpm bootstrap:native
+```
+
+This validates Node/pnpm, the environment, PostgreSQL, Redis, protected file permissions, and Prisma generation. It does **not** silently apply production migrations.
+
+#### 7. Apply migrations and create the first user
+
+```sh
+pnpm db:migrate
+pnpm user:create
+```
+
+#### 8. Build the standalone production application
+
+Root-domain install:
+
+```sh
+pnpm build:native
+```
+
+Path-prefixed install:
+
+```sh
+NEXT_PUBLIC_BASE_PATH=/emailblast pnpm build:native
+```
+
+The generated web entry point is:
+
+```text
+apps/web/.next/standalone/apps/web/server.js
+```
+
+The worker entry point remains:
+
+```text
+node --import tsx apps/worker/main.ts
+```
+
+#### 9. Create systemd services
+
+Example web service:
+
+```ini
+[Unit]
+Description=EmailBlast web
+After=network.target postgresql.service redis-server.service
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/emailblast/apps/web/.next/standalone/apps/web
+EnvironmentFile=/opt/emailblast/.env
+Environment=PORT=3000
+ExecStart=/usr/bin/node server.js
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Save it as:
+
+```text
+/etc/systemd/system/emailblast-web.service
+```
+
+Example worker:
+
+```ini
+[Unit]
+Description=EmailBlast worker
+After=network.target postgresql.service redis-server.service
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/emailblast
+EnvironmentFile=/opt/emailblast/.env
+ExecStart=/usr/bin/node --import tsx apps/worker/main.ts
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Save it as:
+
+```text
+/etc/systemd/system/emailblast-worker.service
+```
+
+If Node is installed somewhere other than `/usr/bin/node`, use the actual result of:
+
+```sh
+command -v node
+```
+
+Enable and start both services:
+
+```sh
+sudo systemctl daemon-reload
+sudo systemctl enable --now emailblast-web.service
+sudo systemctl enable --now emailblast-worker.service
+```
+
+Check them:
+
+```sh
+systemctl --no-pager --full status emailblast-web.service
+systemctl --no-pager --full status emailblast-worker.service
+```
+
+#### 10. Configure HTTPS reverse proxy
+
+Keep the Node process on loopback and publish only HTTPS through Nginx/Caddy.
+
+For a path-prefix deployment, adapt [`deploy/nginx-emailblast.conf`](deploy/nginx-emailblast.conf). The proxy must preserve the configured base path and allow Server-Sent Events to stream.
+
+Do not expose PostgreSQL or Redis publicly.
+
+#### 11. Verify the native installation
+
+Loopback:
+
+```sh
+curl -fsS http://127.0.0.1:3000/health/live
+curl -fsS http://127.0.0.1:3000/health/ready
+```
+
+Public:
+
+```sh
+curl -fsS https://mail.example.com/health/live
+curl -fsS https://mail.example.com/health/ready
+```
+
+For a base path, include it in both URLs.
+
+### First login and provider setup
+
+After installation:
+
+1. sign in with the account created by `pnpm user:create` / `scripts/create-user.ts`;
+2. open **Sending services**;
+3. add a provider;
+4. verify its credentials and sending domain;
+5. save the generated delivery-webhook URL in the provider account when delivery events are supported;
+6. use **Send test email** with a controlled recipient before running a campaign.
+
+EmailBlast does not require provider credentials in repository files. Saved credentials are encrypted before persistence.
+
+### Production upgrades
+
+Always deploy a specific CI-verified SHA.
+
+#### Docker upgrade
+
+```sh
+git fetch origin main
+git checkout --detach <verified-release-sha>
+
+docker compose build
+docker compose stop worker
+docker compose run --rm web node node_modules/prisma/build/index.js migrate deploy
+docker compose up -d --force-recreate web worker proxy
+
+curl --fail https://mail.example.com/health/ready
+```
+
+On an existing-proxy installation, use the same `-p emailblast -f compose.yaml -f compose.shared.yaml` arguments and do not start the bundled proxy.
+
+#### Native/systemd upgrade
+
+```sh
+cd /opt/emailblast
+
+git fetch origin main
+git checkout --detach <verified-release-sha>
+
+pnpm install --frozen-lockfile
+pnpm bootstrap:native:check
+
+NEXT_PUBLIC_BASE_PATH=/emailblast pnpm build:native
+
+sudo systemctl stop emailblast-worker.service
+pnpm db:migrate
+sudo systemctl start emailblast-worker.service
+sudo systemctl restart emailblast-web.service
+```
+
+Use a blank `NEXT_PUBLIC_BASE_PATH` for a root-domain installation.
+
+Do not use `prisma db push` for production releases.
+
+### Backups
+
+Back up both the database **and** the protected `.env`.
+
+Docker PostgreSQL example:
+
+```sh
+mkdir -p backups
+chmod 700 backups
+
+docker compose exec -T postgres \
+  pg_dump -U emailsystem -d emailsystem -Fc \
+  > "backups/emailblast-$(date -u +%Y%m%dT%H%M%SZ).dump"
+```
+
+Native PostgreSQL example:
+
+```sh
+mkdir -p backups
+chmod 700 backups
+
+pg_dump "$DATABASE_URL" -Fc \
+  > "backups/emailblast-$(date -u +%Y%m%dT%H%M%SZ).dump"
+```
+
+Store backups encrypted and off-host. Losing `CREDENTIAL_ENCRYPTION_KEY` makes saved provider credentials unrecoverable.
+
+For more operational detail, read:
 
 - [Production deployment](docs/DEPLOYMENT.md)
 - [Native/systemd runtime](docs/NATIVE_RUNTIME.md)
-
-Production upgrades should deploy an **exact verified Git SHA**, back up PostgreSQL and protected keys first, apply only repository migrations, restart web and workers together, and verify both liveness and readiness.
 
 ---
 
