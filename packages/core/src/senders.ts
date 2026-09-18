@@ -148,6 +148,7 @@ export async function selectDeliverySender(
   deliveryId: string,
   rotate: boolean,
   domainIds?: string[],
+  providerIds?: string[],
 ) {
   const anchor = await tx.senderIdentity.findFirst({
     where: { id: anchorSenderId, userId },
@@ -170,8 +171,16 @@ export async function selectDeliverySender(
     include: senderInclude,
     orderBy: { email: "asc" },
   });
+  const allowedProviderIds = providerIds?.length
+    ? new Set(providerIds)
+    : null;
   const viable = identities
-    .map((sender) => ({ sender, providers: eligibleProvidersForSender(sender) }))
+    .map((sender) => ({
+      sender,
+      providers: eligibleProvidersForSender(sender).filter(
+        (provider) => !allowedProviderIds || allowedProviderIds.has(provider.id),
+      ),
+    }))
     .filter((item) => item.providers.length > 0);
   if (!viable.length) return null;
   const hash = createHash("sha256").update(deliveryId).digest();
