@@ -168,6 +168,21 @@ test("login, provider setup, HTML import, preview, test, campaign controls, reco
     .getByRole("button", { name: "Save & check connection", exact: true })
     .click();
   await expect(page.getByText("Ready", { exact: true })).toBeVisible();
+  const savedProviderDialog = page.getByRole("dialog", {
+    name: "Edit Development Mock",
+    exact: true,
+  });
+  await expect(savedProviderDialog).toBeVisible();
+  await expect(
+    savedProviderDialog.getByText(/\/api\/webhooks\//),
+  ).toBeVisible();
+  await expect(
+    savedProviderDialog.getByLabel("Delivery update signing key"),
+  ).toBeVisible();
+  await savedProviderDialog
+    .getByRole("button", { name: "Cancel", exact: true })
+    .click();
+  await expect(savedProviderDialog).toHaveCount(0);
   const providers = await (
     await context.request.get(appPath("/api/providers"))
   ).json();
