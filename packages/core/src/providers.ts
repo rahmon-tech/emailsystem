@@ -3,6 +3,7 @@ import {
   ensureGovernor,
   commonBudgets,
   senderDomain,
+  providerMonthlyUsage,
 } from "./safety";
 import { safetySettings } from "./safety-config";
 import { randomUUID } from "node:crypto";
@@ -383,6 +384,15 @@ export async function testProvider(
       const current = await tx.providerConnection.findFirstOrThrow({
         where: { id, userId },
       });
+      if (current.monthlyBudgetOverride !== null) {
+        const monthly = await providerMonthlyUsage(tx, userId, [id]);
+        if ((monthly.get(id) ?? 0) + 1 > current.monthlyBudgetOverride)
+          throw new AppError(
+            429,
+            "SAFETY_BUDGET",
+            "Monthly provider limit reached. Try the test after the next UTC month begins.",
+          );
+      }
       const reservation = await governor.reserve(
         token,
         [
