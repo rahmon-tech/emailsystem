@@ -35,20 +35,32 @@ after(async () => {
   await redis.quit();
 });
 
-test("provider rotation cannot burst the same sender domain", async () => {
+test("same-domain connection capacity aggregates while smooth pacing still prevents bursts", async () => {
   const user = crypto.randomUUID();
   users.push(user);
   const providers = [
-    candidate(
-      "p1",
-      rateGroup(user, "resend", "sender@example.com", "us-east-1"),
-    ),
-    candidate(
-      "p2",
-      rateGroup(user, "mailgun", "other@example.com", "eu-west-1"),
-    ),
+    {
+      ...candidate(
+        "p1",
+        rateGroup(user, "connection-1", "sender@example.com", "us-east-1"),
+      ),
+      perSecond: 10,
+      perMinute: 60,
+    },
+    {
+      ...candidate(
+        "p2",
+        rateGroup(user, "connection-2", "other@example.com", "eu-west-1"),
+      ),
+      perSecond: 10,
+      perMinute: 60,
+    },
   ];
   assert.notEqual(providers[0].group, providers[1].group);
+  assert.equal(
+    providers[0].group.split(".")[1],
+    providers[1].group.split(".")[1],
+  );
 
   const firstToken = crypto.randomUUID();
   const first = await acquireProvider(user, providers, firstToken, providers, true);
@@ -57,6 +69,17 @@ test("provider rotation cannot burst the same sender domain", async () => {
     user,
     providers.find((p) => p.id === first)!,
     firstToken,
+  );
+
+  const pacingGroup = providers[0].group.split(".")[1];
+  const next = Number(await redis.get(`dispatch:${user}:p:${pacingGroup}:next`));
+  const [seconds, micros] = await redis.time();
+  const redisNow =
+    Number(seconds) * 1000 + Math.floor(Number(micros) / 1000);
+  const remaining = next - redisNow;
+  assert(
+    remaining >= 350 && remaining < 900,
+    `Expected aggregate two-connection domain pacing near 500ms, got ${remaining}ms`,
   );
 
   const immediate = await acquireProvider(
