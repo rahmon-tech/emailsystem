@@ -57,7 +57,7 @@ export function TrackingSettings() {
           void run(refresh);
         }}
       >
-        Link settings
+        Link tracking
       </Button>
       <ResponsiveDialog
         open={open}
@@ -88,27 +88,26 @@ export function TrackingSettings() {
                   label="Track clicks by default"
                 />
                 <TextField
-                  label="Redirect base"
+                  label="Tracking link base"
                   value={`${data.appUrl}/r/…`}
-                  helperText="Uses this app’s verified public URL; no third-party shortener is required."
+                  helperText="Tracked links use your own EmailSystem address. No third-party link shortener is needed."
                   slotProps={{ input: { readOnly: true } }}
                 />
                 <Accordion disableGutters>
                   <AccordionSummary expandIcon={<ExpandMore />}>
-                    <Typography>Destination policy</Typography>
+                    <Typography>Blocked link destinations</Typography>
                   </AccordionSummary>
                   <AccordionDetails>
                     <Stack spacing={1.5}>
                       <Typography variant="body2" color="text.secondary">
-                        Denied domains and their subdomains cannot be sent or
-                        redirected to.
+                        Add website domains that should never be used in campaign links.
                       </Typography>
                       <Stack
                         direction={{ xs: "column", sm: "row" }}
                         spacing={1}
                       >
                         <TextField
-                          label="Denied destination domain"
+                          label="Blocked website domain"
                           value={denied}
                           onChange={(event) => setDenied(event.target.value)}
                           fullWidth
@@ -139,7 +138,7 @@ export function TrackingSettings() {
                           <Typography sx={{ overflowWrap: "anywhere" }}>
                             {domain.hostname}
                           </Typography>
-                          <Tooltip title="Remove denial">
+                          <Tooltip title="Remove blocked domain">
                             <IconButton
                               aria-label={`Remove ${domain.hostname}`}
                               disabled={busy}
@@ -168,21 +167,21 @@ export function TrackingSettings() {
                             }
                           />
                         }
-                        label="Block unknown reputation results"
+                        label="Block links we cannot check"
                       />
                       <Typography variant="caption" color="text.secondary">
-                        Off by default. A timeout stays unknown—it is never
-                        silently reported as clean.
+                        Off by default. When enabled, a link is blocked if its
+                        destination cannot be checked instead of being treated as safe.
                       </Typography>
                     </Stack>
                   </AccordionDetails>
                 </Accordion>
                 <Typography variant="caption" color="text.secondary">
-                  Daily aggregate visit totals are kept for {data.retentionDays}{" "}
-                  days; links expire after {data.linkLifetimeDays} days. No IP
-                  address, browser fingerprint, cookies, or request headers are
-                  stored. “Likely automated” is heuristic and a visit never
-                  confirms a human action.
+                  Daily click totals are kept for {data.retentionDays}{" "}
+                  days; tracked links expire after {data.linkLifetimeDays} days.
+                  EmailSystem does not store IP addresses, browser fingerprints,
+                  cookies, or request headers. Some visits may come from automated
+                  link scanners, so a tracked visit does not prove a person clicked.
                 </Typography>
               </>
             )}
