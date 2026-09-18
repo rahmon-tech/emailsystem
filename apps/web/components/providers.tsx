@@ -737,8 +737,20 @@ function ProviderForm({
       String(row?.settings.timeout ?? 20000),
     ),
     [busy, setBusy] = useState(false),
-    [error, setError] = useState("");
+    [error, setError] = useState(""),
+    [webhookCopied, setWebhookCopied] = useState(false);
   const fields = credentialFields(type, transport, settings);
+  const webhookUrl = row ? `${appUrl}/api/webhooks/${row.id}` : "";
+  const copyWebhookUrl = async () => {
+    if (!webhookUrl) return;
+    try {
+      await navigator.clipboard.writeText(webhookUrl);
+      setWebhookCopied(true);
+      window.setTimeout(() => setWebhookCopied(false), 1500);
+    } catch {
+      setError("Could not copy the webhook URL. Select the URL and copy it manually.");
+    }
+  };
   const change = (key: string, value: unknown) =>
     setSettings((s) => ({ ...s, [key]: value }));
   return (
@@ -1109,34 +1121,65 @@ function ProviderForm({
               ) : (
                 <>
                   <Typography variant="body2" color="text.secondary">
-                    EmailSystem provides the webhook URL. Add that URL to {d.name}
+                    EmailBlast provides the webhook URL. Add that URL to {d.name}
                     so it can report Delivered, Bounced, Complaint, and other
                     delivery events back to this connection.
                   </Typography>
                   {row ? (
                     <>
-                      <TextField
-                        label="Webhook URL (provided by EmailSystem)"
-                        value={`${appUrl}/api/webhooks/${row.id}`}
-                        fullWidth
-                        slotProps={{ htmlInput: { readOnly: true } }}
-                        helperText={`Copy this exact URL into ${d.name}'s webhook, event, or callback settings.`}
-                      />
-                      <Button
-                        size="small"
-                        sx={{ alignSelf: "flex-start" }}
-                        onClick={() =>
-                          void navigator.clipboard.writeText(
-                            `${appUrl}/api/webhooks/${row.id}`,
-                          )
-                        }
+                      <Box
+                        sx={{
+                          display: "flex",
+                          alignItems: "flex-start",
+                          gap: 1,
+                          p: 1.25,
+                          border: 1,
+                          borderColor: "divider",
+                          borderRadius: 1.5,
+                          bgcolor: "background.paper",
+                        }}
                       >
-                        Copy webhook URL
-                      </Button>
+                        <Box sx={{ minWidth: 0, flex: 1 }}>
+                          <Typography
+                            variant="caption"
+                            color="text.secondary"
+                            sx={{ display: "block" }}
+                          >
+                            Webhook URL
+                          </Typography>
+                          <Typography
+                            component="code"
+                            sx={{
+                              display: "block",
+                              mt: 0.5,
+                              fontFamily: "monospace",
+                              fontSize: 12.5,
+                              lineHeight: 1.5,
+                              overflowWrap: "anywhere",
+                              wordBreak: "break-word",
+                              userSelect: "all",
+                            }}
+                          >
+                            {webhookUrl}
+                          </Typography>
+                        </Box>
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          sx={{ flexShrink: 0 }}
+                          onClick={() => void copyWebhookUrl()}
+                        >
+                          {webhookCopied ? "Copied" : "Copy"}
+                        </Button>
+                      </Box>
+                      <Typography variant="caption" color="text.secondary">
+                        Copy this exact URL into {d.name}'s webhook, event, or
+                        callback settings.
+                      </Typography>
                     </>
                   ) : (
                     <Alert severity="info">
-                      Save this connection once and EmailSystem will create its
+                      Save this connection once and EmailBlast will create its
                       permanent webhook URL automatically. It will look like{" "}
                       <strong>{appUrl}/api/webhooks/…</strong>. You do not create
                       or supply this URL yourself.
@@ -1146,7 +1189,7 @@ function ProviderForm({
                   {emailSystemManagedWebhookSecret(type) ? (
                     <>
                       <TextField
-                        label="Callback secret (generated by EmailSystem)"
+                        label="Callback secret (generated by EmailBlast)"
                         type="password"
                         autoComplete="new-password"
                         value={secrets.webhookSecret ?? ""}
@@ -1156,7 +1199,7 @@ function ProviderForm({
                             ? "The saved secret is hidden. Leave it unchanged, or generate a new one to rotate the callback authentication."
                             : row
                               ? "This is the secret created during the first save. Copy it now with the webhook URL; it will be hidden the next time you open this connection."
-                              : "EmailSystem generated this secret. It will be saved with the connection and shown once more alongside the permanent webhook URL."
+                              : "EmailBlast generated this secret. It will be saved with the connection and shown once more alongside the permanent webhook URL."
                         }
                       />
                       <Stack direction="row" sx={{ gap: 1, flexWrap: "wrap" }}>
@@ -1206,13 +1249,13 @@ function ProviderForm({
                         }
                         helperText={
                           type === "resend"
-                            ? "After registering the EmailSystem webhook URL in Resend, copy Resend's whsec_… signing secret here."
+                            ? "After registering the EmailBlast webhook URL in Resend, copy Resend's whsec_… signing secret here."
                             : type === "mailgun"
                               ? "Paste the Webhook Signing Key from Mailgun here. Mailgun uses it to sign delivery events."
                               : type === "sendgrid"
                                 ? "Enable SendGrid Signed Event Webhook verification, then paste its public key here."
                                 : type === "ses"
-                                  ? "Subscribe the EmailSystem webhook URL through Amazon SNS, then paste the exact SNS topic ARN here."
+                                  ? "Subscribe the EmailBlast webhook URL through Amazon SNS, then paste the exact SNS topic ARN here."
                                   : row
                                     ? "Leave blank to keep the saved delivery credential unchanged."
                                     : "Add the verification value supplied by the sending service."
@@ -1225,21 +1268,21 @@ function ProviderForm({
                     <Alert severity="warning">
                       Plain SMTP has no universal delivery webhook. This works only
                       when the SMTP service you use also supports delivery/event
-                      callbacks. Give that service the EmailSystem webhook URL,
+                      callbacks. Give that service the EmailBlast webhook URL,
                       use HTTP Basic username <strong>emailsystem</strong> and the
                       generated callback secret as the password, and configure it
-                      to POST delivery events. EmailSystem accepts common JSON
+                      to POST delivery events. EmailBlast accepts common JSON
                       fields such as event/status, messageId/message_id,
                       recipient/email, and timestamp/time. If your SMTP service
                       sends a different format, it needs a provider-specific
-                      adapter; EmailSystem will not guess that an accepted email
+                      adapter; EmailBlast will not guess that an accepted email
                       was delivered.
                     </Alert>
                   )}
 
                   {type === "elastic" ? (
                     <Typography variant="caption" color="text.secondary">
-                      In Elastic Email, use the EmailSystem webhook URL as the
+                      In Elastic Email, use the EmailBlast webhook URL as the
                       notification URL and append <strong>?key=YOUR_SECRET</strong>,
                       using the generated callback secret above.
                     </Typography>
