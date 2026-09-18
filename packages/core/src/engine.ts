@@ -290,7 +290,7 @@ export async function processDelivery(
             [],
             now() + 60000,
             now(),
-            "No enabled verified sender alias is currently eligible in this campaign domain pool.",
+            "None of the selected domains has a From address and sending service available right now. EmailSystem will keep checking.",
           );
           return false;
         }
@@ -352,7 +352,7 @@ export async function processDelivery(
             monthlyBlocked.map((budget) => budget.scope),
             monthWindowUtc(now()).next,
             now(),
-            "Monthly account/domain safety limit reached · sending resumes when the next UTC month begins",
+            "A monthly sending limit has been reached. Sending will continue automatically when the next UTC month begins.",
           );
           return false;
         }
@@ -420,7 +420,7 @@ export async function processDelivery(
             dailyAvailable.map((provider) => "provider-month:" + provider.id),
             monthWindowUtc(now()).next,
             now(),
-            "Monthly provider limit reached · sending resumes when the next UTC month begins",
+            "A sending service has reached its monthly limit. EmailSystem will use another available service, or continue when the next UTC month begins.",
           );
           return false;
         }
@@ -467,7 +467,7 @@ export async function processDelivery(
               [],
               pacingPermit.nextAllowedAt,
               now(),
-              "Experiment smooth pacing interval is active.",
+              "This controlled experiment is waiting for its next scheduled send interval.",
             );
             return false;
           }
@@ -874,7 +874,7 @@ export async function processDelivery(
                 state: "DEFERRED",
                 nextAttemptAt: new Date(Date.now() + 1000),
                 safeError:
-                  "This sending service was removed from this campaign after a provider-side block. Trying another available connection.",
+                  "This sending service was removed from the campaign after it rejected further sending. Trying another available service.",
               },
             });
         } else if (
