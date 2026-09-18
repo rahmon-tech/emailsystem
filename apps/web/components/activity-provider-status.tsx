@@ -39,7 +39,7 @@ function pressureLabel(row: ProviderRow) {
   if (row.pressure === "cooldown") return "Temporarily paused";
   if (row.pressure === "slowed") return "Sending slower";
   if (row.pressure === "disabled") return "Turned off";
-  return "Ready";
+  return "Normal speed";
 }
 
 export function ActivityProviderStatus() {
