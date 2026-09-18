@@ -96,23 +96,23 @@ test("Activity shows approved experiment configuration and can stop the bound ru
     expect(loginResponse.status()).toBe(200);
     await page.goto(appPath(`/activity?campaignId=${campaign.id}`));
 
-    const card = page.getByRole("region", { name: "Authorized experiment" });
+    const card = page.getByRole("region", { name: "Controlled experiment" });
     await expect(card).toBeVisible();
-    await expect(card.getByText("Pacing: smooth", { exact: true })).toBeVisible();
-    await expect(card.getByText("Interval: 2s", { exact: true })).toBeVisible();
-    await expect(card.getByText("Concurrency: 2", { exact: true })).toBeVisible();
+    await expect(card.getByText("Sending pattern: steady", { exact: true })).toBeVisible();
+    await expect(card.getByText("Send interval: 2s", { exact: true })).toBeVisible();
+    await expect(card.getByText("Emails at once: 2", { exact: true })).toBeVisible();
     await expect(
-      card.getByText("Encoding: provider default", { exact: true }),
+      card.getByText("Email encoding: provider default", { exact: true }),
     ).toBeVisible();
-    await expect(card.getByText("Charset: UTF-8", { exact: true })).toBeVisible();
+    await expect(card.getByText("Text format: UTF-8", { exact: true })).toBeVisible();
     await expect(
-      card.getByText("Requested content: html", { exact: true }),
+      card.getByText("Message type: html", { exact: true }),
     ).toBeVisible();
     await expect(page.getByText("controlled-controls@example.net")).toHaveCount(0);
 
     await card.getByRole("button", { name: "Stop experiment", exact: true }).click();
     const dialog = page.getByRole("dialog", {
-      name: "Stop authorized experiment?",
+      name: "Stop controlled experiment?",
     });
     await expect(dialog).toBeVisible();
     const reason = "Operator stopped after reviewing the bounded Activity proof.";
