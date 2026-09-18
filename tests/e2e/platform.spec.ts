@@ -68,6 +68,17 @@ test("login, provider setup, HTML import, preview, test, campaign controls, reco
   ).toHaveValue("");
   await page.getByLabel("All sending · 24 hours", { exact: true }).fill("12000");
   await page
+    .getByRole("button", { name: "Automatic protection pauses", exact: true })
+    .click();
+  const complaintThreshold = page.getByLabel(
+    "Pause when complaints reach (%)",
+    { exact: true },
+  );
+  await complaintThreshold.fill("");
+  await expect(complaintThreshold).toHaveValue("");
+  await complaintThreshold.fill("0.5");
+  await expect(complaintThreshold).toHaveValue("0.5");
+  await page
     .getByRole("button", { name: "Save limits", exact: true })
     .click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
