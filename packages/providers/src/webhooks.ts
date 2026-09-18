@@ -77,7 +77,6 @@ export async function authenticateWebhook(
     if (c.type === "ses") return authenticateSns(c, obj(JSON.parse(raw)));
     if (c.type === "elastic")
       return !!secret && equal(url.searchParams.get("key") ?? "", secret);
-    if (c.type === "smtp") return false;
     return (
       !!secret &&
       equal(
@@ -299,6 +298,19 @@ export function normalizeWebhook(
       eventId = text(event.id);
       attempt = text(event.attemptId);
       stamp = event.timestamp;
+    } else if (type === "smtp") {
+      name = text(event.event ?? event.status).toLowerCase();
+      id = text(
+        event.messageId ??
+          event.message_id ??
+          event["message-id"] ??
+          event.id,
+      );
+      recipient = text(event.recipient ?? event.email ?? event.to);
+      eventId = text(event.eventId ?? event.event_id ?? event.id);
+      attempt = text(event.attemptId ?? event.attempt_id ?? event.es_attempt);
+      stamp = event.timestamp ?? event.time ?? event.date;
+      bounceType = text(event.bounceType ?? event.bounce_type ?? event.category);
     }
     const rfcId =
       type === "ses"
