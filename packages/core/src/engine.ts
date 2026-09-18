@@ -26,6 +26,7 @@ import {
   wakeSafetyWaiters,
   monthWindowUtc,
   providerMonthlyUsage,
+  sharedMonthlyUsage,
 } from "./safety";
 import { safetySettings, messageCost } from "./safety-config";
 import type { Candidate } from "./dispatcher";
@@ -229,6 +230,38 @@ export async function processDelivery(
           return false;
         }
         const settings = safetySettings.parse(user.safetySettings);
+        const sharedMonthly = await sharedMonthlyUsage(
+          tx,
+          initial.userId,
+          [domain],
+          clock,
+        );
+        const monthlyBlocked = [
+          {
+            scope: "account-month",
+            used: sharedMonthly.account,
+            limit: settings.accountMonthly,
+          },
+          {
+            scope: "domain-month:" + domain,
+            used: sharedMonthly.byDomain.get(domain) ?? 0,
+            limit: settings.domainMonthly,
+          },
+        ].filter(
+          (budget) =>
+            budget.limit !== null && budget.used + cost > budget.limit,
+        );
+        if (monthlyBlocked.length) {
+          await waitForSafety(
+            tx,
+            c,
+            monthlyBlocked.map((budget) => budget.scope),
+            monthWindowUtc(now()).next,
+            now(),
+            "Monthly account/domain safety limit reached · sending resumes when the next UTC month begins",
+          );
+          return false;
+        }
         const governor = await ensureGovernor(tx, initial.userId, clock);
         const common = commonBudgets(settings, domain, c.id, c.dailyBudget);
         // The governor filters only budget eligibility; the existing dispatcher still chooses.
