@@ -587,6 +587,12 @@ export const settingsSchema = z
       .pipe(z.email())
       .transform((v) => v.toLowerCase()),
     fromName: headerText.default(""),
+    senderDomain: z
+      .string()
+      .trim()
+      .toLowerCase()
+      .regex(/^[a-zA-Z0-9][a-zA-Z0-9.-]*\.[a-zA-Z]{2,}$/)
+      .optional(),
     replyTo: z
       .string()
       .trim()
@@ -648,6 +654,8 @@ export const connectionSchema = z
     perSecond: z.number().int().min(1).max(100).default(1),
     perMinute: z.number().int().min(1).max(6000).default(30),
     concurrency: z.number().int().min(1).max(20).default(1),
+    dailyBudget: z.number().int().min(1).max(10000000).nullable().default(null),
+    monthlyBudget: z.number().int().min(1).max(300000000).nullable().default(null),
   })
   .strict()
   .superRefine((v, ctx) => {
