@@ -149,7 +149,7 @@ test("address-specific proof does not authorize sibling aliases or foreign/arbit
   );
   await assert.rejects(
     () => preflight(user.id, { ...common, from: "arbitrary@example.org" }),
-    /authorized sender identity/i,
+    /verified From address/i,
   );
   const other = await userFixture("foreign-sender");
   const otherImport = await importRecipients(
