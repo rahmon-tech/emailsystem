@@ -118,7 +118,7 @@ test("150-recipient campaign queues across days: exactly 100 claims, durable wai
   const summary = await campaignSummary(f.user.id, f.campaign.id);
   assert.equal(summary.state, "SENDING");
   assert.equal(summary.acceptedCount, 100);
-  assert.match(summary.safety.waitReason!, /Daily safety limit/);
+  assert.match(summary.safety.waitReason!, /24-hour sending limit/);
   assert.equal(
     await db.delivery.count({
       where: { campaignId: f.campaign.id, state: "FAILED" },
@@ -562,7 +562,7 @@ test("no healthy providers stop claims with a durable explanation, without failu
   );
   assert.match(
     (await campaignSummary(f.user.id, f.campaign.id)).safety.waitReason!,
-    /No healthy eligible provider/,
+    /From address and sending service available/,
   );
   assert.equal(
     await db.activityEvent.count({
