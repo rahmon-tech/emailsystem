@@ -667,10 +667,10 @@ function ProviderForm({
       ).join(", "),
     ),
     [dailyBudget, setDailyBudget] = useState(
-      row?.dailyBudgetOverride ?? 5000,
+      String(row?.dailyBudgetOverride ?? 5000),
     ),
     [monthlyBudget, setMonthlyBudget] = useState(
-      row?.monthlyBudgetOverride ?? 150000,
+      String(row?.monthlyBudgetOverride ?? 150000),
     ),
     [settings, setSettings] = useState({
       ...row?.settings,
@@ -691,10 +691,16 @@ function ProviderForm({
       mockMode: row?.settings.mockMode ?? "success",
     }),
     [secrets, setSecrets] = useState<Record<string, string>>({}),
-    [weight, setWeight] = useState(row?.weight ?? 1),
-    [second, setSecond] = useState(row?.perSecond ?? 1),
-    [minute, setMinute] = useState(row?.perMinute ?? 30),
-    [concurrency, setConcurrency] = useState(row?.concurrency ?? 1),
+    [weight, setWeight] = useState(String(row?.weight ?? 1)),
+    [second, setSecond] = useState(String(row?.perSecond ?? 1)),
+    [minute, setMinute] = useState(String(row?.perMinute ?? 30)),
+    [concurrency, setConcurrency] = useState(String(row?.concurrency ?? 1)),
+    [smtpPort, setSmtpPort] = useState(
+      String(row?.settings.port ?? d.smtp?.port ?? 587),
+    ),
+    [timeout, setTimeout] = useState(
+      String(row?.settings.timeout ?? 20000),
+    ),
     [busy, setBusy] = useState(false),
     [error, setError] = useState("");
   const fields = credentialFields(type, transport, settings);
@@ -740,6 +746,7 @@ function ProviderForm({
               onChange={(_, v) => {
                 if (v) {
                   setTransport(v);
+                  setSmtpPort(String(d.smtp?.port ?? 587));
                   change("port", undefined);
                   change("security", undefined);
                 }
@@ -906,7 +913,7 @@ function ProviderForm({
               type="number"
               value={dailyBudget}
               slotProps={{ htmlInput: { min: 1 } }}
-              onChange={(e) => setDailyBudget(Number(e.target.value))}
+              onChange={(e) => setDailyBudget(e.target.value)}
               helperText="Maximum emails this service may send in any rolling 24-hour period."
               required
             />
@@ -915,7 +922,7 @@ function ProviderForm({
               type="number"
               value={monthlyBudget}
               slotProps={{ htmlInput: { min: 1 } }}
-              onChange={(e) => setMonthlyBudget(Number(e.target.value))}
+              onChange={(e) => setMonthlyBudget(e.target.value)}
               helperText="Maximum emails this service may send in one calendar month (UTC)."
               required
             />
@@ -973,25 +980,25 @@ function ProviderForm({
                     label="Share of sending traffic"
                     type="number"
                     value={weight}
-                    onChange={(e) => setWeight(Number(e.target.value))}
+                    onChange={(e) => setWeight(e.target.value)}
                   />
                   <TextField
                     label="Emails at once"
                     type="number"
                     value={concurrency}
-                    onChange={(e) => setConcurrency(Number(e.target.value))}
+                    onChange={(e) => setConcurrency(e.target.value)}
                   />
                   <TextField
                     label="Emails / second"
                     type="number"
                     value={second}
-                    onChange={(e) => setSecond(Number(e.target.value))}
+                    onChange={(e) => setSecond(e.target.value)}
                   />
                   <TextField
                     label="Emails / minute"
                     type="number"
                     value={minute}
-                    onChange={(e) => setMinute(Number(e.target.value))}
+                    onChange={(e) => setMinute(e.target.value)}
                   />
                 </Box>
                 {transport === "smtp" && (
@@ -1000,9 +1007,9 @@ function ProviderForm({
                       <TextField
                         select
                         label="Port and security"
-                        value={settings.port ?? d.smtp.port}
+                        value={smtpPort}
                         onChange={(e) => {
-                          change("port", Number(e.target.value));
+                          setSmtpPort(e.target.value);
                           change("security", undefined);
                         }}
                       >
@@ -1018,18 +1025,17 @@ function ProviderForm({
                       <TextField
                         label="Port"
                         type="number"
-                        value={settings.port ?? 587}
-                        onChange={(e) => change("port", Number(e.target.value))}
+                        value={smtpPort}
+                        slotProps={{ htmlInput: { min: 1, max: 65535 } }}
+                        onChange={(e) => setSmtpPort(e.target.value)}
                       />
                     )}
                     <TextField
                       label="Connection timeout (milliseconds)"
                       type="number"
-                      value={settings.timeout}
+                      value={timeout}
                       slotProps={{ htmlInput: { min: 5000, max: 60000 } }}
-                      onChange={(e) =>
-                        change("timeout", Number(e.target.value))
-                      }
+                      onChange={(e) => setTimeout(e.target.value)}
                     />
                     {type === "smtp" && (
                       <TextField
@@ -1061,36 +1067,37 @@ function ProviderForm({
               </Typography>
               {d.webhook === "none" ? (
                 <Alert severity="info">
-                  Standard SMTP can confirm that the mail server accepted an email,
-                  but final delivered, bounced, or complaint results are available
-                  only if this service can send delivery updates back to EmailSystem.
-                </Alert>
-              ) : !row ? (
-                <Alert severity="info">
-                  Save and check the connection first. EmailSystem will then show
-                  the permanent delivery-update URL you can register with this
-                  service. After that, add the signing key or event credential the
-                  service gives you.
+                  This connection can confirm only that the receiving mail server
+                  accepted the message. Final delivery needs a delivery callback
+                  from the sending service.
                 </Alert>
               ) : (
                 <>
                   <Typography variant="body2" color="text.secondary">
-                    Delivered, bounced, and complaint results will appear in
-                    Activity after this sending service starts sending updates to
-                    the URL below.
+                    Use this callback so EmailSystem can change an accepted email
+                    to Delivered, Bounced, or Complained when your sending service
+                    reports the final result.
                   </Typography>
-                  <Typography
-                    component="code"
-                    sx={{
-                      fontSize: 12,
-                      overflowWrap: "anywhere",
-                      p: 1.25,
-                      borderRadius: 1.5,
-                      bgcolor: "background.paper",
-                    }}
-                  >
-                    {`${appUrl}/api/webhooks/${row.id}`}
-                  </Typography>
+                  {row ? (
+                    <Typography
+                      component="code"
+                      sx={{
+                        fontSize: 12,
+                        overflowWrap: "anywhere",
+                        p: 1.25,
+                        borderRadius: 1.5,
+                        bgcolor: "background.paper",
+                      }}
+                    >
+                      {`${appUrl}/api/webhooks/${row.id}`}
+                    </Typography>
+                  ) : (
+                    <Alert severity="info">
+                      The permanent delivery-update URL appears here immediately
+                      after the first Save &amp; check connection. You can enter
+                      the signing credential now, or add it when the URL appears.
+                    </Alert>
+                  )}
                   {(type === "ses"
                     ? ["snsTopicArn"]
                     : type === "sendgrid"
@@ -1106,16 +1113,32 @@ function ProviderForm({
                       onChange={(e) =>
                         setSecrets({ ...secrets, [key]: e.target.value })
                       }
+                      helperText={
+                        row
+                          ? "Leave blank to keep the saved delivery credential unchanged."
+                          : "Optional while connecting. Add it now if your sending service already gave it to you."
+                      }
                     />
                   ))}
+                  {type === "smtp" && (
+                    <Alert severity="warning">
+                      Custom SMTP cannot prove final inbox delivery by SMTP alone.
+                      Your SMTP service must support delivery callbacks and send
+                      JSON containing event/status, messageId (or message_id),
+                      recipient/email, and timestamp/time to the URL above. Use
+                      HTTP Basic username emailsystem and the signing key entered
+                      here. Without callbacks, EmailSystem will safely keep the
+                      result as accepted instead of guessing Delivered.
+                    </Alert>
+                  )}
                   <Typography variant="caption" color="text.secondary">
                     {["resend", "mailgun", "sendgrid"].includes(type)
-                      ? "Add the delivery-update URL above in your sending service, then paste the verification/signing key it gives you here."
+                      ? "Register the delivery-update URL with this service, then paste the verification/signing key it gives you here."
                       : type === "ses"
-                        ? "Connect this delivery-update URL through Amazon SNS, then use the exact topic ARN for this SES account and region."
+                        ? "Connect this URL through Amazon SNS, then use the exact topic ARN for this SES account and region."
                         : type === "elastic"
-                          ? "Add the delivery-update URL in Elastic Email, then append ?key=YOUR_WEBHOOK_SECRET."
-                          : "Add the delivery-update URL in your service, then use HTTP Basic authentication with username emailsystem and this webhook secret."}
+                          ? "Register this URL in Elastic Email, then append ?key=YOUR_WEBHOOK_SECRET using the same secret entered here."
+                          : "Register this URL in your sending service and use HTTP Basic authentication with username emailsystem and the secret entered here."}
                   </Typography>
                 </>
               )}
@@ -1140,8 +1163,54 @@ function ProviderForm({
               const domain = senderDomain.trim().toLowerCase();
               if (!domain || !localParts.length)
                 throw new Error("Enter a sending domain and at least one From address.");
+              const integer = (
+                label: string,
+                value: string,
+                min: number,
+                max: number,
+              ) => {
+                const trimmed = value.trim();
+                const parsed = Number(trimmed);
+                if (
+                  !trimmed ||
+                  !Number.isInteger(parsed) ||
+                  parsed < min ||
+                  parsed > max
+                )
+                  throw new Error(
+                    `${label} must be a whole number between ${min.toLocaleString()} and ${max.toLocaleString()}.`,
+                  );
+                return parsed;
+              };
+              const parsedWeight = integer("Share of sending traffic", weight, 1, 100);
+              const parsedSecond = integer("Emails / second", second, 1, 100);
+              const parsedMinute = integer("Emails / minute", minute, 1, 6000);
+              const parsedConcurrency = integer("Emails at once", concurrency, 1, 20);
+              const parsedDailyBudget = integer(
+                "Daily connection limit",
+                dailyBudget,
+                1,
+                10000000,
+              );
+              const parsedMonthlyBudget = integer(
+                "Monthly connection limit",
+                monthlyBudget,
+                1,
+                300000000,
+              );
               const providerSettings = {
                 ...settings,
+                ...(transport === "smtp"
+                  ? {
+                      port: integer("SMTP port", smtpPort, 1, 65535),
+                      timeout: integer(
+                        "Connection timeout",
+                        timeout,
+                        5000,
+                        60000,
+                      ),
+                    }
+                  : {}),
                 senderDomain: domain,
                 senderAliases: localParts,
                 fromEmail: `${localParts[0]}@${domain}`,
@@ -1155,12 +1224,12 @@ function ProviderForm({
                   transport,
                   settings: providerSettings,
                   credentials: secrets,
-                  weight,
-                  perSecond: second,
-                  perMinute: minute,
-                  concurrency,
-                  dailyBudget,
-                  monthlyBudget,
+                  weight: parsedWeight,
+                  perSecond: parsedSecond,
+                  perMinute: parsedMinute,
+                  concurrency: parsedConcurrency,
+                  dailyBudget: parsedDailyBudget,
+                  monthlyBudget: parsedMonthlyBudget,
                 },
                 row ? "PUT" : "POST",
               );
