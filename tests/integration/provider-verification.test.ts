@@ -160,6 +160,41 @@ function sesDeps(
     },
   };
 }
+test("provider edits can add delivery credentials without re-entering saved sending secrets", async () => {
+  const original = input("resend");
+  original.credentials.apiKey = "preserved-sending-key";
+  const dependencies: Dependencies = {
+    fetch: async (_, init) => {
+      if (init?.headers)
+        assert.equal(
+          new Headers(init.headers).get("Authorization"),
+          "Bearer preserved-sending-key",
+        );
+      return Response.json({
+        data: [{ name: "example.com", status: "verified" }],
+      });
+    },
+  };
+  const saved = await saveProvider(userId, original, undefined, dependencies);
+  assert(saved);
+  const updated = await saveProvider(
+    userId,
+    {
+      ...original,
+      credentials: { apiKey: "", webhookSecret: "delivery-signing-secret" },
+    },
+    saved.id,
+    dependencies,
+  );
+  assert(updated);
+  const stored = unlocked(await getConnection(userId, saved.id));
+  assert.equal(stored.credentials.apiKey, "preserved-sending-key");
+  assert.equal(
+    stored.credentials.webhookSecret,
+    "delivery-signing-secret",
+  );
+});
+
 test("SES Save & Verify persists identity, quota, sandbox and enforcement states", async () => {
   for (const [dependencies, status] of [
     [sesDeps(), "HEALTHY"],
