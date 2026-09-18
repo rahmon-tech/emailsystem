@@ -72,8 +72,8 @@ jobs:
         run: node --import tsx scripts/verify-safety-upgrade.ts
       - name: Lint source
         run: pnpm lint
-      - name: Scan repository for secrets
-        run: pnpm secrets:scan
+      - name: Scan repository and Git history for secrets
+        run: pnpm secrets:scan:history
       - name: Typecheck TypeScript
         run: pnpm typecheck
       - name: Run unit tests with critical coverage visibility
