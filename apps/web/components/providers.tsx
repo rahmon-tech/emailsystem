@@ -302,9 +302,19 @@ export function Providers() {
                     </IconButton>
                   </Tooltip>
                 </Stack>
-                <Typography sx={{ mt: 2, fontSize: 13 }}>
-                  Verification sender · {p.settings.fromEmail}
-                </Typography>
+                <Stack spacing={0.35} sx={{ mt: 2 }}>
+                  <Typography sx={{ fontSize: 13, fontWeight: 600 }}>
+                    {p.settings.senderDomain ??
+                      p.settings.fromEmail.split("@")[1] ??
+                      "Sending domain"}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    {(p.settings.senderAliases?.length ?? 1)} alias
+                    {(p.settings.senderAliases?.length ?? 1) === 1 ? "" : "es"} ·{" "}
+                    {p.dailyBudgetOverride?.toLocaleString() ?? "Shared default"}/day ·{" "}
+                    {p.monthlyBudgetOverride?.toLocaleString() ?? "No connection cap"}/month
+                  </Typography>
+                </Stack>
                 <Stack
                   direction="row"
                   sx={{
@@ -345,9 +355,7 @@ export function Providers() {
                     alignItems: "center",
                     justifyContent: "space-between",
                     mt: 1.5,
-                    pt: 1.5,
-                    borderTop: 1,
-                    borderColor: "divider",
+                    pt: 0.5,
                     gap: 1,
                   }}
                 >
