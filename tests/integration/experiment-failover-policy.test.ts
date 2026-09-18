@@ -243,7 +243,7 @@ test("provider policy enforcement stops transport instead of failing over to ano
     where: { id: scenario.campaign.id },
   });
   assert.equal(repaused.state, "PAUSED");
-  assert.match(repaused.safeError ?? "", /Provider enforcement reported/);
+  assert.match(repaused.safeError ?? "", /approved.*controlled experiment.*blocked/i);
 
   const run = await db.experimentRun.findUniqueOrThrow({
     where: { id: scenario.run.id },
