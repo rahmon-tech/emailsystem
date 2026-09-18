@@ -556,7 +556,7 @@ export const catalog: ProviderDefinition[] = [
     verification: "smtp",
     capabilities: { nativeTestMode: "none", idempotency: false },
     help: "Use your mail service’s SMTP host and credentials. Public hosts with validated TLS certificates only.",
-    webhook: "none",
+    webhook: "basic",
   },
   {
     id: "mock",
