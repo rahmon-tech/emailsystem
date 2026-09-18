@@ -160,7 +160,7 @@ export async function selectDeliverySender(
     return providers.length ? { sender: anchor, providers } : null;
   }
   const scopedDomainIds = [
-    ...new Set((domainIds?.length ? domainIds : [anchor.authorizedDomainId])),
+    ...new Set(domainIds === undefined ? [anchor.authorizedDomainId] : domainIds),
   ];
   const identities = await tx.senderIdentity.findMany({
     where: {
@@ -171,9 +171,8 @@ export async function selectDeliverySender(
     include: senderInclude,
     orderBy: { email: "asc" },
   });
-  const allowedProviderIds = providerIds?.length
-    ? new Set(providerIds)
-    : null;
+  const allowedProviderIds =
+    providerIds === undefined ? null : new Set(providerIds);
   const viable = identities
     .map((sender) => ({
       sender,
