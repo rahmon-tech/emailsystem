@@ -1,28 +1,26 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { resolve } from "node:path";
 
 const root = resolve(process.cwd());
 
+function tsxFiles(directory: string): string[] {
+  return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+    const path = resolve(directory, entry.name);
+    if (entry.isDirectory()) return tsxFiles(path);
+    return entry.isFile() && entry.name.endsWith(".tsx") ? [path] : [];
+  });
+}
+
 const userFacingFiles = [
-  "apps/web/components/shell.tsx",
-  "apps/web/components/providers.tsx",
-  "apps/web/components/blast.tsx",
-  "apps/web/components/image-blast.tsx",
-  "apps/web/components/activity.tsx",
-  "apps/web/components/activity-pacing.tsx",
-  "apps/web/components/activity-provider-status.tsx",
-  "apps/web/components/sending-safety.tsx",
-  "apps/web/components/sender-settings.tsx",
-  "apps/web/components/tracking-settings.tsx",
-  "apps/web/components/provider-pacing-panel.tsx",
-  "apps/web/components/image-test-message.tsx",
+  ...tsxFiles(resolve(root, "apps/web/components")),
+  ...tsxFiles(resolve(root, "apps/web/app")),
 ];
 
 test("user-facing web copy does not regress to system-oriented wording", () => {
   const source = userFacingFiles
-    .map((path) => readFileSync(resolve(root, path), "utf8"))
+    .map((path) => readFileSync(path, "utf8"))
     .join("\n");
 
   for (const phrase of [
