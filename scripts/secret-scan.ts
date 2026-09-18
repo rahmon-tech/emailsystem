@@ -39,58 +39,50 @@ for (const file of files) {
 let historyBlobsScanned = 0;
 
 if (scanHistory) {
-  const objects = execFileSync("git", ["rev-list", "--objects", "--all"], {
-    encoding: "utf8",
-    maxBuffer: 64 * 1024 * 1024,
-  })
+  const objectIds = [
+    ...new Set(
+      execFileSync("git", ["rev-list", "--objects", "--all"], {
+        encoding: "utf8",
+        maxBuffer: 64 * 1024 * 1024,
+      })
+        .split("\n")
+        .map((line) => line.trim().split(" ", 1)[0])
+        .filter(Boolean),
+    ),
+  ];
+
+  const batchInput = objectIds.join("\n") + "\n";
+  const metadata = execFileSync(
+    "git",
+    ["cat-file", "--batch-check=%(objectname) %(objecttype) %(objectsize)"],
+    {
+      input: batchInput,
+      encoding: "utf8",
+      maxBuffer: 64 * 1024 * 1024,
+    },
+  );
+
+  const eligibleBlobIds = metadata
     .split("\n")
-    .map((line) => line.trim())
-    .filter(Boolean);
+    .map((line) => line.trim().split(" "))
+    .filter(
+      ([sha, type, size]) =>
+        Boolean(sha) &&
+        type === "blob" &&
+        Number.isFinite(Number(size)) &&
+        Number(size) <= 2 * 1024 * 1024,
+    )
+    .map(([sha]) => sha);
 
-  const seen = new Set<string>();
+  if (eligibleBlobIds.length > 0) {
+    const historicalContent = execFileSync("git", ["cat-file", "--batch"], {
+      input: eligibleBlobIds.join("\n") + "\n",
+      encoding: "utf8",
+      maxBuffer: 256 * 1024 * 1024,
+    });
 
-  for (const line of objects) {
-    const sha = line.split(" ", 1)[0];
-    if (!sha || seen.has(sha)) continue;
-    seen.add(sha);
-
-    let type: string;
-    try {
-      type = execFileSync("git", ["cat-file", "-t", sha], {
-        encoding: "utf8",
-      }).trim();
-    } catch {
-      continue;
-    }
-    if (type !== "blob") continue;
-
-    let size = 0;
-    try {
-      size = Number(
-        execFileSync("git", ["cat-file", "-s", sha], {
-          encoding: "utf8",
-        }).trim(),
-      );
-    } catch {
-      continue;
-    }
-
-    // Credential-bearing source/config files should be small. Avoid loading large
-    // binary/history blobs into memory.
-    if (!Number.isFinite(size) || size > 2 * 1024 * 1024) continue;
-
-    let source: string;
-    try {
-      source = execFileSync("git", ["cat-file", "-p", sha], {
-        encoding: "utf8",
-        maxBuffer: 3 * 1024 * 1024,
-      });
-    } catch {
-      continue;
-    }
-
-    historyBlobsScanned += 1;
-    if (containsCredential(source)) unsafe = true;
+    historyBlobsScanned = eligibleBlobIds.length;
+    if (containsCredential(historicalContent)) unsafe = true;
   }
 }
 
