@@ -310,8 +310,8 @@ export function Blast() {
       />
       {loaded && !hasEligibleSender && (
         <Alert severity="info" sx={{ mb: 3 }}>
-          Verify a provider and sending domain before sending.{" "}
-          <Link href="/providers">Manage providers and aliases</Link>
+          Connect and verify a sending service and domain before sending.{" "}
+          <Link href="/providers">Manage sending services and addresses</Link>
         </Alert>
       )}
       <Box
@@ -365,9 +365,13 @@ export function Blast() {
                     >
                       {index > 0 ? "· " : ""}
                       {(selected.stats[k] ?? 0).toLocaleString()}{" "}
-                      {k === "duplicate" && selected.stats[k] !== 1
-                        ? "duplicates"
-                        : k}
+                      {k === "duplicate"
+                        ? selected.stats[k] === 1
+                          ? "duplicate"
+                          : "duplicates"
+                        : k === "suppressed"
+                          ? "do-not-send"
+                          : k}
                     </Typography>
                   ))}
                 </Stack>
@@ -1017,7 +1021,7 @@ export function Blast() {
           </Card>
           <Card
             component="section"
-            aria-label="Pre-flight"
+            aria-label="Campaign check"
             sx={{ p: { xs: 1.75, sm: 2.25 } }}
           >
             <Stack spacing={2}>
@@ -1029,7 +1033,7 @@ export function Blast() {
                 >
                   03
                 </Typography>
-                <Typography variant="h6">Pre-flight</Typography>
+                <Typography variant="h6">Check campaign</Typography>
               </Stack>
               <Failure error={errorAction === "preflight" ? error : ""} />
               {!flight && (
@@ -1056,11 +1060,11 @@ export function Blast() {
                         flight.count > 0,
                       ],
                       [
-                        `${flight.providers.length} eligible ${flight.providers.length === 1 ? "provider" : "providers"}`,
+                        `${flight.providers.length} sending ${flight.providers.length === 1 ? "service" : "services"} ready`,
                         flight.providers.length > 0,
                       ],
                       [
-                        `Domains · ${flight.sender.domainCount} · ${flight.sender.aliasCount} ${flight.sender.aliasCount === 1 ? "alias" : "aliases"}`,
+                        `${flight.sender.domainCount} sending ${flight.sender.domainCount === 1 ? "domain" : "domains"} · ${flight.sender.aliasCount} From ${flight.sender.aliasCount === 1 ? "address" : "addresses"}`,
                         flight.sender.eligibleProviderCount > 0,
                       ],
                       ["HTML prepared", !!flight.previewHtml],
@@ -1099,11 +1103,10 @@ export function Blast() {
               )}
               {flight && (
                 <Typography variant="body2" color="text.secondary">
-                  {flight.safety.campaignUnits.toLocaleString()} campaign units
-                  · {flight.safety.availableUnits.toLocaleString()} available
-                  now
+                  {flight.safety.campaignUnits.toLocaleString()} emails needed ·{" "}
+                  {flight.safety.availableUnits.toLocaleString()} can send now
                   {flight.safety.campaignUnits > flight.safety.availableUnits
-                    ? ". Remaining recipients queue as capacity becomes available."
+                    ? ". The rest will wait and continue automatically as sending capacity becomes available."
                     : "."}
                 </Typography>
               )}
@@ -1127,7 +1130,7 @@ export function Blast() {
                   })
                 }
               >
-                {busy === "preflight" ? "Checking…" : "Run pre-flight"}
+                {busy === "preflight" ? "Checking…" : "Check campaign"}
               </Button>
               <Button
                 variant={flight?.ready ? "contained" : "outlined"}
@@ -1222,7 +1225,7 @@ export function Blast() {
             <Failure error={errorAction === "test" ? error : ""} />
             <TextField
               select
-              label="Provider"
+              label="Sending service"
               value={testProvider}
               onChange={(e) => setTestProvider(e.target.value)}
             >
