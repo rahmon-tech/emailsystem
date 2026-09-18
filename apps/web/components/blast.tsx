@@ -291,7 +291,7 @@ export function Blast() {
             size="small"
             sx={{ whiteSpace: "nowrap" }}
           >
-            Image-first
+            Image-first mode
           </Button>
         }
       />
