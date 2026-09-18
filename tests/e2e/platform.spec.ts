@@ -221,7 +221,7 @@ test("login, provider setup, HTML import, preview, test, campaign controls, reco
     animations: "disabled",
   });
   await page
-    .getByRole("button", { name: "Link settings", exact: true })
+    .getByRole("button", { name: "Link tracking", exact: true })
     .click();
   const linksDialog = page.getByRole("dialog", {
     name: "Links & tracking",
