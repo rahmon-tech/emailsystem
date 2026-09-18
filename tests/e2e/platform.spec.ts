@@ -466,7 +466,7 @@ test("login, provider setup, HTML import, preview, test, campaign controls, reco
         ).toContainText("Delivered");
       else if (route === "/providers")
         await expect(
-          page.getByText("Browser verification", { exact: true }),
+          page.getByText("Browser verification", { exact: true }).first(),
         ).toBeVisible();
       else
         await expect(page.getByLabel("Sending domains")).toContainText(
