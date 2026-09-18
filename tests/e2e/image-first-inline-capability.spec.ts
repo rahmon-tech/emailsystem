@@ -64,8 +64,8 @@ test("image-first shows inline CID capability as soon as the sender is selected"
     await expect(page).toHaveURL(/\/blast$/);
     await page.goto(appPath("/blast/image"));
 
-    await page.getByLabel("Sender identity").click();
-    await page.getByRole("option", { name: "sender@example.com", exact: true }).click();
+    await page.getByLabel("Sending domain").click();
+    await page.getByRole("option", { name: /^example\.com/ }).click();
 
     await expect(
       page.getByText(
