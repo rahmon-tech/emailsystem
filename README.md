@@ -1,30 +1,64 @@
 # EmailSystem
 
-Self-hosted, multi-provider email campaigns with a focused **Providers → Blast → Activity** workflow.
+[![Verify EmailSystem](https://github.com/rahmon-tech/emailsystem/actions/workflows/ci.yml/badge.svg)](https://github.com/rahmon-tech/emailsystem/actions/workflows/ci.yml)
 
-The web application stores a campaign and returns immediately. Independent workers prepare recipients, claim individual deliveries, coordinate provider limits in Redis, and record outcomes in PostgreSQL. Provider acceptance and confirmed delivery are separate states. An ambiguous send is held for reconciliation rather than resent automatically.
+EmailSystem is a self-hosted, multi-provider email campaign platform built around a simple workflow: **Sending services → Create campaign → Activity**.
 
-## Included
+It separates campaign creation from background delivery. The web application stores work quickly, while independent workers prepare recipients, coordinate provider capacity, claim deliveries, send messages, process provider events, and persist delivery state.
 
-- API and SMTP presets for Resend, Amazon SES, Mailgun, SendGrid, Brevo, Postmark, Mailjet, SMTP2GO and Elastic Email; public Custom SMTP.
-- Encrypted credentials, provider-specific Save & Verify, separate controlled test emails and verification history.
-- Idempotent eight-provider API bootstrap, verified domains, bulk sender aliases, and campaign sender selection.
-- CSV, TXT, XLSX and pasted recipients, normalization, deduplication and account-wide suppressions.
-- Tiptap rich text, CodeMirror HTML import, sanitized immutable email snapshots, mobile/desktop previews, attachments and scheduling.
-- PostgreSQL campaign/delivery/attempt records, BullMQ workers, weighted dispatch, coordinated rate/concurrency limits, cooldowns and bounded retries.
-- Independent rolling 24-hour account/domain/provider/campaign budgets, durable usage recovery, and complaint/hard-bounce pauses requiring review.
-- Authenticated provider notifications, signed unsubscribe links, live SSE activity, pause/resume/cancel, filters and safe CSV exports.
-- Password hashing, tenant ownership checks, CSRF protection, rate limits, Docker Compose, HTTPS proxy, migration and backup instructions.
+Provider acceptance is intentionally not treated as mailbox delivery. Ambiguous outcomes are held for reconciliation instead of being blindly resent.
 
-## Sending safety
+## Highlights
 
-Provider connections default to a 5,000-unit rolling 24-hour cap and a 150,000-unit UTC calendar-month cap. **Providers → Sending safety** can add stricter shared account, sender-domain or campaign ceilings; those shared ceilings are blank by default rather than silently limiting aggregate provider capacity. One To/CC/BCC recipient uses one unit. Eligible connections on the selected verified domain contribute capacity independently, while provider quota/rate/concurrency, sender authorization, warm-up, suppressions and any configured shared ceilings remain authoritative. Larger campaigns queue as capacity becomes available.
+- Multi-provider API and SMTP support for Resend, Amazon SES, Mailgun, SendGrid, Brevo, Postmark, Mailjet, SMTP2GO, Elastic Email, and Custom SMTP.
+- Verified sending domains, multiple From addresses, connection health checks, and provider-aware webhook setup.
+- CSV, TXT, XLSX, and pasted-recipient imports with normalization, deduplication, and suppression handling.
+- Rich-text and HTML composition, sanitization, previews, attachments, scheduling, and pre-flight checks.
+- PostgreSQL-backed campaign, delivery, attempt, audit, and event state.
+- Redis/BullMQ background processing with coordinated rate, concurrency, cooldown, retry, and provider-selection controls.
+- Account, domain, provider, and campaign safety limits with review gates for complaints and hard bounces.
+- Authenticated delivery-event handling, unsubscribe suppression, live Activity updates, pause/resume/cancel, and CSV exports.
+- Docker Compose and native/systemd deployment options.
+- CI covering migrations, schema drift, linting, secret checks, TypeScript, unit/integration tests, browser E2E, production builds, and container validation.
 
-Complaint/hard-bounce thresholds can pause an account or campaign after a meaningful sample. Review the provider reports, record an administrator review, then explicitly resume. See [window, recovery and brake details](docs/ARCHITECTURE.md#central-sending-safety-governor). Sending safety controls reduce accidental over-sending and help preserve provider/account health.
+## Architecture
 
-## Requirements
+```text
+Browser
+   │
+   ▼
+Next.js web application
+   │
+   ├── PostgreSQL ── durable product and delivery state
+   │
+   ├── Redis/BullMQ ── queues, pacing and coordination
+   │
+   └── Worker processes
+          │
+          ├── provider API adapters
+          ├── SMTP adapters
+          └── webhook/event reconciliation
+```
 
-Node 24.19+, pnpm 11.19, PostgreSQL 17, Redis 7.4. Docker Engine with the Compose plugin is recommended for a dedicated VPS, but the repository also supports a native/systemd runtime. TypeScript 6 and ESLint 9 are pinned for compatibility with the current Next.js lint integration; the application uses Next.js 16, React 19, MUI 9 and Prisma 7.
+The delivery engine is designed around durable state transitions and idempotent work. A provider timeout or lost response does not automatically mean a message is safe to resend.
+
+See [Architecture](docs/ARCHITECTURE.md) for the detailed model.
+
+## Technology
+
+- TypeScript
+- Next.js 16 / React 19
+- MUI 9
+- PostgreSQL 17
+- Prisma 7
+- Redis 7.4
+- BullMQ
+- Nodemailer
+- Zod
+- Playwright
+- Docker / Docker Compose
+
+The repository currently targets Node.js 24.19+ and pnpm 11.19.
 
 ## Local development
 
@@ -32,32 +66,43 @@ Node 24.19+, pnpm 11.19, PostgreSQL 17, Redis 7.4. Docker Engine with the Compos
 corepack enable
 corepack prepare pnpm@11.19.0 --activate
 pnpm install --frozen-lockfile
+
 cp .env.example .env
-# Edit DATABASE_URL to use local-development-only as the password.
-# Generate SESSION_SECRET and CREDENTIAL_ENCRYPTION_KEY independently:
-openssl rand -hex 32
-openssl rand -hex 32
+
+# Generate these independently and place them in .env:
+openssl rand -hex 32   # SESSION_SECRET
+openssl rand -hex 32   # CREDENTIAL_ENCRYPTION_KEY
+
 docker compose -f compose.dev.yaml up -d
+
 pnpm bootstrap:native
-# First use of a new empty database only:
 pnpm db:migrate
 pnpm user:create
 pnpm dev
-# In a second terminal:
+```
+
+Start the worker in a second terminal:
+
+```sh
 pnpm worker
 ```
 
-`pnpm bootstrap:native` performs read-only PostgreSQL/Redis checks and validates the runtime environment before generating Prisma. It never applies SQL migrations. If PostgreSQL and Redis are already installed natively, configure their host-reachable URLs in `.env` and skip the development Compose command.
+Set `ALLOW_MOCK_PROVIDER=true` only for development/test environments that intentionally use the mock adapter.
 
-Set `ALLOW_MOCK_PROVIDER=true` to expose the explicitly labeled development adapter. It is absent from a normal installation. It sends no real email. A fresh account contains no providers, recipients or campaigns.
+## Production deployment
 
-## VPS installation
+Two deployment models are supported:
 
-See [deployment instructions](docs/DEPLOYMENT.md) for Docker Compose and shared-host guidance. Existing hosts that run the web/worker processes directly under systemd should use the [native runtime guide](docs/NATIVE_RUNTIME.md). Provider bootstrap values live only in a mode-0600 git-ignored local file and are encrypted into PostgreSQL; they are never browser or repository content.
+- **Docker Compose** for a dedicated installation.
+- **Native/systemd** when PostgreSQL, Redis, reverse proxying, and process supervision are already managed by the host.
 
-For native production builds, `pnpm build:native` packages the current `.next/static` and public assets beside the generated Next.js standalone server so the browser and server always come from the same build.
+Read [Deployment](docs/DEPLOYMENT.md) before installing or upgrading a production instance. Native installations should also read [Native runtime](docs/NATIVE_RUNTIME.md).
+
+Never commit production `.env` files, provider credentials, database dumps, or generated provider bootstrap files.
 
 ## Verification
+
+Run the core checks locally with:
 
 ```sh
 pnpm db:generate
@@ -65,24 +110,34 @@ pnpm lint
 pnpm secrets:scan
 pnpm typecheck
 pnpm test
-# Against an isolated database whose name contains "test":
-pnpm db:migrate
-ALLOW_MOCK_PROVIDER=true pnpm test:integration
+pnpm test:integration
 pnpm build
-ALLOW_MOCK_PROVIDER=true pnpm test:e2e
+pnpm test:e2e
 ```
 
-GitHub Actions uses real PostgreSQL and Redis service containers, applies all SQL migrations, rehearses an upgrade from the verified provider milestone, checks schema drift, runs domain/provider/integration/browser tests, builds Next.js, validates Caddy, and starts the production web/worker containers to check readiness. Browser tests use HTTPS and the development provider; they never send real email. Screenshots and failure traces are attached to the run.
+Integration and browser tests require the documented PostgreSQL/Redis test environment. CI performs a more complete release verification, including fresh migrations, schema-drift checks, upgrade rehearsal, browser testing, and production-container startup.
 
-Implementation and verification status are recorded in [CURRENT_WORK](docs/CURRENT_WORK.md). Live provider delivery, account-specific permission behavior and deployment on your VPS require your credentials/infrastructure. These are not implied by a successful mock test.
+See [Verification](docs/VERIFICATION.md).
 
 ## Documentation
 
-- [Architecture and delivery semantics](docs/ARCHITECTURE.md)
-- [Verification results](docs/VERIFICATION.md)
-- [Provider configuration and webhook setup](docs/PROVIDERS.md)
-- [Security and operational limits](docs/SECURITY.md)
-- [Deployment, migration, backup and restore](docs/DEPLOYMENT.md)
-- [Native / systemd runtime](docs/NATIVE_RUNTIME.md)
-- [Original engineering directive](docs/MASTER_DIRECTIVE.md)
-- [Provider catalog addendum](docs/PROVIDER_CATALOG_ADDENDUM.md)
+- [Architecture](docs/ARCHITECTURE.md)
+- [Provider setup and delivery webhooks](docs/PROVIDERS.md)
+- [Security and operational boundaries](docs/SECURITY.md)
+- [Deployment](docs/DEPLOYMENT.md)
+- [Native/systemd runtime](docs/NATIVE_RUNTIME.md)
+- [Verification and release checks](docs/VERIFICATION.md)
+
+## Responsible use
+
+EmailSystem is intended for legitimate, permission-based email operations. Operators remain responsible for consent, sender authentication, provider policies, applicable law, unsubscribe handling, and acceptable-use requirements.
+
+The project intentionally keeps provider enforcement, suppressions, safety limits, and uncertain-delivery handling separate from ordinary retry logic.
+
+## Project status
+
+The application is actively maintained and has been deployed using the native/systemd runtime. Automated tests use isolated test data and mock transports where appropriate; successful CI does not claim that a third-party provider account, DNS configuration, or live production instance is healthy.
+
+## License
+
+A public repository is not automatically open source. No open-source license has been granted yet; standard copyright restrictions apply until a license is added.
