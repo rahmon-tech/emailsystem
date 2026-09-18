@@ -70,14 +70,14 @@ export function SafetyReview({
       open={open}
       onClose={close}
       busy={busy}
-      title="Review safety pause"
+      title="Review sending pause"
     >
       <DialogContent>
         <Stack spacing={2}>
           <Failure error={error} />
           <Typography>
-            Check the provider reports and correct the cause before allowing
-            more sending. Campaigns stay paused after this review.
+            Review recent bounce and complaint results, then fix the cause before
+            sending more. Campaigns remain paused until you resume them.
           </Typography>
           <FormControlLabel
             control={
@@ -195,7 +195,7 @@ export function SendingSafety() {
       }}
       helperText={
         nullableBudget
-          ? "Blank means no additional shared ceiling at this scope."
+          ? "Leave blank if you do not want an extra limit here."
           : undefined
       }
     />
@@ -221,7 +221,7 @@ export function SendingSafety() {
         )
       }
       slotProps={{ htmlInput: { min: 1, max: 1000000, step: 1 } }}
-      helperText="Blank means no additional ceiling at this scope."
+      helperText="Leave blank if you do not want an extra speed limit here."
     />
   );
   return (
@@ -233,13 +233,13 @@ export function SendingSafety() {
           setOpen(true);
         }}
       >
-        Sending safety
+        Sending limits & protection
       </Button>
       <ResponsiveDialog
         open={open}
         onClose={() => setOpen(false)}
         busy={busy}
-        title="Sending safety"
+        title="Sending limits & protection"
         width={640}
         mobileFullScreen
       >
@@ -251,9 +251,8 @@ export function SendingSafety() {
             ) : (
               <>
                 <Typography color="text.secondary" variant="body2">
-                  Shared account/domain safeguards sit above the daily and
-                  monthly limits configured on each provider connection. Each
-                  To, CC and BCC address uses one unit.
+                  Set optional limits that apply across all sending services.
+                  Each To, CC and BCC recipient counts as one email.
                 </Typography>
                 {value.pausedReason && (
                   <Alert
@@ -274,10 +273,10 @@ export function SendingSafety() {
                     gap: 2.5,
                   }}
                 >
-                  {field("accountDaily", "Account · rolling 24h")}
-                  {field("domainDaily", "Sender domain · rolling 24h")}
-                  {field("accountMonthly", "Account · UTC month")}
-                  {field("domainMonthly", "Sender domain · UTC month")}
+                  {field("accountDaily", "All sending · 24 hours")}
+                  {field("domainDaily", "Each domain · 24 hours")}
+                  {field("accountMonthly", "All sending · monthly")}
+                  {field("domainMonthly", "Each domain · monthly")}
                   {value.campaignDaily !== null &&
                     field("campaignDaily", "Default campaign daily safeguard")}
                 </Box>
@@ -296,13 +295,12 @@ export function SendingSafety() {
                   label="Daily budget for new campaigns"
                 />
                 <Typography variant="caption" color="text.secondary">
-                  Provider connection limits are configured in Providers.
-                  These shared safeguards can still impose a stricter ceiling
-                  across all connections.
+                  Each sending service keeps its own limits. These account and
+                  domain limits can only make sending more restrictive, never less.
                 </Typography>
                 <TextField
                   select
-                  label="Sender-domain warm-up"
+                  label="Domain sending ramp-up"
                   value={value.warmupProfile}
                   onChange={(e) =>
                     setValue({
@@ -311,46 +309,45 @@ export function SendingSafety() {
                         .value as SafetySettings["warmupProfile"],
                     })
                   }
-                  helperText="Controls how cautiously a high-rate sender domain ramps after inactivity. It never raises configured provider limits."
+                  helperText="Controls how quickly a new or inactive domain increases its sending speed. It never exceeds your service limits."
                 >
-                  <MenuItem value="conservative">Conservative</MenuItem>
-                  <MenuItem value="balanced">Balanced</MenuItem>
+                  <MenuItem value="conservative">Slow and cautious</MenuItem>
+                  <MenuItem value="balanced">Recommended</MenuItem>
                   <MenuItem value="high_capacity">
-                    High capacity · within configured limits
+                    Faster · still within your limits
                   </MenuItem>
                 </TextField>
                 <Accordion disableGutters>
                   <AccordionSummary expandIcon={<ExpandMore />}>
-                    Throughput ceilings
+                    Sending speed limits
                   </AccordionSummary>
                   <AccordionDetails>
                     <Stack spacing={2.5}>
-                      {pacingField("accountPerMinute", "Account / minute")}
-                      {pacingField("domainPerMinute", "Sender-domain / minute")}
-                      {pacingField("campaignPerMinute", "Campaign / minute")}
+                      {pacingField("accountPerMinute", "All sending / minute")}
+                      {pacingField("domainPerMinute", "Each domain / minute")}
+                      {pacingField("campaignPerMinute", "Each campaign / minute")}
                       <Typography variant="caption" color="text.secondary">
-                        These optional ceilings are shared across providers. The
-                        dispatcher always uses the strictest applicable account,
-                        sender-domain, campaign, and provider limit.
+                        EmailSystem always follows the lowest limit that applies
+                        to the account, domain, campaign, or sending service.
                       </Typography>
                     </Stack>
                   </AccordionDetails>
                 </Accordion>
                 <Accordion disableGutters>
                   <AccordionSummary expandIcon={<ExpandMore />}>
-                    Automatic safety pauses
+                    Automatic protection pauses
                   </AccordionSummary>
                   <AccordionDetails>
                     <Stack spacing={2.5}>
-                      {field("complaintRate", "Complaint threshold (%)")}
-                      {field("hardBounceRate", "Hard bounce threshold (%)")}
+                      {field("complaintRate", "Pause when complaints reach (%)")}
+                      {field("hardBounceRate", "Pause when hard bounces reach (%)")}
                       {field(
                         "minimumSample",
-                        "Minimum accepted recipient sample",
+                        "Minimum recipients before checking",
                       )}
                       <TextField
                         select
-                        label="Pause scope"
+                        label="What should pause?"
                         value={value.brakeScope}
                         onChange={(e) =>
                           setValue({
@@ -360,21 +357,20 @@ export function SendingSafety() {
                           })
                         }
                       >
-                        <MenuItem value="both">Account and campaign</MenuItem>
-                        <MenuItem value="account">Account</MenuItem>
-                        <MenuItem value="campaign">Campaign</MenuItem>
+                        <MenuItem value="both">This campaign and all sending</MenuItem>
+                        <MenuItem value="account">All sending</MenuItem>
+                        <MenuItem value="campaign">Only this campaign</MenuItem>
                       </TextField>
                       <Typography variant="caption" color="text.secondary">
-                        Uses confirmed provider outcomes over seven days. Safety
-                        pauses require administrator review.
+                        Uses confirmed delivery results from the last seven days.
+                        A paused campaign stays stopped until an administrator reviews it.
                       </Typography>
                     </Stack>
                   </AccordionDetails>
                 </Accordion>
                 <Typography variant="caption" color="text.secondary">
-                  Provider connection capacity still belongs to each SMTP/API
-                  connection. These optional account/domain ceilings are shared
-                  across healthy connections and never increase provider limits.
+                  Your email service limits still apply. These optional account
+                  and domain limits can only reduce how much EmailSystem sends.
                 </Typography>
               </>
             )}
@@ -423,7 +419,7 @@ export function SendingSafety() {
               }
             }}
           >
-            {busy ? "Saving…" : "Save safety settings"}
+            {busy ? "Saving…" : "Save limits"}
           </Button>
         </DialogActions>
       </ResponsiveDialog>
@@ -440,7 +436,7 @@ export function SendingSafety() {
         open={saved}
         autoHideDuration={4000}
         onClose={() => setSaved(false)}
-        message="Sending safety updated."
+        message="Sending limits updated."
       />
     </>
   );
@@ -478,7 +474,7 @@ export function SafetyMetrics({
     <Stack
       spacing={1.5}
       sx={{ mt: 2, p: 2, bgcolor: "action.hover", borderRadius: 2 }}
-      aria-label="Sending safety usage"
+      aria-label="Sending limit usage"
     >
       <Box
         sx={{
@@ -492,8 +488,8 @@ export function SafetyMetrics({
             key={b.scope}
             title={
               b.scope.startsWith("account")
-                ? "Shared across all campaigns and providers. Includes durable transport starts/reservations and provider tests."
-                : "Shared by all eligible senders on this specific sending domain."
+                ? "Shared across all campaigns and sending services. Includes emails already sent or reserved to send, plus test emails."
+                : "Shared by every From address using this sending domain."
             }
           >
             <Box sx={{ minWidth: 0 }}>
@@ -530,7 +526,7 @@ export function SafetyMetrics({
         ))}
       </Box>
       <Typography variant="caption" color="text.secondary">
-        Provider daily/monthly and rate limits also apply.
+        Your sending services may have additional daily, monthly, or speed limits.
         {next
           ? ` Capacity releases from ${new Date(next).toLocaleString()}.`
           : ""}
@@ -545,7 +541,7 @@ export function SafetyMetrics({
                 startIcon={<ShieldOutlined />}
                 onClick={() => setReview(true)}
               >
-                Review safety pause
+                Review pause
               </Button>
             </Box>
           )}
