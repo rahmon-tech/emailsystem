@@ -213,23 +213,32 @@ EmailBlast therefore treats uncertain transport outcomes conservatively and wait
 
 ### Provider routing
 
-Campaigns are not permanently tied to one provider connection.
+Provider routing matters when the user has **more than one eligible sending-service connection** available for the sending domain(s) selected during campaign setup.
 
-For each delivery, the routing layer considers only routes that are currently valid for the selected sending domain and sender identity. Eligibility can be affected by:
+A sending-service connection is one configured provider account/transport in EmailBlast — for example a Resend connection, an Amazon SES connection, a SendGrid connection, or multiple separate connections to the same provider. It does **not** mean multiple EmailBlast user accounts.
 
-- connection enabled/disabled state;
+During campaign setup, the user chooses one or more verified sending domains rather than manually choosing a provider for every recipient. EmailBlast then finds the provider connections already authorized and available for those selected domains and From addresses.
+
+- With **one eligible connection**, that connection is used.
+- With **multiple eligible connections**, EmailBlast can distribute work across the connections that are currently allowed to send.
+- With **no eligible connection**, pre-flight blocks the campaign until a usable sending service/domain combination is available.
+
+For each delivery, eligibility can be affected by:
+
+- whether the connection is enabled;
 - successful provider verification;
-- sender/domain authorization;
+- authorization for the selected domain and From address;
 - provider policy state;
-- configured per-second and per-minute limits;
+- configured traffic share/weight;
+- per-second and per-minute limits;
 - connection concurrency;
-- daily/monthly capacity;
-- cooldowns and temporary pressure;
-- shared account/domain/campaign safeguards;
+- daily/monthly connection capacity;
+- cooldowns and adaptive slowdown;
+- account/domain/campaign safety limits;
 - suppressions;
 - campaign state.
 
-Independent healthy connections can contribute capacity without allowing one provider to bypass the safety or authorization rules of another.
+This lets multiple healthy provider connections contribute capacity without allowing one connection to bypass the safety, authorization, or policy restrictions of another.
 
 ### Background processing
 
