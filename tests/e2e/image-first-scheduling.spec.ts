@@ -63,7 +63,7 @@ test("image-first scheduling uses the existing local-time to ISO campaign contra
       (request) =>
         request.method() === "POST" && request.url().includes("/api/preflight"),
     );
-    await page.getByRole("button", { name: "Run pre-flight", exact: true }).click();
+    await page.getByRole("button", { name: "Check campaign", exact: true }).click();
     const request = await preflightRequest;
     expect(request.postDataJSON()).toMatchObject({ scheduledAt: scheduledIso });
     await expect(
