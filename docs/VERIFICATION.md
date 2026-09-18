@@ -1,6 +1,6 @@
-# Verification and release checks
+# EmailBlast verification and release checks
 
-EmailSystem separates repository verification from live-provider and production-host verification.
+EmailBlast separates repository verification from live-provider and production-host verification.
 
 A green CI run proves that the selected source tree passed the automated repository checks. It does not prove that a third-party provider account, DNS record, TLS certificate, production database, or live webhook is currently healthy.
 
