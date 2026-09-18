@@ -43,7 +43,7 @@ function detail(pacing: Pacing) {
       : "Waiting for enough sending activity to calculate speed.";
   if (pacing.status === "estimating")
     return "Calculating sending speed and time remaining.";
-  return "Based on recent sends. Speed can change when a provider slows down, reaches a limit, or retries a message.";
+  return "Based on recent sends. Speed can change when a sending service slows down, reaches a limit, or retries a message.";
 }
 
 export function ActivityPacing() {
