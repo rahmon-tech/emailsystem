@@ -112,7 +112,25 @@ const states = [
   "CANCELLED",
   "UNKNOWN",
 ];
-const label = (v: string) => v.toLowerCase().replaceAll("_", " ");
+const friendlyLabels: Record<string, string> = {
+  PENDING: "Waiting",
+  QUEUED: "Waiting to send",
+  PROCESSING: "Sending",
+  PROVIDER_ACCEPTED: "Accepted by sending service",
+  DELIVERED: "Delivered",
+  DEFERRED: "Waiting to retry",
+  SOFT_BOUNCED: "Temporary bounce",
+  HARD_BOUNCED: "Bounced",
+  FAILED: "Failed",
+  COMPLAINED: "Complaint",
+  UNSUBSCRIBED: "Unsubscribed",
+  SUPPRESSED: "Skipped · do-not-send",
+  CANCELLED: "Cancelled",
+  UNKNOWN: "Delivery unclear",
+};
+const label = (v: string) =>
+  friendlyLabels[v.toUpperCase()] ??
+  v.toLowerCase().replaceAll("_", " ").replace(/^./, (letter) => letter.toUpperCase());
 export function Activity() {
   const params = useSearchParams();
   const campaignPagesLoaded = useRef(false);
@@ -278,8 +296,8 @@ export function Activity() {
           "Queued",
           (summary.counts.PENDING ?? 0) + (summary.counts.QUEUED ?? 0),
         ],
-        ["Processing", summary.counts.PROCESSING ?? 0],
-        ["Deferred", summary.counts.DEFERRED ?? 0],
+        ["Sending", summary.counts.PROCESSING ?? 0],
+        ["Waiting to retry", summary.counts.DEFERRED ?? 0],
         [
           "Bounced",
           (summary.counts.HARD_BOUNCED ?? 0) +
@@ -339,7 +357,7 @@ export function Activity() {
           <EmptyState
             icon={<GraphicEq />}
             title="No campaigns yet"
-            description="Prepare your first email in Blast."
+            description="Create your first campaign to see its progress here."
             action={
               <Button
                 variant="contained"
@@ -839,7 +857,7 @@ export function Activity() {
                                           : "text.secondary",
                                   }}
                                 >
-                                  {e.kind}
+                                  {label(e.kind)}
                                 </Box>
                               </Stack>
                               <Box sx={{ mt: 0.5, color: "text.secondary" }}>
@@ -911,7 +929,7 @@ export function Activity() {
                                 sx={{ fontSize: 12 }}
                                 color="text.secondary"
                               >
-                                {d.attemptCount} attempts
+                                {d.attemptCount} send attempt{d.attemptCount === 1 ? "" : "s"}
                               </Typography>
                               <Status value={d.state} />
                             </Stack>
@@ -1009,8 +1027,9 @@ export function Activity() {
       >
         <DialogContent>
           <Failure error={error} />
-          Unclaimed recipients will be cancelled. Messages already accepted by a
-          provider and attempts already in progress keep their actual outcomes.
+          Recipients that have not started sending will be cancelled. Emails
+          already accepted by a sending service, or already being sent, keep
+          their actual results.
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setCancel(false)}>Keep campaign</Button>
@@ -1045,7 +1064,7 @@ export function Activity() {
             />
             <Tooltip title="Search">
               <IconButton
-                aria-label="Search suppressions"
+                aria-label="Search do-not-send list"
                 onClick={() => void inspectSuppression()}
               >
                 <Search fontSize="small" />
