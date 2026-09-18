@@ -27,7 +27,7 @@ import {
 import { api } from "./api-client";
 const sections = [
   { label: "Blast", path: "/blast", icon: SendOutlined },
-  { label: "Providers", path: "/providers", icon: HubOutlined },
+  { label: "Sending services", path: "/providers", icon: HubOutlined },
   { label: "Activity", path: "/activity", icon: TerminalOutlined },
 ];
 export function Shell({
