@@ -5,7 +5,7 @@ import { sessionCookie, userFromTokens } from "@emailsystem/core/auth";
 import { absoluteAppUrl } from "@emailsystem/core/server-paths";
 import { ImageBlast } from "../../../../components/image-blast";
 
-export const metadata = { title: "Image-first Blast" };
+export const metadata = { title: "Create image-first campaign" };
 export const dynamic = "force-dynamic";
 
 export default async function Page() {
