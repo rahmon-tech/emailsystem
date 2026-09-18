@@ -90,6 +90,7 @@ export const messageInput = z
     name: headerText.min(1),
     importId: z.uuid(),
     senderDomainId: z.uuid().optional(),
+    senderDomainIds: z.array(z.uuid()).min(1).max(10).optional(),
     senderIdentityId: z.uuid().optional(),
     experimentRunId: z.uuid().optional(),
     from: z
@@ -119,7 +120,11 @@ export const messageInput = z
   })
   .strict()
   .refine(
-    (value) => value.senderDomainId || value.senderIdentityId || value.from,
+    (value) =>
+      value.senderDomainIds?.length ||
+      value.senderDomainId ||
+      value.senderIdentityId ||
+      value.from,
     {
       message: "Choose a verified sending domain.",
       path: ["senderDomainId"],
@@ -167,24 +172,52 @@ export async function preflight(userId: string, input: unknown) {
     (await db.suppression.count({ where: { userId, email: { in: copies } } }))
   )
     problems.push("A CC/BCC address is suppressed.");
-  const senderSelection = data.senderDomainId
-    ? await resolveSenderDomain(userId, data.senderDomainId)
-    : await resolveSender(userId, {
-        senderIdentityId: data.senderIdentityId,
-        from: data.from,
-      });
+  const selectedDomainIds = [
+    ...new Set(
+      data.senderDomainIds?.length
+        ? data.senderDomainIds
+        : data.senderDomainId
+          ? [data.senderDomainId]
+          : [],
+    ),
+  ];
+  if (data.experimentRunId && selectedDomainIds.length > 1)
+    problems.push(
+      "Authorized experiments must stay pinned to one sending domain.",
+    );
+  const domainSelections = selectedDomainIds.length
+    ? await Promise.all(
+        selectedDomainIds.map((domainId) =>
+          resolveSenderDomain(userId, domainId),
+        ),
+      )
+    : [];
+  const senderSelection =
+    domainSelections[0] ??
+    (await resolveSender(userId, {
+      senderIdentityId: data.senderIdentityId,
+      from: data.from,
+    }));
   const sender = senderSelection.sender;
-  const poolSenders = data.senderDomainId
-    ? (senderSelection as Awaited<ReturnType<typeof resolveSenderDomain>>).senders
+  const poolSenders = domainSelections.length
+    ? domainSelections.flatMap((selection) => selection.senders)
     : [sender];
   const providerPool =
-    data.experimentRunId && data.senderDomainId
+    data.experimentRunId && selectedDomainIds.length
       ? (
           await resolveSender(userId, {
             senderIdentityId: sender.id,
           })
         ).providers
-      : senderSelection.providers;
+      : domainSelections.length
+        ? [
+            ...new Map(
+              domainSelections
+                .flatMap((selection) => selection.providers)
+                .map((provider) => [provider.id, provider]),
+            ).values(),
+          ]
+        : senderSelection.providers;
   const providers = needsInlineTransport
     ? providerPool.filter((provider) =>
         supportsInlineAttachmentTransport(provider),
@@ -220,19 +253,49 @@ export async function preflight(userId: string, input: unknown) {
     problems.push(
       "Raise the provider rate limits to cover one recipient plus the CC/BCC copies, or remove copies.",
     );
-  const safety = await safetyCapacity(userId, sender.email);
+  const safetyRows = await Promise.all(
+    (domainSelections.length
+      ? domainSelections.map((selection) => selection.sender.email)
+      : [sender.email]
+    ).map((from) => safetyCapacity(userId, from)),
+  );
+  const safety = safetyRows[0];
   const campaignLimit =
     data.dailyBudget === undefined ? safety.campaignDefault : data.dailyBudget;
   const cost = messageCost(data);
+  const remaining = (
+    budget:
+      | { used: number; limit: number | null; nextReleaseAt: number | null }
+      | undefined,
+  ) =>
+    !budget || budget.limit === null
+      ? Infinity
+      : Math.max(0, budget.limit - budget.used);
+  const accountBudget = safety.usage.find((budget) => budget.scope === "account");
+  const domainBudgets = safetyRows.map((row) =>
+    row.usage.find((budget) => budget.scope.startsWith("domain:")),
+  );
   if (
-    [...safety.usage.map((b) => b.limit), campaignLimit].some(
-      (limit) => limit !== null && limit < cost,
+    (accountBudget?.limit !== null &&
+      accountBudget !== undefined &&
+      accountBudget.limit < cost) ||
+    (campaignLimit !== null && campaignLimit < cost) ||
+    domainBudgets.every(
+      (budget) =>
+        budget !== undefined && budget.limit !== null && budget.limit < cost,
     )
   )
     problems.push(
-      "A safety budget is too small for one message and its copies. Raise it or remove copies.",
+      "The available account, campaign, or selected-domain safety capacity is too small for one message and its copies.",
     );
   if (safety.pausedReason) problems.push(safety.pausedReason);
+  const domainPoolAvailable = domainBudgets.reduce(
+    (total, budget) =>
+      total === Infinity || budget?.limit === null
+        ? Infinity
+        : total + remaining(budget),
+    0,
+  );
   const snapshot = normalizeEmail(data.html, data.preheader);
   const referencedCids = cidReferences(snapshot.html);
   const inlineIds = new Set(
@@ -278,11 +341,16 @@ export async function preflight(userId: string, input: unknown) {
       enabled: tracking.enabled,
       appUrl: tracking.enabled ? config().APP_URL : null,
     },
-    senderPool: data.senderDomainId
+    senderPool: selectedDomainIds.length
       ? {
           domainId: sender.authorizedDomain.id,
-          enabled: poolSenders.length > 1 && !data.experimentRunId,
+          domainIds: selectedDomainIds,
+          domains: domainSelections.map((selection) => selection.domain.domain),
+          enabled:
+            (poolSenders.length > 1 || selectedDomainIds.length > 1) &&
+            !data.experimentRunId,
           aliasCount: poolSenders.length,
+          domainCount: selectedDomainIds.length,
         }
       : undefined,
   };
@@ -297,11 +365,17 @@ export async function preflight(userId: string, input: unknown) {
             `${copies.length} CC/BCC copies will be sent for every recipient and count toward provider limits.`,
           ]
         : []),
-      ...(data.senderDomainId && poolSenders.length > 1 && !data.experimentRunId
+      ...(selectedDomainIds.length > 1 && !data.experimentRunId
         ? [
-            `${poolSenders.length} enabled verified aliases are available on this domain. Deliveries are distributed consistently across the alias pool; provider limits are unchanged.`,
+            `${selectedDomainIds.length} verified domains and ${poolSenders.length} eligible aliases are in this campaign pool. Each delivery uses only a currently authorized domain/provider route, and retries keep normal safety limits.`,
           ]
-        : []),
+        : selectedDomainIds.length === 1 &&
+            poolSenders.length > 1 &&
+            !data.experimentRunId
+          ? [
+              `${poolSenders.length} enabled verified aliases are available on this domain. Deliveries are distributed consistently across the alias pool; provider limits are unchanged.`,
+            ]
+          : []),
     ],
     count,
     reputation: reputation.links,
@@ -309,7 +383,8 @@ export async function preflight(userId: string, input: unknown) {
     safety: {
       campaignUnits: count * cost,
       availableUnits: Math.min(
-        safety.available,
+        remaining(accountBudget),
+        domainPoolAvailable,
         campaignLimit ?? Infinity,
         safety.providerUsage
           .filter((b) =>
@@ -344,6 +419,10 @@ export async function preflight(userId: string, input: unknown) {
       domainId: sender.authorizedDomain.id,
       email: sender.email,
       domain: sender.authorizedDomain.domain,
+      domains: domainSelections.length
+        ? domainSelections.map((selection) => selection.domain.domain)
+        : [sender.authorizedDomain.domain],
+      domainCount: domainSelections.length || 1,
       aliasCount: poolSenders.length,
       eligibleProviderCount: effectiveProviders.length,
     },
