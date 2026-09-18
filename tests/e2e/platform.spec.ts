@@ -100,6 +100,8 @@ test("login, provider setup, HTML import, preview, test, campaign controls, reco
           ? "Delivery update public key"
           : "Delivery update signing key";
     await expect(input(deliveryCredential)).toBeVisible();
+    await expect(input("Delivery update URL")).toBeVisible();
+    await expect(input("Delivery update URL")).toHaveValue("");
     await expect(
       dialog.getByRole("link", { name: new RegExp("Where do I get") }).first(),
     ).toHaveAttribute("href", /^https:/);
@@ -191,8 +193,8 @@ test("login, provider setup, HTML import, preview, test, campaign controls, reco
   });
   await expect(savedProviderDialog).toBeVisible();
   await expect(
-    savedProviderDialog.getByText(/\/api\/webhooks\//),
-  ).toBeVisible();
+    savedProviderDialog.getByLabel("Delivery update URL"),
+  ).toHaveValue(/\/api\/webhooks\//);
   await expect(
     savedProviderDialog.getByLabel("Delivery update signing key"),
   ).toBeVisible();
