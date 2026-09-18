@@ -38,7 +38,7 @@ test("image-first composer manages inline image lifecycle, copy recipients, ordi
     await page.goto(appPath("/blast/image"));
 
     await expect(
-      page.getByRole("heading", { name: "Blast", exact: true }),
+      page.getByRole("heading", { name: "Create campaign", exact: true }),
     ).toBeVisible();
     await expect(
       page.getByRole("link", { name: "Standard", exact: true }),
@@ -100,13 +100,13 @@ test("image-first composer manages inline image lifecycle, copy recipients, ordi
       (request) =>
         request.method() === "POST" && request.url().includes("/api/preflight"),
     );
-    await page.getByRole("button", { name: "Run pre-flight", exact: true }).click();
+    await page.getByRole("button", { name: "Check campaign", exact: true }).click();
     const request = await preflightRequest;
     expect(request.postDataJSON()).toMatchObject({
       cc: ["COPY@example.org", "copy-two@example.org"],
       bcc: ["blind@example.org", "blind-two@example.org"],
     });
-    await expect(page.getByText(/supports inline CID images/i)).toBeVisible();
+    await expect(page.getByText(/supports embedded images/i)).toBeVisible();
     await expect(
       page.getByRole("button", { name: "Send campaign", exact: true }),
     ).toBeDisabled();
@@ -157,12 +157,12 @@ test("image-first test email filters unsupported transports before any test deli
       .getByRole("button", { name: "Send a test email", exact: true })
       .click();
     await expect(
-      page.getByRole("dialog", { name: "Test this image-first message" }),
+      page.getByRole("dialog", { name: "Send a test email" }),
     ).toBeVisible();
     await expect(
-      page.getByText(/no healthy provider transport that supports inline CID images/i),
+      page.getByText(/none of the available sending services support this message with the image embedded/i),
     ).toBeVisible();
-    await expect(page.getByLabel("Provider")).toBeDisabled();
+    await expect(page.getByLabel("Sending service")).toBeDisabled();
     await page.getByLabel("Test recipient").fill("controlled@example.net");
     await expect(
       page.getByRole("button", { name: "Send test", exact: true }),
