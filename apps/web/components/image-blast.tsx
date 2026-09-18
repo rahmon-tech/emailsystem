@@ -348,7 +348,7 @@ export function ImageBlast() {
     <>
       <PageTitle
         title="Blast"
-        description="Image-first mode · primary visual sent as a real inline CID asset."
+        description="Image-first mode · build an email around one main image embedded directly in the message."
         inlineAction
         action={
           <Button
@@ -456,7 +456,7 @@ export function ImageBlast() {
                   setSenderIdentityId(sender?.id ?? "");
                   invalidate();
                 }}
-                helperText="Choose one or more verified domains. Rotation and failover use only currently eligible domains, aliases and provider connections."
+                helperText="Choose one or more verified domains. EmailSystem automatically uses only domains, From addresses, and sending services that are available."
                 required
                 slotProps={{
                   select: {
@@ -489,7 +489,7 @@ export function ImageBlast() {
                     />
                     <ListItemText
                       primary={domain.domain}
-                      secondary={`${domain.senders.length} alias${domain.senders.length === 1 ? "" : "es"} · ${domain.providerIds.length} provider${domain.providerIds.length === 1 ? "" : "s"}`}
+                      secondary={`${domain.senders.length} From ${domain.senders.length === 1 ? "address" : "addresses"} · ${domain.providerIds.length} sending ${domain.providerIds.length === 1 ? "service" : "services"}`}
                     />
                   </MenuItem>
                 ))}
@@ -570,8 +570,8 @@ export function ImageBlast() {
                   sx={{ display: "block" }}
                 >
                   {tracking.enabled
-                    ? `Links use ${trackingConfig?.appUrl ?? "the configured app URL"}/r/…; the campaign snapshot decides which safe links are rewritten.`
-                    : "Tracking is off; safe links stay direct."}
+                    ? `Tracked links use ${trackingConfig?.appUrl ?? "your EmailSystem URL"}/r/… .`
+                    : "Tracking is off; links go directly to their destination."}
                 </Typography>
               </Box>
               <Box
@@ -676,7 +676,7 @@ export function ImageBlast() {
                   color="text.secondary"
                   sx={{ display: "block", mt: 0.5 }}
                 >
-                  Ordinary attachments remain separate from the primary inline image.
+                  Other attachments stay separate from the main image.
                 </Typography>
                 {!!attachments.length && (
                   <Stack
@@ -756,19 +756,19 @@ export function ImageBlast() {
 
           <Card sx={{ p: { xs: 1.75, sm: 2.25 } }}>
             <Stack spacing={2}>
-              <Typography variant="h6">3 · Pre-flight & send</Typography>
+              <Typography variant="h6">3 · Check & send</Typography>
               {flight && (
                 <Alert severity={flight.ready ? "success" : "warning"}>
                   {flight.ready
-                    ? `${flight.count.toLocaleString()} recipients · ${flight.providers.length} inline-capable provider${flight.providers.length === 1 ? "" : "s"}`
-                    : "Resolve the pre-flight issues before sending."}
+                    ? `${flight.count.toLocaleString()} recipients · ${flight.providers.length} sending service${flight.providers.length === 1 ? "" : "s"} ready for embedded images`
+                    : "Fix the issues below before sending."}
                 </Alert>
               )}
               {flight && (
                 <Typography variant="body2" color="text.secondary">
                   {flight.tracking.enabled
-                    ? "Tracking on · click links will be rewritten when the campaign snapshot is created."
-                    : "Tracking off · safe links stay direct."}
+                    ? "Click tracking is on."
+                    : "Click tracking is off; links stay direct."}
                 </Typography>
               )}
               {flight?.problems.map((problem) => (
@@ -806,7 +806,7 @@ export function ImageBlast() {
                   })
                 }
               >
-                {busy === "preflight" ? "Checking…" : "Run pre-flight"}
+                {busy === "preflight" ? "Checking…" : "Check campaign"}
               </Button>
               <Button
                 variant="contained"
@@ -847,7 +847,9 @@ export function ImageBlast() {
         }
       >
         <DialogContent>
-          {flight?.count.toLocaleString()} messages will enter the existing background delivery queue. The inline image and any ordinary attachments remain part of the immutable campaign snapshot.
+          {flight?.count.toLocaleString()} emails will be prepared for sending.
+          You can follow progress in Activity. The main image and attachments stay
+          exactly as reviewed when the campaign starts.
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setConfirm(false)}>Keep editing</Button>
