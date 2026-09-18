@@ -16,6 +16,19 @@ import {
 } from "@mui/material";
 import { AlternateEmail, ExpandMore } from "@mui/icons-material";
 import { api } from "./api-client";
+
+const suggestedAliases = [
+  "info",
+  "support",
+  "hello",
+  "contact",
+  "sales",
+  "updates",
+  "news",
+  "team",
+  "alerts",
+  "billing",
+];
 import { Failure, ResponsiveDialog, Status } from "./shared";
 
 export type SenderCatalog = {
@@ -82,12 +95,13 @@ function DomainSenders({
       <AccordionDetails>
         <Stack spacing={2}>
           <Typography variant="body2" color="text.secondary">
-            Add aliases in bulk. A campaign keeps one selected sender for every
-            recipient; aliases do not increase provider capacity.
+            Add aliases in bulk. Domain-based campaigns distribute deliveries
+            consistently across enabled aliases; retries keep a stable assignment.
+            Aliases never increase provider capacity.
           </Typography>
           <TextField
             label="Alias names"
-            placeholder="news, billing, events, sales"
+            placeholder="info, support, hello, sales"
             value={localParts}
             onChange={(event) => setLocalParts(event.target.value)}
             helperText={`${parts.length} unique-looking entr${parts.length === 1 ? "y" : "ies"}; separate with commas, spaces, or new lines.`}
@@ -108,6 +122,13 @@ function DomainSenders({
               fullWidth
             />
           </Stack>
+          <Button
+            size="small"
+            sx={{ alignSelf: "flex-start" }}
+            onClick={() => setLocalParts(suggestedAliases.join(", "))}
+          >
+            Use 10 suggested aliases
+          </Button>
           <Button
             variant="outlined"
             disabled={busy || !parts.length}
@@ -223,12 +244,12 @@ export function SenderSettings() {
           void run(refresh);
         }}
       >
-        Senders
+        Domains & aliases
       </Button>
       <ResponsiveDialog
         open={open}
         onClose={() => setOpen(false)}
-        title="Domains & senders"
+        title="Domains & aliases"
         width={720}
         mobileFullScreen
       >
@@ -236,8 +257,9 @@ export function SenderSettings() {
           <Stack spacing={2.5}>
             <Failure error={error} />
             <Typography variant="body2" color="text.secondary">
-              Campaigns use verified sender identities—not arbitrary From text.
-              The same domain can be authorized by several providers.
+              Campaigns choose a verified domain. Its enabled aliases and all
+              providers that can legitimately send for that domain stay behind
+              the selection.
             </Typography>
             <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
               <TextField
@@ -271,8 +293,8 @@ export function SenderSettings() {
             ))}
             {data && !data.domains.length && (
               <Typography variant="body2" color="text.secondary">
-                No sender domains yet. Saving a provider also creates its sender
-                identity here, pending verification evidence.
+                No sending domains yet. Saving a provider creates its domain
+                and configured aliases here, pending provider authorization evidence.
               </Typography>
             )}
           </Stack>
