@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/rahmon-tech/emailsystem/security
+    about: Use private security reporting when available. Do not disclose sensitive details in a public issue.
