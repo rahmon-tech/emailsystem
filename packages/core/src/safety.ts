@@ -16,7 +16,7 @@ import {
 } from "./safety-governor";
 
 export const DAILY_WAIT =
-  "Daily safety limit reached · sending resumes as capacity becomes available";
+  "24-hour sending limit reached · sending will continue automatically as capacity becomes available";
 export async function lockSafety(tx: Prisma.TransactionClient, userId: string) {
   await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${"safety:" + userId},0))::text`;
 }
@@ -285,7 +285,7 @@ export async function saveSafetySettings(userId: string, input: unknown) {
         data: { dailyBudgetOverride: p.dailyBudgetOverride },
       });
       if (!changed.count)
-        throw new AppError(404, "PROVIDER", "Provider not found.");
+        throw new AppError(404, "PROVIDER", "Sending service not found.");
     }
     await tx.user.update({
       where: { id: userId },
