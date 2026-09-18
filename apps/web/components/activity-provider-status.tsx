@@ -75,7 +75,7 @@ export function ActivityProviderStatus() {
     <Stack
       component="section"
       spacing={1.5}
-      aria-label="Campaign provider availability"
+      aria-label="Sending connection availability"
       sx={{ mb: 2, p: { xs: 1.75, sm: 2 }, border: 1, borderColor: "divider", borderRadius: 2 }}
     >
       <Stack
