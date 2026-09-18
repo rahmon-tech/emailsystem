@@ -95,6 +95,7 @@ model ProviderConnection {
   perMinute Int @default(30)
   concurrency Int @default(1)
   dailyBudgetOverride Int?
+  monthlyBudgetOverride Int?
   revision Int @default(1)
   deletedAt DateTime?
   createdAt DateTime @default(now())
@@ -311,6 +312,7 @@ model DeliveryAttempt {
   @@index([deliveryId,startedAt])
   @@index([state,startedAt])
   @@index([userId,transmissionStartedAt])
+  @@index([userId,providerId,transmissionStartedAt])
   @@index([userId,state,startedAt])
   @@index([experimentRunId,startedAt])
 }
