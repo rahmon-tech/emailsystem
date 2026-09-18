@@ -31,6 +31,7 @@ import {
   ShieldOutlined,
   GraphicEq,
   Refresh,
+  Replay,
   Search,
   PeopleOutlined,
   HubOutlined,
@@ -207,7 +208,7 @@ export function Activity() {
       live = false;
     };
   }, [selected, filter, summary]);
-  async function action(kind: "pause" | "resume" | "cancel") {
+  async function action(kind: "pause" | "resume" | "cancel" | "retry") {
     setBusy(true);
     setError("");
     try {
@@ -219,7 +220,9 @@ export function Activity() {
           ? "Campaign paused."
           : kind === "resume"
             ? "Campaign resumed."
-            : "Remaining sends cancelled.",
+            : kind === "retry"
+              ? "Failed recipients requeued."
+              : "Remaining sends cancelled.",
       );
     } catch (e) {
       setError((e as Error).message);
@@ -500,6 +503,20 @@ export function Activity() {
                           onClick={() => void action("resume")}
                         >
                           Resume
+                        </Button>
+                      )}
+                    {["FAILED", "COMPLETED_WITH_ERRORS"].includes(
+                      summary.state,
+                    ) &&
+                      (summary.counts.FAILED ?? 0) > 0 && (
+                        <Button
+                          variant="contained"
+                          aria-label="Retry failed recipients"
+                          startIcon={<Replay />}
+                          disabled={busy || !!summary.safety.pausedReason}
+                          onClick={() => void action("retry")}
+                        >
+                          Retry failed
                         </Button>
                       )}
                     {["PREPARING", "QUEUED", "SENDING", "PAUSED"].includes(
