@@ -95,10 +95,10 @@ test("Activity keeps live evidence review bounded and verifies explicitly withou
     expect(loginResponse.status()).toBe(200);
     await page.goto(appPath(`/activity?campaignId=${campaign.id}`));
 
-    const card = page.getByRole("region", { name: "Experiment evidence review" });
+    const card = page.getByRole("region", { name: "Experiment records" });
     await expect(card).toBeVisible();
-    await expect(card.getByText("Not yet verified", { exact: true })).toBeVisible();
-    await expect(card).toContainText("1 retained entry");
+    await expect(card.getByText("Not checked yet", { exact: true })).toBeVisible();
+    await expect(card).toContainText("1 protected entry");
     await expect(card).toContainText("#1 · run started");
     await expect(page.getByText("browser-secret-must-not-render")).toHaveCount(0);
 
@@ -109,12 +109,12 @@ test("Activity keeps live evidence review bounded and verifies explicitly withou
             appPath(`/api/campaigns/${campaign.id}/experiment/evidence?verify=1`),
           ) && response.request().method() === "GET",
       ),
-      card.getByRole("button", { name: "Verify chain" }).click(),
+      card.getByRole("button", { name: "Check records" }).click(),
     ]);
     expect(firstVerifyResponse.status()).toBe(200);
-    await expect(card.getByText("Chain verified", { exact: true })).toBeVisible();
-    await expect(card).toContainText("1 chained entry");
-    await expect(card).toContainText("verified through #1");
+    await expect(card.getByText("Records verified", { exact: true })).toBeVisible();
+    await expect(card).toContainText("1 protected entry");
+    await expect(card).toContainText("checked through record #1");
 
     await db.$transaction((tx) =>
       appendExperimentEvidence(tx, {
@@ -129,9 +129,9 @@ test("Activity keeps live evidence review bounded and verifies explicitly withou
       }),
     );
 
-    await expect(card).toContainText("2 retained entries", { timeout: 15_000 });
-    await expect(card.getByText("Verification outdated", { exact: true })).toBeVisible();
-    await expect(card).toContainText("#2 · transport outcome");
+    await expect(card).toContainText("2 protected entries", { timeout: 15_000 });
+    await expect(card.getByText("Check is out of date", { exact: true })).toBeVisible();
+    await expect(card).toContainText("#2 · Send result");
     await expect(page.getByText("browser-message-id-must-not-render")).toHaveCount(0);
 
     const [verifyResponse] = await Promise.all([
@@ -141,12 +141,12 @@ test("Activity keeps live evidence review bounded and verifies explicitly withou
             appPath(`/api/campaigns/${campaign.id}/experiment/evidence?verify=1`),
           ) && response.request().method() === "GET",
       ),
-      card.getByRole("button", { name: "Verify chain" }).click(),
+      card.getByRole("button", { name: "Check records" }).click(),
     ]);
     expect(verifyResponse.status()).toBe(200);
-    await expect(card.getByText("Chain verified", { exact: true })).toBeVisible();
-    await expect(card).toContainText("2 chained entries");
-    await expect(card).toContainText("verified through #2");
+    await expect(card.getByText("Records verified", { exact: true })).toBeVisible();
+    await expect(card).toContainText("2 protected entries");
+    await expect(card).toContainText("checked through record #2");
   } finally {
     await db.campaign.deleteMany({ where: { userId: user.id } });
     await db.experimentEvidence.deleteMany({ where: { userId: user.id } });
