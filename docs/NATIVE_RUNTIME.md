@@ -1,6 +1,6 @@
-# Native / systemd runtime
+# EmailBlast native / systemd runtime
 
-EmailSystem supports a non-Docker runtime when PostgreSQL, Redis, reverse proxying, and process supervision are already managed by the host.
+EmailBlast supports a non-Docker runtime when PostgreSQL, Redis, reverse proxying, and process supervision are already managed by the host.
 
 The native runtime does not replace the Docker Compose deployment. Choose one runtime model per installation.
 
@@ -83,7 +83,7 @@ Web service example:
 
 ```ini
 [Unit]
-Description=EmailSystem web
+Description=EmailBlast web
 After=network.target
 
 [Service]
@@ -104,7 +104,7 @@ Worker example:
 
 ```ini
 [Unit]
-Description=EmailSystem worker
+Description=EmailBlast worker
 After=network.target
 
 [Service]
