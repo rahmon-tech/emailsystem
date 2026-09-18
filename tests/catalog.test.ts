@@ -469,3 +469,40 @@ test("explicit Resend test sends use the safe address and separate idempotency k
   }
   assert.equal(keys.size, 2);
 });
+
+
+test("connection schema accepts bounded domain aliases and daily/monthly caps", () => {
+  const parsed = connectionSchema.parse({
+    name: "Domain pool",
+    type: "smtp",
+    transport: "smtp",
+    settings: {
+      fromEmail: "info@example.com",
+      senderDomain: "Example.COM",
+      senderAliases: ["info", "support", "hello"],
+      host: "smtp.example.com",
+      port: 587,
+      security: "starttls",
+    },
+    credentials: { username: "user", password: "secret" },
+    dailyBudget: 5000,
+    monthlyBudget: 120000,
+  });
+  assert.equal(parsed.settings.senderDomain, "example.com");
+  assert.deepEqual(parsed.settings.senderAliases, ["info", "support", "hello"]);
+  assert.equal(parsed.dailyBudget, 5000);
+  assert.equal(parsed.monthlyBudget, 120000);
+
+  assert(
+    !connectionSchema.safeParse({
+      ...parsed,
+      settings: {
+        ...parsed.settings,
+        senderAliases: Array.from({ length: 11 }, (_, index) => `alias-${index}`),
+      },
+    }).success,
+  );
+  assert(
+    !connectionSchema.safeParse({ ...parsed, monthlyBudget: 0 }).success,
+  );
+});
