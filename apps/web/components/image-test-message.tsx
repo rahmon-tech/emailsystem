@@ -167,7 +167,7 @@ export function ImageTestMessage({
         open={open}
         onClose={() => setOpen(false)}
         busy={busy}
-        title="Send a test message"
+        title="Send a test email"
         width={520}
         mobileFullScreen
       >
