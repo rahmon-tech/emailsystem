@@ -1,4 +1,4 @@
-import { lockSafety, safetyCapacity } from "./safety";
+import { lockSafety, safetyCapacity, senderDomain } from "./safety";
 import { dailyBudget, messageCost } from "./safety-config";
 import { db } from "@emailsystem/db";
 import type { CampaignState, Prisma } from "@emailsystem/db";
