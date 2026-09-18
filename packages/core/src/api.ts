@@ -456,12 +456,15 @@ export async function api(request: Request, parts: string[]) {
       if (id) uuid(id);
       if (method === "GET" && id && !action)
         return response(await campaignSummary(user.id, id));
-      if (method === "POST" && ["pause", "resume", "cancel"].includes(action))
+      if (
+        method === "POST" &&
+        ["pause", "resume", "cancel", "retry"].includes(action)
+      )
         return response(
           await controlCampaign(
             user.id,
             id,
-            action as "pause" | "resume" | "cancel",
+            action as "pause" | "resume" | "cancel" | "retry",
           ),
         );
       if (method === "GET" && action === "export") {
