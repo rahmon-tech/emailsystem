@@ -170,9 +170,6 @@ export function ActivityExperimentEvidence() {
     activeVerification?.valid === true &&
     activeVerification.count === evidence.integrity.count &&
     activeVerification.headHash === evidence.integrity.headHash;
-  const head = evidence.integrity.headHash
-    ? `${evidence.integrity.headHash.slice(0, 12)}…`
-    : null;
 
   return (
     <Card
