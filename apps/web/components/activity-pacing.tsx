@@ -34,16 +34,16 @@ function duration(seconds: number | null) {
 }
 
 function detail(pacing: Pacing) {
-  if (pacing.campaignState === "PAUSED") return "Campaign is paused.";
+  if (pacing.campaignState === "PAUSED") return "This campaign is paused.";
   if (pacing.safetyWaitReason) return pacing.safetyWaitReason;
-  if (pacing.status === "complete") return "No recipients remain in the dispatch queue.";
+  if (pacing.status === "complete") return "All recipients have finished sending.";
   if (pacing.status === "waiting")
     return pacing.sampleSize
-      ? "Dispatch is currently idle, so the previous pace is not used for ETA."
-      : "Waiting for enough real dispatch activity to measure pace.";
+      ? "Sending is temporarily idle. The time estimate will update when sending continues."
+      : "Waiting for enough sending activity to calculate speed.";
   if (pacing.status === "estimating")
-    return "Collecting a little more dispatch history before showing ETA.";
-  return "ETA is based on recent transport starts and can change with provider cooldowns, limits, retries, or safety controls.";
+    return "Calculating sending speed and time remaining.";
+  return "Based on recent sends. Speed can change when a provider slows down, reaches a limit, or retries a message.";
 }
 
 export function ActivityPacing() {
@@ -78,11 +78,11 @@ export function ActivityPacing() {
       : `${pacing.messagesPerMinute.toLocaleString()} / min`;
   const status =
     pacing.status === "active"
-      ? "Observed live"
+      ? "Sending now"
       : pacing.status === "complete"
-        ? "Complete"
+        ? "Finished"
         : pacing.status === "estimating"
-          ? "Estimating"
+          ? "Calculating"
           : "Waiting";
 
   return (
@@ -95,7 +95,7 @@ export function ActivityPacing() {
           <SpeedOutlined fontSize="small" />
           <Box sx={{ minWidth: 0 }}>
             <Typography sx={{ fontSize: 13, fontWeight: 700 }}>
-              Dispatch pace
+              Sending progress
             </Typography>
             <Typography color="text.secondary" sx={{ fontSize: 12 }}>
               {detail(pacing)}
@@ -111,20 +111,20 @@ export function ActivityPacing() {
             flexWrap: "wrap",
           }}
         >
-          <Tooltip title={`Observed from ${pacing.sampleSize} recent transmitted attempt${pacing.sampleSize === 1 ? "" : "s"}.`}>
+          <Tooltip title={`Based on ${pacing.sampleSize} recent send${pacing.sampleSize === 1 ? "" : "s"}.`}>
             <Box>
               <Typography sx={{ fontSize: 12 }} color="text.secondary">
-                Current pace
+                Sending speed
               </Typography>
               <Typography sx={{ fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>
                 {pace}
               </Typography>
             </Box>
           </Tooltip>
-          <Tooltip title="Estimate disappears when recent dispatch activity becomes stale.">
+          <Tooltip title="This estimate updates automatically as sending speed changes.">
             <Box>
               <Typography sx={{ fontSize: 12 }} color="text.secondary">
-                Estimated remaining
+                Time remaining
               </Typography>
               <Stack direction="row" sx={{ gap: 0.5, alignItems: "center" }}>
                 <ScheduleOutlined sx={{ fontSize: 16 }} />
