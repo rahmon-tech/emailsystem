@@ -52,6 +52,7 @@ test("Activity shows live sending connection availability", async ({ page }) => 
     ).toBeVisible();
     await expect(panel.getByText("1 of 1 ready", { exact: true })).toBeVisible();
     await expect(panel.getByText("Ready", { exact: true })).toBeVisible();
+    await expect(panel.getByText("Normal speed", { exact: true })).toBeVisible();
 
     await db.providerConnection.update({
       where: { id: provider.id },
