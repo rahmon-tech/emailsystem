@@ -156,7 +156,9 @@ test("login, provider setup, HTML import, preview, test, campaign controls, reco
   await page
     .getByRole("button", { name: "Save & check connection", exact: true })
     .click();
-  await expect(\n    page.getByRole("alert").filter({ hasText: /domain/i }).first(),\n  ).toContainText(/domain/i);
+  await expect(
+    page.getByRole("alert").filter({ hasText: /domain/i }).first(),
+  ).toContainText(/domain/i);
   await page.getByLabel("Sending domain").fill("example.com");
   await expect(page.getByLabel("From address names")).toHaveValue("info");
   await expect(page.getByLabel("Daily connection limit")).toHaveValue("5000");
