@@ -219,7 +219,6 @@ function DomainSenders({
 export function SenderSettings() {
   const [open, setOpen] = useState(false);
   const [data, setData] = useState<SenderCatalog | null>(null);
-  const [domain, setDomain] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const refresh = async () => setData(await api<SenderCatalog>("senders"));
@@ -257,31 +256,9 @@ export function SenderSettings() {
           <Stack spacing={2.5}>
             <Failure error={error} />
             <Typography variant="body2" color="text.secondary">
-              Campaigns choose a verified domain. Its enabled aliases and all
-              providers that can legitimately send for that domain stay behind
-              the selection.
+              Domains come from provider configuration. Manage the aliases
+              available behind each verified domain here.
             </Typography>
-            <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
-              <TextField
-                label="Sending domain"
-                placeholder="example.com"
-                value={domain}
-                onChange={(event) => setDomain(event.target.value)}
-                fullWidth
-              />
-              <Button
-                variant="outlined"
-                disabled={busy || !domain.trim()}
-                onClick={() =>
-                  void run(async () => {
-                    await api("senders/domain", { domain });
-                    setDomain("");
-                  })
-                }
-              >
-                Add domain
-              </Button>
-            </Stack>
             {data?.domains.map((item, index) => (
               <DomainSenders
                 key={item.id}
