@@ -6,11 +6,11 @@ import {
   brakeDecision,
 } from "@emailsystem/core/safety-config";
 
-test("safety defaults are independent finite budgets with recipient-unit cost", () => {
+test("shared safety capacity defaults are opt-in while recipient-unit cost remains explicit", () => {
   const s = safetySettings.parse({});
   assert.deepEqual(
     [s.accountDaily, s.domainDaily, s.providerDaily, s.campaignDaily],
-    [10000, 5000, 5000, 5000],
+    [null, null, null, null],
   );
   assert.equal(messageCost({ cc: ["c1", "c2"], bcc: ["b1"] }), 4);
 });
@@ -27,7 +27,7 @@ test("safety settings reject zero, negatives, NaN, infinity, fractional and over
     safetySettings.parse({ campaignDaily: null }).campaignDaily,
     null,
   );
-  assert.equal(safetySettings.safeParse({ accountDaily: null }).success, false);
+  assert.equal(safetySettings.safeParse({ accountDaily: null }).success, true);
 });
 test("brakes require meaningful samples and preserve complaint priority", () => {
   const s = safetySettings.parse({});
