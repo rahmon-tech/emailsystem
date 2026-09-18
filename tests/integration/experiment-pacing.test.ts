@@ -132,7 +132,7 @@ test("smooth experiment pacing is a run-wide transport-start floor with evidence
   assert.equal(currentCampaign.safeError, null);
   assert(currentCampaign.safetyWaitUntil);
   assert(currentCampaign.safetyWaitUntil.getTime() > Date.now());
-  assert.match(currentCampaign.safetyWaitReason ?? "", /experiment smooth pacing/i);
+  assert.match(currentCampaign.safetyWaitReason ?? "", /next scheduled send interval/i);
 
   const storedRun = await db.experimentRun.findUniqueOrThrow({
     where: { id: run.id },
