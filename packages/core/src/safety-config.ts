@@ -7,10 +7,10 @@ export const warmupProfile = z
 export type WarmupProfile = z.infer<typeof warmupProfile>;
 export const safetySettings = z
   .object({
-    accountDaily: dailyBudget.default(10000),
-    domainDaily: dailyBudget.default(5000),
-    providerDaily: dailyBudget.default(5000),
-    campaignDaily: dailyBudget.nullable().default(5000),
+    accountDaily: dailyBudget.nullable().default(null),
+    domainDaily: dailyBudget.nullable().default(null),
+    providerDaily: dailyBudget.nullable().default(null),
+    campaignDaily: dailyBudget.nullable().default(null),
     accountPerMinute: pacingPerMinute.default(null),
     domainPerMinute: pacingPerMinute.default(null),
     campaignPerMinute: pacingPerMinute.default(null),
