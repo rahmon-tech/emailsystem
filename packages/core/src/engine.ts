@@ -318,7 +318,7 @@ export async function processDelivery(
           cost,
           group: rateGroup(
             p.userId,
-            p.type,
+            p.id,
             selectedSender!.email,
             (p.settings as ConnectionInput["settings"]).region,
           ),
@@ -333,7 +333,7 @@ export async function processDelivery(
           cost,
           group: rateGroup(
             p.userId,
-            p.type,
+            p.id,
             selectedSender!.email,
             (p.settings as ConnectionInput["settings"]).region,
           ),
@@ -402,7 +402,7 @@ export async function processDelivery(
             (p) =>
               rateGroup(
                 p.userId,
-                p.type,
+                p.id,
                 selectedSender!.email,
                 (p.settings as ConnectionInput["settings"]).region,
               ) === candidate!.group,
