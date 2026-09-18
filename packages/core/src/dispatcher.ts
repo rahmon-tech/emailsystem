@@ -61,7 +61,7 @@ for _,c in ipairs(candidates) do
  local pacingAllowed=(c.smooth==0) or (
    accountAllowed and campaignAllowed
    and ms>=providerNext and ms>=groupNext and ms>=pacingNext
-   and redis.call('ZCARD',pacing..':active')<1
+   and redis.call('ZCARD',pacing..':active')<c.pacingConcurrency
    and tonumber(redis.call('GET',pacing..':s'..sec) or '0')+c.cost<=c.pacingSecond
    and tonumber(redis.call('GET',pacing..':m'..minute) or '0')+c.cost<=c.pacingMinute
  )
@@ -122,8 +122,9 @@ export function rateGroup(
   region = "",
 ) {
   const domain = (from.split("@")[1] ?? "").trim().toLowerCase();
-  // The first digest preserves provider-specific quota/rate grouping. The second
-  // is a provider-independent sender-domain pacing key carried alongside it.
+  // The first digest identifies an independently configured connection-rate
+  // group. The second is the provider-independent sender-domain pacing key
+  // carried alongside it so aggregate domain safeguards remain coordinated.
   return `${digest(`${userId}:${type}:${domain}:${region}`)}.${senderDomainRateGroup(userId, from)}`;
 }
 function pacingGroupFromRateGroup(group: string) {
@@ -204,12 +205,22 @@ export async function acquireProvider(
     const pacingGroup = pacingGroupFromRateGroup(c.group);
     const peers = ratePeers.filter((p) => p.group === c.group);
     const providerPeers = peers.length ? peers : [c];
-    const pacingPeers = ratePeers.filter(
+    const pacingPeers = candidates.filter(
       (p) => pacingGroupFromRateGroup(p.group) === pacingGroup,
     );
     const domainPeers = pacingPeers.length ? pacingPeers : [c];
-    const pacingSecond = Math.min(...domainPeers.map((p) => p.perSecond));
-    const providerDomainMinute = Math.min(...domainPeers.map((p) => p.perMinute));
+    const pacingSecond = domainPeers.reduce(
+      (total, provider) => total + provider.perSecond,
+      0,
+    );
+    const providerDomainMinute = domainPeers.reduce(
+      (total, provider) => total + provider.perMinute,
+      0,
+    );
+    const pacingConcurrency = domainPeers.reduce(
+      (total, provider) => total + provider.concurrency,
+      0,
+    );
     const pacingMinute = Math.min(
       providerDomainMinute,
       pacingPolicy.domainPerMinute ?? providerDomainMinute,
@@ -235,6 +246,7 @@ export async function acquireProvider(
       groupConcurrency: Math.min(...providerPeers.map((p) => p.concurrency)),
       pacingSecond,
       pacingMinute,
+      pacingConcurrency,
       pacingSlowdown: smoothPacing
         ? domainSoftStartSlowdown(
             pacingMinute,
