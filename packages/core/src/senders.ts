@@ -325,12 +325,13 @@ export async function ensureProviderIdentity(
     create: { userId, domain },
     update: {},
   });
+  const primaryLocalPart = canonicalLocalPart(localPart);
   const sender = await tx.senderIdentity.upsert({
     where: { userId_email: { userId, email } },
     create: {
       userId,
       authorizedDomainId: authorizedDomain.id,
-      localPart: canonicalLocalPart(localPart),
+      localPart: primaryLocalPart,
       email,
       displayName: settings.fromName,
       replyTo: settings.replyTo,
@@ -341,6 +342,35 @@ export async function ensureProviderIdentity(
       enabled: true,
     },
   });
+  const configuredAliases = [
+    ...new Set(
+      [primaryLocalPart, ...(settings.senderAliases ?? [])].map(canonicalLocalPart),
+    ),
+  ].slice(0, 10);
+  const existingAliases = await tx.senderIdentity.findMany({
+    where: {
+      userId,
+      authorizedDomainId: authorizedDomain.id,
+      localPart: { in: configuredAliases },
+    },
+    select: { localPart: true },
+  });
+  const existingParts = new Set(existingAliases.map((item) => item.localPart));
+  const missingAliases = configuredAliases.filter(
+    (alias) => !existingParts.has(alias),
+  );
+  if (missingAliases.length)
+    await tx.senderIdentity.createMany({
+      data: missingAliases.map((alias) => ({
+        userId,
+        authorizedDomainId: authorizedDomain.id,
+        localPart: alias,
+        email: senderEmail(alias, domain),
+        displayName: settings.fromName,
+        replyTo: settings.replyTo,
+      })),
+      skipDuplicates: true,
+    });
   const staleAuthorizations = await tx.providerDomainAuthorization.findMany({
     where: {
       userId,
