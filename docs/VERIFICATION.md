@@ -6,11 +6,11 @@ This report separates repository/CI proof from live provider and deployment-host
 
 Published `main` is exactly:
 
-`128ba739299db8e3caad3599df9dd7dddfe437c6`
+`4b33adaa24cff03940ffddd2642b2a170481d844`
 
-PR #87 introduced the final domain-first sender/provider/capacity/mobile-UX reconciliation.
+PR #89 introduced multi-domain campaign pools, route-aware failover/capacity, safer retry/resume behavior and the user-first mobile/provider/Activity UX reconciliation.
 
-Quality #383 passed on the exact PR head. Push-triggered Quality #384 / run `35333756671` then passed on the exact same published `main` SHA.
+Quality #455 / run `35363742131` passed on the exact merged `main` SHA.
 
 The successful pipeline covered:
 
@@ -31,24 +31,25 @@ The successful pipeline covered:
 - production-container validation;
 - diagnostics/artifact handling and teardown.
 
-## Verified domain-first behavior
+## Verified sending-pool behavior
 
 Repository tests now prove:
 
-- provider configuration owns a sending domain and a bounded alias pool;
+- provider configuration owns a sending domain and bounded From-address pool;
+- standard and Image-first campaigns can select multiple verified domains while preserving single-domain compatibility;
+- only currently viable domain/From-address/sending-service routes enter the active campaign pool;
+- disabled or terminally broken connections can be skipped while healthy selected routes continue;
+- controlled experiments remain pinned to their approved sender and fail closed on provider policy enforcement;
 - provider connection daily/monthly capacity is persisted and enforced;
-- multiple eligible connections on the same selected domain contribute capacity independently;
-- providers authorized only for another domain do not leak into that domain's campaign pool;
-- shared account/domain/campaign ceilings can impose stricter limits but are blank by default;
-- sender-domain short-window pacing coordinates the aggregate eligible connection rate rather than collapsing all connections to the lowest sibling limit;
-- warm-up/adaptive pressure can still lower effective pace;
-- non-experiment delivery alias assignment is deterministic per delivery and retries keep a stable assignment;
-- alias selection never widens provider authorization;
-- address-specific authorization cannot be bypassed by another alias;
-- experiment-bound campaigns remain pinned to their approved sender identity;
-- recipient-import menus have bounded independent scrolling;
-- touch/mobile editor text and toolbar behavior avoid focus zoom/width wobble;
-- standard Blast and Image-first use the same domain-first sending contract.
+- independent eligible connections contribute configured capacity additively;
+- shared account/domain/campaign rolling-24-hour and monthly ceilings can impose stricter limits;
+- live resume/retry checks use current route availability rather than stale campaign assumptions;
+- manual retry requeues only definitively FAILED deliveries and leaves UNKNOWN/already accepted outcomes untouched;
+- address-specific authorization cannot be widened through another From address;
+- recipient/menu dropdowns use bounded independent scrolling on mobile;
+- the mobile workspace header remains sticky;
+- user-facing web copy is regression-tested against internal system-oriented terminology;
+- provider delivery-update setup supports the URL-first, signing-key-second flow.
 
 ## Delivery truth
 
@@ -75,6 +76,6 @@ The live host must still be re-inspected before applying this release. Repositor
 
 ## Acceptance boundary
 
-Development/publication acceptance is satisfied by exact published `main` SHA `128ba739299db8e3caad3599df9dd7dddfe437c6` and push-triggered Quality #384 / run `35333756671`.
+Development/publication acceptance is satisfied by exact published `main` SHA `4b33adaa24cff03940ffddd2642b2a170481d844` and Quality #455 / run `35363742131`.
 
-The remaining work is live environment/provider acceptance: update the existing native/systemd installation, verify persistence/migrations/process supervision/reverse proxy/TLS/readiness, then verify real provider/domain/webhook behavior with a tightly controlled legitimate smoke test.
+The remaining work is live environment/provider acceptance: update the existing native/systemd installation, verify persistence/migrations/process supervision/reverse proxy/TLS/readiness, then verify real sending-domain/delivery-update behavior with a tightly controlled legitimate smoke test.
