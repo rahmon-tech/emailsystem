@@ -204,31 +204,45 @@ export function Providers() {
     <>
       <PageTitle
         title="Providers"
-        description="Your sending connections, at a glance."
+        description="Manage sending connections. Domain, alias, capacity and delivery-event settings belong to each connection."
         action={
+          <Button
+            variant="contained"
+            startIcon={<Add />}
+            onClick={() => setPicker(true)}
+          >
+            Add provider
+          </Button>
+        }
+      />
+      <Card sx={{ p: { xs: 1.5, sm: 2 }, mb: 2.5 }}>
+        <Stack
+          direction={{ xs: "column", sm: "row" }}
+          sx={{
+            gap: 1.25,
+            alignItems: { xs: "stretch", sm: "center" },
+            justifyContent: "space-between",
+          }}
+        >
+          <Box sx={{ minWidth: 0 }}>
+            <Typography sx={{ fontSize: 13, fontWeight: 700 }}>
+              Account-wide sending settings
+            </Typography>
+            <Typography variant="caption" color="text.secondary">
+              These controls apply across connections. Provider credentials, domains,
+              aliases, daily/monthly capacity and webhooks stay inside each provider.
+            </Typography>
+          </Box>
           <Stack
             direction="row"
-            spacing={1}
-            sx={{
-              alignItems: "center",
-              justifyContent: { xs: "space-between", sm: "flex-end" },
-              flexWrap: "wrap",
-              rowGap: 1,
-            }}
+            sx={{ gap: 0.5, flexWrap: "wrap", flexShrink: 0 }}
           >
             <SendingSafety />
             <SenderSettings />
             <TrackingSettings />
-            <Button
-              variant="contained"
-              startIcon={<Add />}
-              onClick={() => setPicker(true)}
-            >
-              Add provider
-            </Button>
           </Stack>
-        }
-      />
+        </Stack>
+      </Card>
       <Failure error={error} />
       {items === null ? (
         <Loading />
@@ -531,10 +545,15 @@ export function Providers() {
           row={selected.row}
           appUrl={appUrl}
           onClose={() => setSelected(null)}
-          onSaved={async () => {
-            setSelected(null);
+          onSaved={async (saved) => {
             await reload();
-            setToast("Provider saved. Review its verification result.");
+            if (selected.row) {
+              setSelected(null);
+              setToast("Provider updated. Delivery status settings are active.");
+            } else {
+              setSelected({ type: saved.type, row: saved });
+              setToast("Connection saved. Add its webhook signing details to receive delivery outcomes.");
+            }
           }}
         />
       )}
@@ -625,7 +644,7 @@ function ProviderForm({
   row?: ProviderRow;
   appUrl: string;
   onClose: () => void;
-  onSaved: () => Promise<void>;
+  onSaved: (saved: ProviderRow) => Promise<void>;
 }) {
   const d = definition(type);
   const [transport, setTransport] = useState<"api" | "smtp">(
@@ -1047,11 +1066,18 @@ function ProviderForm({
                   unless this mail service exposes a provider-specific event
                   integration.
                 </Alert>
+              ) : !row ? (
+                <Alert severity="info">
+                  Save and verify the connection first. EmailSystem will create its
+                  permanent callback URL, keep this setup open, and then let you
+                  paste the provider signing key or event credential. This avoids
+                  asking for a key before the provider has a URL to register.
+                </Alert>
               ) : (
                 <>
                   <Typography variant="body2" color="text.secondary">
-                    Delivery/bounce/complaint events update Activity after your
-                    provider is configured to call this endpoint.
+                    Delivery, bounce and complaint events update Activity after
+                    your provider calls this connection-specific endpoint.
                   </Typography>
                   <Typography
                     component="code"
@@ -1063,9 +1089,7 @@ function ProviderForm({
                       bgcolor: "background.paper",
                     }}
                   >
-                    {row
-                      ? `${appUrl}/api/webhooks/${row.id}`
-                      : "Save the connection once to create its webhook endpoint."}
+                    {`${appUrl}/api/webhooks/${row.id}`}
                   </Typography>
                   {(type === "ses"
                     ? ["snsTopicArn"]
@@ -1086,12 +1110,12 @@ function ProviderForm({
                   ))}
                   <Typography variant="caption" color="text.secondary">
                     {["resend", "mailgun", "sendgrid"].includes(type)
-                      ? "Copy the verification/signing key from the provider webhook settings."
+                      ? "Register the callback URL above with the provider, then paste its verification/signing key here."
                       : type === "ses"
-                        ? "Use the exact SNS topic ARN for this SES account and region."
+                        ? "Register the callback through SNS and use the exact topic ARN for this SES account and region."
                         : type === "elastic"
-                          ? "Append ?key=YOUR_WEBHOOK_SECRET to this endpoint in Elastic Email."
-                          : "Configure HTTP Basic authentication with username emailsystem and this webhook secret."}
+                          ? "Register the callback URL, then append ?key=YOUR_WEBHOOK_SECRET in Elastic Email."
+                          : "Register the callback URL, then configure HTTP Basic authentication with username emailsystem and this webhook secret."}
                   </Typography>
                 </>
               )}
@@ -1123,7 +1147,7 @@ function ProviderForm({
                 fromEmail: `${localParts[0]}@${domain}`,
                 ...(type === "mailgun" ? { domain } : {}),
               };
-              await api(
+              const saved = await api<ProviderRow>(
                 row ? `providers/${row.id}` : "providers",
                 {
                   name,
@@ -1140,7 +1164,7 @@ function ProviderForm({
                 },
                 row ? "PUT" : "POST",
               );
-              await onSaved();
+              await onSaved(saved);
             } catch (e) {
               setError((e as Error).message);
             } finally {
