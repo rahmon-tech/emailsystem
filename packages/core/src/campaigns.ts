@@ -152,7 +152,7 @@ export async function preflight(userId: string, input: unknown) {
     throw new AppError(
       404,
       "IMPORT",
-      "Recipient import not found or not ready.",
+      "The selected recipient list is not available yet.",
     );
   const count = await db.importRecipient.count({
     where: { importId: list.id, userId },
@@ -634,7 +634,7 @@ export async function controlCampaign(
         live.campaignBlockReason ??
           live.providers.find((provider) => provider.unavailableReason)
             ?.unavailableReason ??
-          "No currently eligible provider/domain route is available for this campaign.",
+          "No sending service and domain combination is currently available for this campaign.",
       );
   }
   return db.$transaction(async (tx) => {
@@ -647,7 +647,7 @@ export async function controlCampaign(
         throw new AppError(
           409,
           "EXPERIMENT_STATE",
-          "Experiment-bound campaigns cannot be manually retried outside their approved run.",
+          "This controlled experiment cannot be manually retried outside its approved run.",
         );
       if (!["FAILED", "COMPLETED_WITH_ERRORS"].includes(c.state))
         throw new AppError(
@@ -660,7 +660,7 @@ export async function controlCampaign(
         throw new AppError(
           409,
           "SAFETY_REVIEW",
-          "Administrator safety review is required before retrying failed recipients.",
+          "An administrator must review the sending pause before failed recipients can be retried.",
         );
       const failed = await tx.delivery.count({
         where: { campaignId: id, userId, state: "FAILED" },
@@ -669,7 +669,7 @@ export async function controlCampaign(
         throw new AppError(
           409,
           "STATE",
-          "This campaign has no definitively failed recipients to retry.",
+          "This campaign has no failed recipients that are safe to retry.",
         );
       await tx.delivery.updateMany({
         where: { campaignId: id, userId, state: "FAILED" },
@@ -699,7 +699,7 @@ export async function controlCampaign(
           userId,
           campaignId: id,
           kind: "QUEUED",
-          message: `${failed} definitively failed recipient${failed === 1 ? "" : "s"} requeued. Unknown and already accepted outcomes were left untouched.`,
+          message: `${failed} failed recipient${failed === 1 ? "" : "s"} queued to try again. Recipients with unclear delivery or already accepted messages were left untouched.`,
         },
       });
       return updated;
@@ -710,7 +710,7 @@ export async function controlCampaign(
         throw new AppError(
           409,
           "SAFETY_REVIEW",
-          "Administrator safety review is required before resuming.",
+          "An administrator must review the sending pause before this campaign can resume.",
         );
       if (c.experimentRunId) {
         const run = await tx.experimentRun.findFirst({
@@ -729,7 +729,7 @@ export async function controlCampaign(
           throw new AppError(
             409,
             "EXPERIMENT_STATE",
-            "The bound experiment run must be active before this campaign can resume.",
+            "The controlled experiment must be active before this campaign can resume.",
           );
       }
     }
