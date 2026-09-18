@@ -166,7 +166,7 @@ test("provider monthly cap pauses only exhausted connections and resumes next UT
       monthlyBudgetOverride: 2,
     },
   });
-  let clock = Date.UTC(2026, 8, 18, 12, 0, 0);
+  let clock = Date.now() + 1000;
   let sends = 0;
   const send = async () => {
     sends += 1;
@@ -188,7 +188,17 @@ test("provider monthly cap pauses only exhausted connections and resumes next UT
   });
   assert.equal(pending.length, 1);
 
-  clock = Date.UTC(2026, 9, 1, 0, 1, 0);
+  {
+    const current = new Date(clock);
+    clock = Date.UTC(
+      current.getUTCFullYear(),
+      current.getUTCMonth() + 1,
+      1,
+      0,
+      1,
+      0,
+    );
+  }
   const rateKeys = await redis.keys(`dispatch:${f.user.id}:*`);
   if (rateKeys.length) await redis.del(...rateKeys);
   await processDelivery(pending[0].id, send, () => clock);
@@ -204,7 +214,7 @@ test("shared monthly account ceiling blocks additional claims until the next UTC
     providerDaily: 1000,
     campaignDaily: 1000,
   });
-  const clock = Date.UTC(2026, 8, 18, 12, 0, 0);
+  const clock = Date.now() + 1000;
   let sends = 0;
   const send = async () => {
     sends += 1;
