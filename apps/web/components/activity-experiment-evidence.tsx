@@ -64,21 +64,21 @@ function evidenceStatus(
   verification: VerificationSnapshot | null,
 ) {
   if (evidence.retention.status === "purged")
-    return { label: "Purged by retention", color: "warning" as const };
+    return { label: "Older records removed", color: "warning" as const };
   if (!evidence.integrity.available)
-    return { label: "Integrity unavailable", color: "default" as const };
+    return { label: "Record check unavailable", color: "default" as const };
   if (verification && !verification.valid)
-    return { label: "Integrity check failed", color: "error" as const };
+    return { label: "Record check failed", color: "error" as const };
   if (evidence.integrity.count === 0)
-    return { label: "No evidence yet", color: "default" as const };
+    return { label: "No records yet", color: "default" as const };
   if (!verification)
-    return { label: "Not yet verified", color: "default" as const };
+    return { label: "Not checked yet", color: "default" as const };
   if (
     verification.count !== evidence.integrity.count ||
     verification.headHash !== evidence.integrity.headHash
   )
-    return { label: "Verification outdated", color: "warning" as const };
-  return { label: "Chain verified", color: "success" as const };
+    return { label: "Check is out of date", color: "warning" as const };
+  return { label: "Records verified", color: "success" as const };
 }
 
 const eventLabel = (kind: string) => kind.replaceAll(".", " ").replaceAll("-", " ");
@@ -172,7 +172,7 @@ export function ActivityExperimentEvidence() {
   return (
     <Card
       component="section"
-      aria-label="Experiment evidence review"
+      aria-label="Experiment records"
       sx={{ mb: 2, p: { xs: 1.75, sm: 2 } }}
     >
       <Stack spacing={1.5}>
@@ -183,9 +183,9 @@ export function ActivityExperimentEvidence() {
           <Stack direction="row" sx={{ gap: 1, alignItems: "center" }}>
             <FactCheckOutlined fontSize="small" />
             <Box>
-              <Typography sx={{ fontWeight: 700 }}>Evidence review</Typography>
+              <Typography sx={{ fontWeight: 700 }}>Experiment records</Typography>
               <Typography variant="caption" color="text.secondary">
-                Tamper-evident experiment ledger
+                Protected history of this controlled experiment
               </Typography>
             </Box>
           </Stack>
@@ -202,7 +202,7 @@ export function ActivityExperimentEvidence() {
                   onClick={verifyChain}
                   disabled={verifying}
                 >
-                  {verifying ? "Verifying…" : "Verify chain"}
+                  {verifying ? "Checking…" : "Check records"}
                 </Button>
               )}
           </Stack>
@@ -210,7 +210,7 @@ export function ActivityExperimentEvidence() {
 
         {evidence.retention.status === "purged" ? (
           <Alert severity="warning">
-            Experiment evidence was purged by the configured retention policy
+            Older experiment records were removed according to your record-keeping settings
             {evidence.retention.purgedAt
               ? ` on ${new Date(evidence.retention.purgedAt).toLocaleString()}`
               : ""}
@@ -218,19 +218,17 @@ export function ActivityExperimentEvidence() {
           </Alert>
         ) : verificationCurrent && activeVerification ? (
           <Typography variant="body2" color="text.secondary">
-            {evidence.integrity.count.toLocaleString()} chained {entryWord(evidence.integrity.count)} · verified through #{activeVerification.verifiedThrough.toLocaleString()}
-            {head ? ` · head ${head}` : ""} · verified {new Date(activeVerification.verifiedAt).toLocaleString()}
+            {evidence.integrity.count.toLocaleString()} protected {entryWord(evidence.integrity.count)} · checked through record #{activeVerification.verifiedThrough.toLocaleString()} · checked {new Date(activeVerification.verifiedAt).toLocaleString()}
           </Typography>
         ) : (
           <Typography variant="body2" color="text.secondary">
-            {evidence.integrity.count.toLocaleString()} retained {entryWord(evidence.integrity.count)} · full-chain verification required
-            {head ? ` · head ${head}` : ""}
+            {evidence.integrity.count.toLocaleString()} protected {entryWord(evidence.integrity.count)} · run a record check to confirm they have not changed
           </Typography>
         )}
 
         <Box>
           <Typography variant="caption" color="text.secondary">
-            Recent evidence
+            Recent records
           </Typography>
           {evidence.recent.length ? (
             <Stack spacing={0.75} sx={{ mt: 0.75 }}>
@@ -251,7 +249,7 @@ export function ActivityExperimentEvidence() {
             </Stack>
           ) : (
             <Typography variant="body2" color="text.secondary" sx={{ mt: 0.75 }}>
-              No retained evidence entries yet.
+              No experiment records yet.
             </Typography>
           )}
         </Box>
