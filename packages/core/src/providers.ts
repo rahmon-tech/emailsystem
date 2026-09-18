@@ -84,6 +84,8 @@ export function unlocked(row: {
   perSecond: number;
   perMinute: number;
   concurrency: number;
+  dailyBudgetOverride: number | null;
+  monthlyBudgetOverride: number | null;
 }): Connection {
   return {
     ...connectionSchema.parse({
@@ -100,6 +102,8 @@ export function unlocked(row: {
       perSecond: row.perSecond,
       perMinute: row.perMinute,
       concurrency: row.concurrency,
+      dailyBudget: row.dailyBudgetOverride ?? undefined,
+      monthlyBudget: row.monthlyBudgetOverride ?? undefined,
     }),
     id: row.id,
   };
