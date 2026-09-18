@@ -4,7 +4,11 @@ import { db } from "@emailsystem/db";
 import { redis } from "@emailsystem/core/redis";
 import { createUser } from "@emailsystem/core/auth";
 import { saveProvider } from "@emailsystem/core/providers";
-import { addSenderIdentities, listSenders } from "@emailsystem/core/senders";
+import {
+  addSenderIdentities,
+  listSenders,
+  selectDeliverySender,
+} from "@emailsystem/core/senders";
 import { importRecipients } from "@emailsystem/core/imports";
 import {
   createCampaign,
@@ -203,5 +207,151 @@ test("changing a provider domain retires its old sender authorization", async ()
   assert.equal(
     after.domains.find((domain) => domain.domain === "old-example.com")?.status,
     "UNVERIFIED",
+  );
+});
+
+
+test("domain selection creates a bounded verified alias pool and chooses aliases deterministically", async () => {
+  const user = await userFixture("domain-pool");
+  const provider = await saveProvider(user.id, {
+    name: "Domain pool provider",
+    type: "mock",
+    transport: "api",
+    settings: {
+      fromEmail: "info@example-pool.com",
+      senderDomain: "example-pool.com",
+      senderAliases: ["info", "support", "hello", "sales"],
+      fromName: "Example Pool",
+    },
+    credentials: {},
+    perSecond: 20,
+    perMinute: 1000,
+    concurrency: 4,
+    dailyBudget: 500,
+    monthlyBudget: 5000,
+  });
+  assert(provider);
+  const catalog = await listSenders(user.id);
+  const domain = catalog.domains.find(
+    (candidate) => candidate.domain === "example-pool.com",
+  )!;
+  assert.equal(domain.status, "VERIFIED");
+  assert.deepEqual(
+    domain.senders.map((sender) => sender.localPart).sort(),
+    ["hello", "info", "sales", "support"],
+  );
+  assert(
+    domain.senders.every((sender) =>
+      sender.availableProviderIds.includes(provider.id),
+    ),
+  );
+
+  const imported = await importRecipients(
+    user.id,
+    Buffer.from("one@example.net\ntwo@example.net"),
+    "domain-pool.txt",
+  );
+  const flight = await preflight(user.id, {
+    name: "Domain pool campaign",
+    senderDomainId: domain.id,
+    importId: imported.id,
+    subject: "Domain pool",
+    html: "<p>Domain pool.</p>",
+  });
+  assert(flight.ready);
+  assert.equal(flight.sender.domainId, domain.id);
+  assert.equal(flight.sender.aliasCount, 4);
+  assert.equal(flight.providers.length, 1);
+
+  const campaign = await createCampaign(user.id, {
+    name: "Domain pool campaign",
+    senderDomainId: domain.id,
+    importId: imported.id,
+    subject: "Domain pool",
+    html: "<p>Domain pool.</p>",
+    startKey: crypto.randomUUID(),
+  });
+  const snapshot = campaign.message as {
+    senderPool?: { enabled?: boolean; aliasCount?: number };
+  };
+  assert.equal(snapshot.senderPool?.enabled, true);
+  assert.equal(snapshot.senderPool?.aliasCount, 4);
+
+  const anchor = campaign.senderIdentityId!;
+  const selections = await db.$transaction(async (tx) =>
+    Promise.all(
+      Array.from({ length: 24 }, (_, index) =>
+        selectDeliverySender(
+          tx,
+          user.id,
+          anchor,
+          "delivery-" + index,
+          true,
+        ),
+      ),
+    ),
+  );
+  const chosen = selections.map((selection) => selection!.sender.email);
+  assert(chosen.every((email) => email.endsWith("@example-pool.com")));
+  assert(new Set(chosen).size > 1);
+  const repeated = await db.$transaction((tx) =>
+    selectDeliverySender(tx, user.id, anchor, "delivery-7", true),
+  );
+  assert.equal(repeated!.sender.email, chosen[7]);
+});
+
+test("address-specific providers do not widen a domain alias pool", async () => {
+  const user = await userFixture("address-pool");
+  const provider = await saveProvider(
+    user.id,
+    {
+      name: "Address-only provider",
+      type: "mailjet",
+      transport: "api",
+      settings: {
+        fromEmail: "verified@address-pool.example",
+        senderDomain: "address-pool.example",
+        senderAliases: ["verified", "unproven"],
+      },
+      credentials: {
+        apiKey: "synthetic-mailjet-key",
+        secretKey: "synthetic-mailjet-secret",
+      },
+    },
+    undefined,
+    {
+      fetch: async () => Response.json({ Messages: [{ Status: "success" }] }),
+    },
+  );
+  assert(provider);
+  const domain = (await listSenders(user.id)).domains.find(
+    (candidate) => candidate.domain === "address-pool.example",
+  )!;
+  const verified = domain.senders.find(
+    (sender) => sender.localPart === "verified",
+  )!;
+  const unproven = domain.senders.find(
+    (sender) => sender.localPart === "unproven",
+  )!;
+  assert.deepEqual(verified.availableProviderIds, [provider.id]);
+  assert.deepEqual(unproven.availableProviderIds, []);
+
+  const choices = await db.$transaction(async (tx) =>
+    Promise.all(
+      Array.from({ length: 12 }, (_, index) =>
+        selectDeliverySender(
+          tx,
+          user.id,
+          verified.id,
+          "address-delivery-" + index,
+          true,
+        ),
+      ),
+    ),
+  );
+  assert(
+    choices.every(
+      (selection) => selection?.sender.email === verified.email,
+    ),
   );
 });
