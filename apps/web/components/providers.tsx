@@ -1173,8 +1173,8 @@ function ProviderForm({
                         </Button>
                       </Box>
                       <Typography variant="caption" color="text.secondary">
-                        Copy this exact URL into {d.name}'s webhook, event, or
-                        callback settings.
+                        Copy this exact URL into the webhook, event, or callback
+                        settings for {d.name}.
                       </Typography>
                     </>
                   ) : (
