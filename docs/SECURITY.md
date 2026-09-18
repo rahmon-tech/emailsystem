@@ -1,4 +1,4 @@
-# Security and operations
+# EmailBlast security and operations
 
 ## Reporting vulnerabilities
 
