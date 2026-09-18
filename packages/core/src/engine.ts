@@ -979,7 +979,7 @@ export async function recoverStalled() {
         const from = (c.message as { from: string }).from;
         const group = rateGroup(
           d.userId,
-          provider.type,
+          provider.id,
           from,
           (provider.settings as ConnectionInput["settings"]).region,
         );
@@ -991,7 +991,7 @@ export async function recoverStalled() {
                   (p) =>
                     rateGroup(
                       d.userId,
-                      p.type,
+                      p.id,
                       from,
                       (p.settings as ConnectionInput["settings"]).region,
                     ) === group,
