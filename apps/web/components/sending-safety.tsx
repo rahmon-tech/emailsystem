@@ -145,7 +145,14 @@ export function SendingSafety() {
       | "hardBounceRate"
       | "minimumSample",
     label: string,
-  ) => (
+  ) => {
+    const nullableBudget = [
+      "accountDaily",
+      "domainDaily",
+      "providerDaily",
+      "campaignDaily",
+    ].includes(key);
+    return (
     <TextField
       key={key}
       label={label}
@@ -153,7 +160,16 @@ export function SendingSafety() {
       fullWidth
       value={value?.[key] ?? ""}
       onChange={(e) =>
-        setValue((v) => v && { ...v, [key]: Number(e.target.value) })
+        setValue(
+          (v) =>
+            v && {
+              ...v,
+              [key]:
+                nullableBudget && e.target.value === ""
+                  ? null
+                  : Number(e.target.value),
+            },
+        )
       }
       slotProps={{
         htmlInput: {
@@ -166,8 +182,14 @@ export function SendingSafety() {
           step: key.endsWith("Rate") ? 0.01 : 1,
         },
       }}
+      helperText={
+        nullableBudget
+          ? "Blank means no additional shared ceiling at this scope."
+          : undefined
+      }
     />
-  );
+    );
+  };
   const pacingField = (
     key: "accountPerMinute" | "domainPerMinute" | "campaignPerMinute",
     label: string,
