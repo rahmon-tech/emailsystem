@@ -334,6 +334,13 @@ async function saveVerification(
       data: { userId, action: "provider.verified", resourceId: id },
     });
     await syncProviderAuthorization(tx, userId, id, v);
+    // A provider verification/configuration change can add capacity or restore
+    // an eligible route. Wake waiting campaigns so they re-evaluate the saved
+    // provider limits immediately instead of sleeping until an obsolete timer.
+    await tx.campaign.updateMany({
+      where: { userId, safetyWaitUntil: { not: null } },
+      data: { safetyWaitUntil: null, safetyWaitReason: null },
+    });
   });
 }
 export async function testProvider(
