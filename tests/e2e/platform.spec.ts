@@ -45,9 +45,9 @@ test("login, provider setup, HTML import, preview, test, campaign controls, reco
     .getByRole("button", { name: "Sending safety", exact: true })
     .click();
   await expect(
-    page.getByLabel("Account daily budget", { exact: true }),
-  ).toHaveValue("10000");
-  await page.getByLabel("Account daily budget", { exact: true }).fill("12000");
+    page.getByLabel("Account daily safeguard", { exact: true }),
+  ).toHaveValue("");
+  await page.getByLabel("Account daily safeguard", { exact: true }).fill("12000");
   await page
     .getByRole("button", { name: "Save safety settings", exact: true })
     .click();
@@ -107,7 +107,7 @@ test("login, provider setup, HTML import, preview, test, campaign controls, reco
       await page.setViewportSize({ width: 1280, height: 720 });
     }
     await dialog
-      .getByRole("button", { name: "Sending limits and webhooks" })
+      .getByRole("button", { name: "Advanced throughput" })
       .click();
     await expect(dialog.getByLabel("Port and security")).toBeVisible();
     await expect(
@@ -127,18 +127,22 @@ test("login, provider setup, HTML import, preview, test, campaign controls, reco
   await chooseProvider("Custom SMTP");
   await expect(page.getByLabel("SMTP hostname")).toBeVisible();
   await page
-    .getByRole("button", { name: "Sending limits and webhooks" })
+    .getByRole("button", { name: "Advanced throughput" })
     .click();
   await expect(page.getByLabel("Security", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Cancel", exact: true }).click();
   await chooseProvider("Development Mock");
   await page.getByLabel("Connection name").fill("Browser verification");
-  await page.getByLabel("Verification sender email").fill("invalid-address");
+  await page.getByLabel("Sending domain").fill("invalid-address");
   await page
     .getByRole("button", { name: "Save & Verify", exact: true })
     .click();
-  await expect(page.getByRole("alert")).toContainText(/email/i);
-  await page.getByLabel("Verification sender email").fill("sender@example.com");
+  await expect(page.getByRole("alert")).toContainText(/domain/i);
+  await page.getByLabel("Sending domain").fill("example.com");
+  await expect(page.getByLabel("Sender aliases")).toHaveValue("info");
+  await expect(page.getByLabel("Daily connection limit")).toHaveValue("5000");
+  await expect(page.getByLabel("Monthly connection limit")).toHaveValue("150000");
+  await expect(page.getByText("Delivery status & webhook", { exact: true })).toBeVisible();
   await page
     .getByRole("button", { name: "Save & Verify", exact: true })
     .click();
@@ -148,16 +152,18 @@ test("login, provider setup, HTML import, preview, test, campaign controls, reco
   ).json();
   expect(providers).toHaveLength(1);
   expect(providers[0]).not.toHaveProperty("credentials");
-  await page.getByRole("button", { name: "Senders", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Domains & aliases", exact: true })
+    .click();
   const sendersDialog = page.getByRole("dialog", {
-    name: "Domains & senders",
+    name: "Domains & aliases",
     exact: true,
   });
   await expect(
     sendersDialog.getByText("example.com", { exact: true }),
   ).toBeVisible();
   await expect(
-    sendersDialog.getByText("sender@example.com", { exact: true }),
+    sendersDialog.getByText("info@example.com", { exact: true }),
   ).toBeVisible();
   await sendersDialog
     .getByRole("button", { name: "Done", exact: true })
@@ -351,7 +357,7 @@ test("login, provider setup, HTML import, preview, test, campaign controls, reco
     await context.request.post(appPath("/api/campaigns"), {
       data: {
         name: "Control verification",
-        from: "sender@example.com",
+        from: "info@example.com",
         subject: "Controls",
         html: "<p>Control test</p>",
         importId: imported.id,
@@ -524,7 +530,7 @@ test("login, provider setup, HTML import, preview, test, campaign controls, reco
           exact: true,
         });
         await expect(
-          dialog.getByLabel("Account daily budget", { exact: true }),
+          dialog.getByLabel("Account daily safeguard", { exact: true }),
         ).toHaveValue("12000");
         await dialog
           .getByRole("button", { name: "Automatic safety pauses", exact: true })
