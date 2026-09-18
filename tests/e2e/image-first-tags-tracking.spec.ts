@@ -74,7 +74,7 @@ test("image-first reuses account tracking defaults and the existing campaign tag
       (request) =>
         request.method() === "POST" && request.url().includes("/api/preflight"),
     );
-    await page.getByRole("button", { name: "Run pre-flight", exact: true }).click();
+    await page.getByRole("button", { name: "Check campaign", exact: true }).click();
     const request = await preflightRequest;
     expect(request.postDataJSON()).toMatchObject({
       tags: ["launch", "VIP", "image"],
@@ -82,7 +82,7 @@ test("image-first reuses account tracking defaults and the existing campaign tag
     });
     await expect(
       page.getByText(
-        "Tracking on · click links will be rewritten when the campaign snapshot is created.",
+        "Click tracking is on.",
         { exact: true },
       ),
     ).toBeVisible();
