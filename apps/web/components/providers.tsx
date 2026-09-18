@@ -840,8 +840,8 @@ function ProviderForm({
           )}
           {row && (
             <Alert severity="info">
-              Re-enter sending credentials to replace this connection. Existing
-              secrets are never displayed.
+              Saved credentials stay in place and are never displayed. Leave a
+              secret blank to keep it, or enter a new value to replace it.
             </Alert>
           )}
           {fields.map((field) => (
@@ -850,7 +850,7 @@ function ProviderForm({
               label={field.label}
               type="password"
               autoComplete="new-password"
-              required={!field.optional}
+              required={!field.optional && !row}
               value={secrets[field.key] ?? ""}
               onChange={(e) =>
                 setSecrets({ ...secrets, [field.key]: e.target.value })
