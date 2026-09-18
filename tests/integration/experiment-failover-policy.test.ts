@@ -211,7 +211,7 @@ test("provider policy enforcement stops transport instead of failing over to ano
     where: { id: scenario.campaign.id },
   });
   assert.equal(paused.state, "PAUSED");
-  assert.match(paused.safeError ?? "", /Provider enforcement reported/);
+  assert.match(paused.safeError ?? "", /approved.*controlled experiment.*blocked/i);
 
   // Even if an operator tries to resume before reviewing the block, the
   // campaign must fail closed rather than routing around enforcement.
