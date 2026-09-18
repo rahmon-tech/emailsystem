@@ -37,6 +37,68 @@ export function commonBudgets(
       : []),
   ];
 }
+
+export function monthWindowUtc(now = Date.now()) {
+  const date = new Date(now);
+  const start = Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1);
+  const next = Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 1);
+  return { start, next };
+}
+
+export async function providerMonthlyUsage(
+  tx: Prisma.TransactionClient,
+  userId: string,
+  providerIds: string[],
+  clock?: () => number,
+) {
+  const ids = [...new Set(providerIds)];
+  if (!ids.length) return new Map<string, number>();
+  const now = clock?.() ?? Date.now();
+  const { start } = monthWindowUtc(now);
+  const monthStart = new Date(start);
+  const reservationCutoff = new Date(Math.max(start, now - RESERVATION_MS));
+
+  const [transmitted, reserved, tests] = await Promise.all([
+    tx.deliveryAttempt.groupBy({
+      by: ["providerId"],
+      where: {
+        userId,
+        providerId: { in: ids },
+        transmissionStartedAt: { gte: monthStart },
+      },
+      _sum: { messageUnits: true },
+    }),
+    tx.deliveryAttempt.groupBy({
+      by: ["providerId"],
+      where: {
+        userId,
+        providerId: { in: ids },
+        state: "RESERVED",
+        transmissionStartedAt: null,
+        safetyReservedAt: { gte: reservationCutoff },
+      },
+      _sum: { messageUnits: true },
+    }),
+    tx.providerTestDelivery.groupBy({
+      by: ["providerId"],
+      where: {
+        providerId: { in: ids },
+        provider: { userId },
+        safetyAt: { gte: monthStart },
+      },
+      _count: { _all: true },
+    }),
+  ]);
+
+  const usage = new Map(ids.map((id) => [id, 0]));
+  for (const row of transmitted)
+    usage.set(row.providerId, (usage.get(row.providerId) ?? 0) + (row._sum.messageUnits ?? 0));
+  for (const row of reserved)
+    usage.set(row.providerId, (usage.get(row.providerId) ?? 0) + (row._sum.messageUnits ?? 0));
+  for (const row of tests)
+    usage.set(row.providerId, (usage.get(row.providerId) ?? 0) + row._count._all);
+  return usage;
+}
 // Caller holds the same PostgreSQL account lock used for reserve/claim/start.
 // A Redis reset therefore cannot race past an uncommitted durable attempt.
 export async function ensureGovernor(
@@ -126,7 +188,12 @@ export async function getSafetySettings(userId: string) {
   const user = await db.user.findUniqueOrThrow({ where: { id: userId } });
   const providers = await db.providerConnection.findMany({
     where: { userId, deletedAt: null },
-    select: { id: true, name: true, dailyBudgetOverride: true },
+    select: {
+      id: true,
+      name: true,
+      dailyBudgetOverride: true,
+      monthlyBudgetOverride: true,
+    },
   });
   return {
     ...safetySettings.parse(user.safetySettings),
@@ -250,7 +317,11 @@ export async function safetyCapacity(
       );
       const providers = await tx.providerConnection.findMany({
         where: { userId, deletedAt: null },
-        select: { id: true, dailyBudgetOverride: true },
+        select: {
+      id: true,
+      dailyBudgetOverride: true,
+      monthlyBudgetOverride: true,
+    },
       });
       const providerUsage = providers.length
         ? await g.inspect(
@@ -260,6 +331,19 @@ export async function safetyCapacity(
             })),
           )
         : [];
+      const monthly = await providerMonthlyUsage(
+        tx,
+        userId,
+        providers.map((provider) => provider.id),
+        clock,
+      );
+      const { next: nextMonthStart } = monthWindowUtc(clock?.() ?? Date.now());
+      const providerMonthlyUsageRows = providers.map((provider) => ({
+        scope: "provider-month:" + provider.id,
+        used: monthly.get(provider.id) ?? 0,
+        limit: provider.monthlyBudgetOverride,
+        nextReleaseAt: provider.monthlyBudgetOverride === null ? null : nextMonthStart,
+      }));
       const available = Math.max(
         0,
         Math.min(
@@ -271,6 +355,7 @@ export async function safetyCapacity(
       return {
         usage,
         providerUsage,
+        providerMonthlyUsage: providerMonthlyUsageRows,
         available,
         reviewScope: user.safetyPausedReason
           ? ("account" as const)
