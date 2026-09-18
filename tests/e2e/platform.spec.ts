@@ -1,6 +1,7 @@
 import { appPath } from "@emailsystem/core/paths";
-import { test, expect } from "@playwright/test";
+import { test, expect, type Locator } from "@playwright/test";
 import { mkdirSync, readFileSync } from "node:fs";
+import { E2E_EMAIL, E2E_PASSWORD } from "./credentials";
 test("login, provider setup, HTML import, preview, test, campaign controls, recovery and export", async ({
   page,
   context,
@@ -19,37 +20,55 @@ test("login, provider setup, HTML import, preview, test, campaign controls, reco
       animations: "disabled",
     });
   };
+  const assertMobileMenuScrollIsContained = async (trigger: Locator) => {
+    const pageScrollBefore = await page.evaluate(() => window.scrollY);
+    await trigger.click();
+    const menu = page.locator(".MuiMenu-paper:visible").last();
+    await expect(menu).toBeVisible();
+    const size = await menu.evaluate((el) => ({
+      clientHeight: el.clientHeight,
+      scrollHeight: el.scrollHeight,
+    }));
+    expect(size.scrollHeight).toBeGreaterThan(size.clientHeight);
+    await menu.hover();
+    await page.mouse.wheel(0, 1200);
+    await expect
+      .poll(() => menu.evaluate((el) => el.scrollTop))
+      .toBeGreaterThan(0);
+    expect(await page.evaluate(() => window.scrollY)).toBe(pageScrollBefore);
+    await page.keyboard.press("Escape");
+  };
   const chooseProvider = async (name: string) => {
     await page
-      .getByRole("button", { name: "Add provider", exact: true })
+      .getByRole("button", { name: "Add sending service", exact: true })
       .first()
       .click();
     const picker = page.getByRole("dialog", {
-      name: "Add provider",
+      name: "Add sending service",
       exact: true,
     });
     await picker.getByRole("button", { name, exact: true }).click();
     await expect(picker).toHaveCount(0);
   };
   await page.goto(appPath("/login"));
-  await page.getByLabel("Email address").fill("browser-test@example.com");
-  await page.getByLabel("Password").fill("Isolated-browser-test-password-2026");
+  await page.getByLabel("Email address").fill(E2E_EMAIL);
+  await page.getByLabel("Password").fill(E2E_PASSWORD);
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await expect(page).toHaveURL(/providers/);
   const authCookie = (await context.cookies()).find(
     (c) => c.name === "emailsystem_session",
   );
   expect(authCookie?.path).toBe(process.env.NEXT_PUBLIC_BASE_PATH || "/");
-  await expect(page.getByText("No providers yet")).toBeVisible();
+  await expect(page.getByText("No sending services yet")).toBeVisible();
   await page
-    .getByRole("button", { name: "Sending safety", exact: true })
+    .getByRole("button", { name: "Sending limits & protection", exact: true })
     .click();
   await expect(
-    page.getByLabel("Account · rolling 24h", { exact: true }),
+    page.getByLabel("All sending · 24 hours", { exact: true }),
   ).toHaveValue("");
-  await page.getByLabel("Account · rolling 24h", { exact: true }).fill("12000");
+  await page.getByLabel("All sending · 24 hours", { exact: true }).fill("12000");
   await page
-    .getByRole("button", { name: "Save safety settings", exact: true })
+    .getByRole("button", { name: "Save limits", exact: true })
     .click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
   expect(
@@ -91,13 +110,13 @@ test("login, provider setup, HTML import, preview, test, campaign controls, reco
         .click();
       await expect(input("Server token")).toBeVisible();
       await expect(input("Stream SMTP access key")).toHaveCount(0);
-      await dialog.getByLabel("Message Stream type").click();
+      await dialog.getByLabel("Postmark stream use").click();
       await page
-        .getByRole("option", { name: "Transactional — test only" })
+        .getByRole("option", { name: "Test emails only" })
         .click();
       await expect(input("Message Stream ID")).toHaveValue("outbound");
       await expect(
-        dialog.getByText(/Campaigns require a Broadcast stream/),
+        dialog.getByText(/will not use it for campaigns/),
       ).toBeVisible();
       await page.setViewportSize({ width: 390, height: 844 });
       await page.screenshot({
@@ -107,7 +126,7 @@ test("login, provider setup, HTML import, preview, test, campaign controls, reco
       await page.setViewportSize({ width: 1280, height: 720 });
     }
     await dialog
-      .getByRole("button", { name: "Advanced throughput" })
+      .getByRole("button", { name: "Advanced sending speed" })
       .click();
     await expect(dialog.getByLabel("Port and security")).toBeVisible();
     await expect(
@@ -127,36 +146,36 @@ test("login, provider setup, HTML import, preview, test, campaign controls, reco
   await chooseProvider("Custom SMTP");
   await expect(page.getByLabel("SMTP hostname")).toBeVisible();
   await page
-    .getByRole("button", { name: "Advanced throughput" })
+    .getByRole("button", { name: "Advanced sending speed" })
     .click();
   await expect(page.getByLabel("Security", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Cancel", exact: true }).click();
   await chooseProvider("Development Mock");
-  await page.getByLabel("Connection name").fill("Browser verification");
+  await page.getByLabel("Name this connection").fill("Browser verification");
   await page.getByLabel("Sending domain").fill("invalid-address");
   await page
-    .getByRole("button", { name: "Save & Verify", exact: true })
+    .getByRole("button", { name: "Save & check connection", exact: true })
     .click();
   await expect(page.getByRole("alert")).toContainText(/domain/i);
   await page.getByLabel("Sending domain").fill("example.com");
-  await expect(page.getByLabel("Sender aliases")).toHaveValue("info");
+  await expect(page.getByLabel("From address names")).toHaveValue("info");
   await expect(page.getByLabel("Daily connection limit")).toHaveValue("5000");
   await expect(page.getByLabel("Monthly connection limit")).toHaveValue("150000");
-  await expect(page.getByText("Delivery status & webhook", { exact: true })).toBeVisible();
+  await expect(page.getByText("Delivery updates", { exact: true })).toBeVisible();
   await page
-    .getByRole("button", { name: "Save & Verify", exact: true })
+    .getByRole("button", { name: "Save & check connection", exact: true })
     .click();
-  await expect(page.getByText("Healthy", { exact: true })).toBeVisible();
+  await expect(page.getByText("Ready", { exact: true })).toBeVisible();
   const providers = await (
     await context.request.get(appPath("/api/providers"))
   ).json();
   expect(providers).toHaveLength(1);
   expect(providers[0]).not.toHaveProperty("credentials");
   await page
-    .getByRole("button", { name: "Domains & aliases", exact: true })
+    .getByRole("button", { name: "Sending addresses", exact: true })
     .click();
   const sendersDialog = page.getByRole("dialog", {
-    name: "Domains & aliases",
+    name: "Sending addresses",
     exact: true,
   });
   await expect(
@@ -221,11 +240,11 @@ test("login, provider setup, HTML import, preview, test, campaign controls, reco
   await expect(page.getByText("1 duplicate", { exact: true })).toBeVisible();
   // Failed validation is visible beside the action, even below the composer.
   await page
-    .getByRole("button", { name: "Run pre-flight", exact: true })
+    .getByRole("button", { name: "Check campaign", exact: true })
     .click();
   await expect(
     page
-      .getByRole("region", { name: "Pre-flight", exact: true })
+      .getByRole("region", { name: "Campaign check", exact: true })
       .getByRole("alert"),
   ).toBeVisible();
   await expect(
@@ -271,7 +290,7 @@ test("login, provider setup, HTML import, preview, test, campaign controls, reco
       .getByRole("heading", { name: "Delivery check" }),
   ).toBeVisible();
   await page
-    .getByRole("button", { name: "Run pre-flight", exact: true })
+    .getByRole("button", { name: "Check campaign", exact: true })
     .click();
   await expect(page.getByText("Ready to send", { exact: true })).toBeVisible();
   await page.getByText("More options", { exact: true }).click();
@@ -283,7 +302,7 @@ test("login, provider setup, HTML import, preview, test, campaign controls, reco
   ).toBeDisabled();
   await expect(page.getByText("Ready to send", { exact: true })).toHaveCount(0);
   await page
-    .getByRole("button", { name: "Run pre-flight", exact: true })
+    .getByRole("button", { name: "Check campaign", exact: true })
     .click();
   await expect(page.getByText("Ready to send", { exact: true })).toBeVisible();
   await page.screenshot({
@@ -298,7 +317,7 @@ test("login, provider setup, HTML import, preview, test, campaign controls, reco
   await expect(page).toHaveURL(/activity\?campaignId=/);
   await expect(
     page.getByRole("log", { name: "Campaign events" }),
-  ).toContainText("DELIVERED");
+  ).toContainText("Delivered");
   const campaignId = new URL(page.url()).searchParams.get("campaignId")!;
   await expect
     .poll(async () => {
@@ -427,7 +446,7 @@ test("login, provider setup, HTML import, preview, test, campaign controls, reco
       if (route === "/activity")
         await expect(
           page.getByRole("log", { name: "Campaign events" }),
-        ).toContainText("DELIVERED");
+        ).toContainText("Delivered");
       else if (route === "/providers")
         await expect(
           page.getByText("Browser verification", { exact: true }),
@@ -455,7 +474,7 @@ test("login, provider setup, HTML import, preview, test, campaign controls, reco
             "Hello there,\nWe’ve been working on a few things we think you’ll love. Here’s a quick look at what’s new this month.\nThanks for being part of the journey.",
           );
         await page
-          .getByRole("button", { name: "Run pre-flight", exact: true })
+          .getByRole("button", { name: "Check campaign", exact: true })
           .click();
         await expect(
           page.getByText("Ready to send", { exact: true }),
@@ -487,11 +506,11 @@ test("login, provider setup, HTML import, preview, test, campaign controls, reco
       if (route === "/providers") {
         if (width === 390 || width === 1366) {
           await page
-            .getByRole("button", { name: "Add provider", exact: true })
+            .getByRole("button", { name: "Add sending service", exact: true })
             .first()
             .click();
           const picker = page.getByRole("dialog", {
-            name: "Add provider",
+            name: "Add sending service",
             exact: true,
           });
           await expect(picker).toBeVisible();
@@ -505,11 +524,11 @@ test("login, provider setup, HTML import, preview, test, campaign controls, reco
             exact: true,
           });
           await expect(
-            providerForm.getByLabel("Connection name"),
+            providerForm.getByLabel("Name this connection"),
           ).toBeVisible();
           await review(`provider-dialog-${width}`, false);
           const bounds = await providerForm
-            .getByRole("button", { name: "Save & Verify", exact: true })
+            .getByRole("button", { name: "Save & check connection", exact: true })
             .boundingBox();
           expect(bounds).not.toBeNull();
           expect(bounds!.y + bounds!.height).toBeLessThanOrEqual(900);
@@ -523,20 +542,20 @@ test("login, provider setup, HTML import, preview, test, campaign controls, reco
             .click();
         }
         await page
-          .getByRole("button", { name: "Sending safety", exact: true })
+          .getByRole("button", { name: "Sending limits & protection", exact: true })
           .click();
         const dialog = page.getByRole("dialog", {
-          name: "Sending safety",
+          name: "Sending limits & protection",
           exact: true,
         });
         await expect(
-          dialog.getByLabel("Account · rolling 24h", { exact: true }),
+          dialog.getByLabel("All sending · 24 hours", { exact: true }),
         ).toHaveValue("12000");
         await dialog
-          .getByRole("button", { name: "Automatic safety pauses", exact: true })
+          .getByRole("button", { name: "Automatic protection pauses", exact: true })
           .click();
         await expect(
-          dialog.getByLabel("Complaint threshold (%)", { exact: true }),
+          dialog.getByLabel("Pause when complaints reach (%)", { exact: true }),
         ).toBeVisible();
         expect(
           await dialog.evaluate((el) => el.scrollWidth <= el.clientWidth + 2),
@@ -550,10 +569,18 @@ test("login, provider setup, HTML import, preview, test, campaign controls, reco
           .getByRole("button", { name: "Close", exact: true })
           .click();
       }
-      if (route === "/activity")
+      if (route === "/activity") {
         await expect(
-          page.getByLabel("Sending safety usage", { exact: true }),
+          page.getByLabel("Sending limit usage", { exact: true }),
         ).toContainText("Account · 24h");
+        if (width === 390) {
+          await page.getByRole("tab", { name: "Recipients", exact: true }).click();
+          await assertMobileMenuScrollIsContained(
+            page.getByLabel("Delivery status", { exact: true }),
+          );
+          await page.getByRole("tab", { name: "Live updates", exact: true }).click();
+        }
+      }
       await page.screenshot({
         path: `test-results/${route.slice(1)}-${width}.png`,
         fullPage: true,
@@ -570,10 +597,10 @@ test("login, provider setup, HTML import, preview, test, campaign controls, reco
   await page
     .getByRole("button", { name: "Open navigation", exact: true })
     .click();
-  await page.getByRole("link", { name: "Providers", exact: true }).click();
+  await page.getByRole("link", { name: "Sending services", exact: true }).click();
   await expect(page).toHaveURL(/providers/);
   await expect(
-    page.getByRole("link", { name: "Blast", exact: true }),
+    page.getByRole("link", { name: "Create campaign", exact: true }),
   ).not.toBeVisible();
   await context.clearCookies();
   await page.goto(appPath("/login"));
