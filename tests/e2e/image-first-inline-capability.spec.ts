@@ -64,12 +64,12 @@ test("image-first shows inline CID capability as soon as the sender is selected"
     await expect(page).toHaveURL(/\/blast$/);
     await page.goto(appPath("/blast/image"));
 
-    await page.getByLabel("Sending domain").click();
+    await page.getByLabel("Sending domains").click();
     await page.getByRole("option", { name: /^example\.com/ }).click();
 
     await expect(
       page.getByText(
-        "Inline CID ready · 1 of 2 eligible providers can send this Image-first message.",
+        "Embedded image ready · 1 of 2 sending services can send this message.",
         { exact: true },
       ),
     ).toBeVisible();
@@ -77,7 +77,7 @@ test("image-first shows inline CID capability as soon as the sender is selected"
     await expect(page.getByText("API without CID", { exact: true })).toBeVisible();
 
     await expect(
-      page.getByRole("button", { name: "Run pre-flight", exact: true }),
+      page.getByRole("button", { name: "Check campaign", exact: true }),
     ).toBeDisabled();
   } finally {
     await db.user.deleteMany({ where: { id: user.id } });
