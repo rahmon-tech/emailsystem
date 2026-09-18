@@ -312,9 +312,9 @@ export async function campaignProviderStatus(
           : domainMonthlyRemaining !== null && domainMonthlyRemaining < cost
             ? `${domain} has reached its monthly sending limit.`
             : streamType(provider.settings) === "transactional"
-            ? "This connection is configured for test/transactional mail, not campaigns."
+            ? "This connection is set up for test emails only, not campaigns."
             : needsInlineTransport && !supportsInlineAttachmentTransport(provider)
-              ? "Provider transport does not support this campaign's inline CID assets."
+              ? "This sending service cannot send this campaign with its embedded image."
               : !provider.enabled
                 ? "This sending service is turned off."
                 : provider.health !== "HEALTHY"
@@ -323,7 +323,7 @@ export async function campaignProviderStatus(
                     ? "This sending service is temporarily paused."
                     : provider.quotaRemaining !== null &&
                         provider.quotaRemaining < cost
-                      ? "This sending service has no remaining provider quota for another email."
+                      ? "This sending service has no remaining sending allowance for another email."
                       : safetyRemaining !== null && safetyRemaining < cost
                         ? "This sending service has reached its 24-hour limit."
                         : monthlySafetyRemaining !== null &&
