@@ -152,6 +152,49 @@ test("150-recipient campaign queues across days: exactly 100 claims, durable wai
     "COMPLETED",
   );
 });
+test("provider monthly cap pauses only exhausted connections and resumes next UTC month", async () => {
+  const f = await fixture(3, {
+    accountDaily: 1000,
+    domainDaily: 1000,
+    providerDaily: 1000,
+    campaignDaily: 1000,
+  });
+  await db.providerConnection.update({
+    where: { id: f.provider.id },
+    data: {
+      dailyBudgetOverride: 1000,
+      monthlyBudgetOverride: 2,
+    },
+  });
+  let clock = Date.UTC(2026, 8, 18, 12, 0, 0);
+  let sends = 0;
+  const send = async () => {
+    sends += 1;
+    return {
+      status: "accepted" as const,
+      providerMessageId: crypto.randomUUID(),
+    };
+  };
+  for (const delivery of f.deliveries)
+    await processDelivery(delivery.id, send, () => clock);
+  assert.equal(sends, 2);
+  const summary = await campaignSummary(f.user.id, f.campaign.id);
+  assert.match(summary.safety.waitReason ?? "", /Monthly provider limit/);
+  const pending = await db.delivery.findMany({
+    where: {
+      campaignId: f.campaign.id,
+      state: { in: ["PENDING", "QUEUED", "DEFERRED"] },
+    },
+  });
+  assert.equal(pending.length, 1);
+
+  clock = Date.UTC(2026, 9, 1, 0, 1, 0);
+  const rateKeys = await redis.keys(`dispatch:${f.user.id}:*`);
+  if (rateKeys.length) await redis.del(...rateKeys);
+  await processDelivery(pending[0].id, send, () => clock);
+  assert.equal(sends, 3);
+});
+
 test("Redis flush rebuild retains transmitted UNKNOWN and accepted costs including CC/BCC", async () => {
   const f = await fixture(2, {}, true);
   await processDelivery(f.deliveries[0].id, async () => ({
