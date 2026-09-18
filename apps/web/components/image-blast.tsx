@@ -341,10 +341,17 @@ export function ImageBlast() {
     <>
       <PageTitle
         title="Blast"
-        description="Image-first mode · send the primary visual as a real inline CID asset."
+        description="Image-first mode · primary visual sent as a real inline CID asset."
+        inlineAction
         action={
-          <Button component={Link} href="/blast" variant="outlined">
-            Standard mode
+          <Button
+            component={Link}
+            href="/blast"
+            variant="outlined"
+            size="small"
+            sx={{ whiteSpace: "nowrap" }}
+          >
+            Standard
           </Button>
         }
       />
@@ -356,12 +363,12 @@ export function ImageBlast() {
             xs: "1fr",
             lg: "minmax(0,1fr) minmax(360px,.8fr)",
           },
-          gap: 2.5,
+          gap: 2,
           alignItems: "start",
         }}
       >
-        <Stack spacing={2.5}>
-          <Card sx={{ p: { xs: 2, sm: 2.5 } }}>
+        <Stack spacing={2}>
+          <Card sx={{ p: { xs: 1.75, sm: 2.25 } }}>
             <Stack spacing={2}>
               <Typography variant="h6">1 · Recipients</Typography>
               {selectedImport && (
@@ -415,7 +422,7 @@ export function ImageBlast() {
             </Stack>
           </Card>
 
-          <Card sx={{ p: { xs: 2, sm: 2.5 } }}>
+          <Card sx={{ p: { xs: 1.75, sm: 2.25 } }}>
             <Stack spacing={2}>
               <Typography variant="h6">2 · Message</Typography>
               <TextField
@@ -662,7 +669,7 @@ export function ImageBlast() {
         </Stack>
 
         <Stack spacing={2.5} sx={{ position: { lg: "sticky" }, top: { lg: 24 } }}>
-          <Card sx={{ p: { xs: 2, sm: 2.5 } }}>
+          <Card sx={{ p: { xs: 1.75, sm: 2.25 } }}>
             <Stack spacing={2}>
               <Typography variant="h6">Preview</Typography>
               {image && !preview && (
@@ -713,7 +720,7 @@ export function ImageBlast() {
             </Stack>
           </Card>
 
-          <Card sx={{ p: { xs: 2, sm: 2.5 } }}>
+          <Card sx={{ p: { xs: 1.75, sm: 2.25 } }}>
             <Stack spacing={2}>
               <Typography variant="h6">3 · Pre-flight & send</Typography>
               {flight && (
