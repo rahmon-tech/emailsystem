@@ -127,13 +127,20 @@ export function SendingSafety() {
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false),
     [saved, setSaved] = useState(false),
-    [review, setReview] = useState(false);
+    [review, setReview] = useState(false),
+    [numberDrafts, setNumberDrafts] = useState<Record<string, string>>({});
   useEffect(() => {
     if (!open) return;
     let live = true;
     void api<Settings>("safety")
       .then((v) => {
-        if (live) setValue(v);
+        if (!live) return;
+        setValue(v);
+        setNumberDrafts({
+          complaintRate: String(v.complaintRate),
+          hardBounceRate: String(v.hardBounceRate),
+          minimumSample: String(v.minimumSample),
+        });
       })
       .catch((e) => {
         if (live) setError(e.message);
@@ -169,19 +176,28 @@ export function SendingSafety() {
       label={label}
       type="number"
       fullWidth
-      value={value?.[key] ?? ""}
-      onChange={(e) =>
+      value={
+        nullableBudget
+          ? (value?.[key] ?? "")
+          : (numberDrafts[key] ?? String(value?.[key] ?? ""))
+      }
+      onChange={(e) => {
+        const raw = e.target.value;
+        if (!nullableBudget)
+          setNumberDrafts((drafts) => ({ ...drafts, [key]: raw }));
         setValue(
           (v) =>
             v && {
               ...v,
               [key]:
-                nullableBudget && e.target.value === ""
+                nullableBudget && raw === ""
                   ? null
-                  : Number(e.target.value),
+                  : raw === ""
+                    ? v[key]
+                    : Number(raw),
             },
-        )
-      }
+        );
+      }}
       slotProps={{
         htmlInput: {
           min: key.endsWith("Rate") ? 0.01 : 1,
@@ -394,6 +410,16 @@ export function SendingSafety() {
                     ([key]) => key !== "providers" && key !== "pausedReason",
                   ),
                 );
+                for (const [key, label] of [
+                  ["complaintRate", "Complaint pause threshold"],
+                  ["hardBounceRate", "Hard-bounce pause threshold"],
+                  ["minimumSample", "Minimum recipients before checking"],
+                ] as const) {
+                  const raw = numberDrafts[key]?.trim() ?? "";
+                  if (!raw)
+                    throw new Error(`${label} is required.`);
+                  settings[key] = Number(raw);
+                }
                 const valid = safetySettings.parse(settings);
                 setValue(
                   await api<Settings>(
