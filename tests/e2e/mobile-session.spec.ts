@@ -52,6 +52,13 @@ test("iPhone Blast stays centered and session survives hard reload", async ({
   await expect(page).toHaveURL(/\/blast$/);
   await expect(page.getByRole("heading", { name: "Create campaign" })).toBeVisible();
 
+  // Visiting the login URL with a valid session should never show the sign-in
+  // form again; the server must resolve the session and return to the workspace.
+  await page.goto(appPath("/login"));
+  await expect(page).toHaveURL(/\/blast$/);
+  await expect(page.getByRole("heading", { name: "Create campaign" })).toBeVisible();
+  await expect(page.getByLabel("Email address")).toHaveCount(0);
+
   const geometry = await page.evaluate(() => {
     const root = document.documentElement;
     const main = document.querySelector("main");
