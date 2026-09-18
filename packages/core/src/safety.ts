@@ -45,6 +45,65 @@ export function monthWindowUtc(now = Date.now()) {
   return { start, next };
 }
 
+export async function sharedMonthlyUsage(
+  tx: Prisma.TransactionClient,
+  userId: string,
+  domains: string[] = [],
+  clock?: () => number,
+) {
+  const now = clock?.() ?? Date.now();
+  const { start } = monthWindowUtc(now);
+  const monthStart = new Date(start);
+  const reservationCutoff = new Date(Math.max(start, now - RESERVATION_MS));
+  const scopedDomains = [...new Set(domains.map((domain) => domain.toLowerCase()))];
+
+  const [transmitted, reserved, tests] = await Promise.all([
+    tx.deliveryAttempt.groupBy({
+      by: ["senderDomain"],
+      where: {
+        userId,
+        transmissionStartedAt: { gte: monthStart },
+      },
+      _sum: { messageUnits: true },
+    }),
+    tx.deliveryAttempt.groupBy({
+      by: ["senderDomain"],
+      where: {
+        userId,
+        state: "RESERVED",
+        transmissionStartedAt: null,
+        safetyReservedAt: { gte: reservationCutoff },
+      },
+      _sum: { messageUnits: true },
+    }),
+    tx.providerTestDelivery.groupBy({
+      by: ["senderDomain"],
+      where: {
+        provider: { userId },
+        safetyAt: { gte: monthStart },
+      },
+      _count: { _all: true },
+    }),
+  ]);
+
+  const byDomain = new Map<string, number>();
+  let account = 0;
+  const add = (domain: string, cost: number) => {
+    const normalized = domain.toLowerCase();
+    account += cost;
+    if (!scopedDomains.length || scopedDomains.includes(normalized))
+      byDomain.set(normalized, (byDomain.get(normalized) ?? 0) + cost);
+  };
+  for (const row of transmitted)
+    add(row.senderDomain, row._sum.messageUnits ?? 0);
+  for (const row of reserved)
+    add(row.senderDomain, row._sum.messageUnits ?? 0);
+  for (const row of tests) add(row.senderDomain, row._count._all);
+  for (const domain of scopedDomains)
+    if (!byDomain.has(domain)) byDomain.set(domain, 0);
+  return { account, byDomain };
+}
+
 export async function providerMonthlyUsage(
   tx: Prisma.TransactionClient,
   userId: string,
@@ -331,13 +390,36 @@ export async function safetyCapacity(
             })),
           )
         : [];
+      const domain = senderDomain(from);
+      const sharedMonthly = await sharedMonthlyUsage(
+        tx,
+        userId,
+        [domain],
+        clock,
+      );
+      const { next: nextMonthStart } = monthWindowUtc(clock?.() ?? Date.now());
+      const monthlyUsage = [
+        {
+          scope: "account-month",
+          used: sharedMonthly.account,
+          limit: settings.accountMonthly,
+          nextReleaseAt:
+            settings.accountMonthly === null ? null : nextMonthStart,
+        },
+        {
+          scope: "domain-month:" + domain,
+          used: sharedMonthly.byDomain.get(domain) ?? 0,
+          limit: settings.domainMonthly,
+          nextReleaseAt:
+            settings.domainMonthly === null ? null : nextMonthStart,
+        },
+      ];
       const monthly = await providerMonthlyUsage(
         tx,
         userId,
         providers.map((provider) => provider.id),
         clock,
       );
-      const { next: nextMonthStart } = monthWindowUtc(clock?.() ?? Date.now());
       const providerMonthlyUsageRows = providers.map((provider) => ({
         scope: "provider-month:" + provider.id,
         used: monthly.get(provider.id) ?? 0,
@@ -355,13 +437,14 @@ export async function safetyCapacity(
       return {
         usage,
         providerUsage,
+        monthlyUsage,
         providerMonthlyUsage: providerMonthlyUsageRows,
         available,
         reviewScope: user.safetyPausedReason
           ? ("account" as const)
           : ("campaign" as const),
         campaignDefault: settings.campaignDaily,
-        domain: senderDomain(from),
+        domain,
         pausedReason:
           user.safetyPausedReason ?? campaign?.safetyPausedReason ?? null,
         waitReason: campaign?.safetyWaitReason ?? null,
