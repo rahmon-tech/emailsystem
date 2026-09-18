@@ -229,13 +229,18 @@ export function RichEditor({
           borderColor: "divider",
           borderRadius: 2,
           overflow: "hidden",
+          minWidth: 0,
+          maxWidth: "100%",
         }}
       >
         <Box
           sx={{
             display: "flex",
             gap: 0.2,
-            flexWrap: "wrap",
+            flexWrap: { xs: "nowrap", sm: "wrap" },
+            overflowX: { xs: "auto", sm: "visible" },
+            overscrollBehaviorX: "contain",
+            WebkitOverflowScrolling: "touch",
             p: 1,
             bgcolor: "action.hover",
             borderBottom: 1,
@@ -274,9 +279,10 @@ export function RichEditor({
               sx={{
                 display: "flex",
                 alignItems: "center",
-                borderLeft: i ? 1 : 0,
+                borderLeft: { xs: 0, sm: i ? 1 : 0 },
                 borderColor: "divider",
-                pl: i ? 0.5 : 0,
+                pl: { xs: 0, sm: i ? 0.5 : 0 },
+                flexShrink: 0,
               }}
             >
               {group.map((b) => (
