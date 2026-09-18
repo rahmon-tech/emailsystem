@@ -172,7 +172,7 @@ export async function preflight(userId: string, input: unknown) {
     copies.length &&
     (await db.suppression.count({ where: { userId, email: { in: copies } } }))
   )
-    problems.push("A CC/BCC address is suppressed.");
+    problems.push("A CC or BCC address is on your do-not-send list.");
   const selectedDomainIds = [
     ...new Set(
       data.senderDomainIds?.length
@@ -184,7 +184,7 @@ export async function preflight(userId: string, input: unknown) {
   ];
   if (data.experimentRunId && selectedDomainIds.length > 1)
     problems.push(
-      "Authorized experiments must stay pinned to one sending domain.",
+      "Controlled experiments can use only one sending domain at a time.",
     );
   const domainSelections = selectedDomainIds.length
     ? await Promise.all(
@@ -227,8 +227,8 @@ export async function preflight(userId: string, input: unknown) {
   if (!providers.length)
     problems.push(
       needsInlineTransport
-        ? "Verify this sender with at least one healthy provider transport that supports inline CID images."
-        : "Verify this sender with at least one healthy broadcast provider.",
+        ? "Connect at least one ready sending service that supports embedded images for this From address."
+        : "Connect at least one ready sending service for this From address.",
     );
   const experiment = data.experimentRunId
     ? await db.$transaction((tx) =>
@@ -252,7 +252,7 @@ export async function preflight(userId: string, input: unknown) {
     )
   )
     problems.push(
-      "Raise the provider rate limits to cover one recipient plus the CC/BCC copies, or remove copies.",
+      "Increase the sending-service speed limit enough to include the recipient plus all CC/BCC copies, or remove some copies.",
     );
   const safetyRows = await Promise.all(
     (domainSelections.length
@@ -302,7 +302,7 @@ export async function preflight(userId: string, input: unknown) {
     )
   )
     problems.push(
-      "The available account, campaign, or selected-domain safety capacity is too small for one message and its copies.",
+      "One of your sending limits is too low for a single email plus its CC/BCC copies. Increase the limit or remove some copies.",
     );
   if (safety.pausedReason) problems.push(safety.pausedReason);
   const domainPoolAvailable = domainBudgets.reduce(
@@ -343,10 +343,10 @@ export async function preflight(userId: string, input: unknown) {
     reputation.links.some((r) => r.state === "REPUTATION_UNKNOWN")
   )
     problems.push(
-      "Your link policy requires known reputation results. Review unknown destinations or update the policy.",
+      "One or more links could not be checked. Review those destinations or allow links that cannot be checked in Link tracking settings.",
     );
   if (!(data.text?.trim() || snapshot.text.trim()))
-    problems.push("The email body is empty after safety checks.");
+    problems.push("The email body is empty after checks.");
   const message = {
     from: sender.email,
     fromName: sender.displayName,
@@ -385,18 +385,18 @@ export async function preflight(userId: string, input: unknown) {
       ...reputation.warnings,
       ...(copies.length
         ? [
-            `${copies.length} CC/BCC copies will be sent for every recipient and count toward provider limits.`,
+            `${copies.length} CC/BCC copies will be sent for every recipient and count toward your sending limits.`,
           ]
         : []),
       ...(selectedDomainIds.length > 1 && !data.experimentRunId
         ? [
-            `${selectedDomainIds.length} verified domains and ${poolSenders.length} eligible aliases are in this campaign pool. Each delivery uses only a currently authorized domain/provider route, and retries keep normal safety limits.`,
+            `${selectedDomainIds.length} sending domains and ${poolSenders.length} From addresses are selected. EmailSystem will use whichever selected sending service is available without exceeding its limits.`,
           ]
         : selectedDomainIds.length === 1 &&
             poolSenders.length > 1 &&
             !data.experimentRunId
           ? [
-              `${poolSenders.length} enabled verified aliases are available on this domain. Deliveries are distributed consistently across the alias pool; provider limits are unchanged.`,
+              `${poolSenders.length} From addresses are available on this domain. EmailSystem will spread sending across them without changing your service limits.`,
             ]
           : []),
     ],
