@@ -260,7 +260,7 @@ export function Activity() {
   const metrics: [string, number][] = summary
     ? [
         ["Delivered", summary.counts.DELIVERED ?? 0],
-        ["Provider accepted", summary.acceptedCount],
+        ["Accepted by sending service", summary.acceptedCount],
         ["Failed", summary.counts.FAILED ?? 0],
         [
           "Remaining",
@@ -285,8 +285,8 @@ export function Activity() {
           (summary.counts.HARD_BOUNCED ?? 0) +
             (summary.counts.SOFT_BOUNCED ?? 0),
         ],
-        ["Suppressed", summary.counts.SUPPRESSED ?? 0],
-        ["Unknown", summary.counts.UNKNOWN ?? 0],
+        ["Skipped · do-not-send", summary.counts.SUPPRESSED ?? 0],
+        ["Delivery unclear", summary.counts.UNKNOWN ?? 0],
         ["Cancelled", summary.counts.CANCELLED ?? 0],
         ["Complaints", summary.counts.COMPLAINED ?? 0],
       ]
@@ -321,7 +321,7 @@ export function Activity() {
                 void inspectSuppression();
               }}
             >
-              Suppressions
+              Do-not-send list
             </Button>
           </Stack>
         }
@@ -564,7 +564,7 @@ export function Activity() {
                     sx={{ justifyContent: "space-between", mb: 1 }}
                   >
                     <Typography sx={{ fontSize: 13 }}>
-                      Dispatch progress
+                      Sending progress
                     </Typography>
                     <Typography sx={{ fontSize: 13 }}>
                       {done.toLocaleString()} /{" "}
@@ -581,7 +581,7 @@ export function Activity() {
                           )
                         : 0
                     }
-                    aria-label="Dispatch progress"
+                    aria-label="Sending progress"
                   />
                 </Box>
                 <Box
@@ -615,10 +615,10 @@ export function Activity() {
                       </Typography>
                       <Tooltip
                         title={
-                          name === "Provider accepted"
-                            ? "Accepted by the provider. Delivery requires a separate webhook confirmation."
+                          name === "Accepted by sending service"
+                            ? "The sending service accepted the email. Final delivery may arrive later through delivery updates."
                             : name === "Remaining"
-                              ? "Pending, queued, processing and deferred recipients."
+                              ? "Recipients still waiting to send, sending now, or waiting to retry."
                               : name
                         }
                       >
@@ -654,7 +654,7 @@ export function Activity() {
                           ml: 0.5,
                           fontWeight: 600,
                           color:
-                            name === "Unknown" && value
+                            name === "Delivery unclear" && value
                               ? "warning.main"
                               : "text.primary",
                           fontVariantNumeric: "tabular-nums",
@@ -683,9 +683,9 @@ export function Activity() {
                       sx={{ flexWrap: "wrap", rowGap: 1 }}
                     >
                       {[
-                        ["Raw visits", summary.tracking.rawVisits],
-                        ["Likely automated", summary.tracking.likelyAutomated],
-                        ["Unclassified", summary.tracking.unclassified],
+                        ["Tracked visits", summary.tracking.rawVisits],
+                        ["Likely automated visits", summary.tracking.likelyAutomated],
+                        ["Unclear visits", summary.tracking.unclassified],
                       ].map(([label, value]) => (
                         <Stack key={String(label)}>
                           <Typography variant="h6">
@@ -698,9 +698,9 @@ export function Activity() {
                       ))}
                     </Stack>
                     <Typography variant="caption" color="text.secondary">
-                      Last {summary.tracking.retentionDays} days. Automated
-                      detection is an estimate; visits do not confirm human
-                      engagement.
+                      Last {summary.tracking.retentionDays} days. Some visits may
+                      come from automated link scanners, so a tracked visit does
+                      not prove that a person clicked.
                     </Typography>
                   </Card>
                 )}
@@ -728,7 +728,7 @@ export function Activity() {
                       />
                     }
                     iconPosition="start"
-                    label="Live events"
+                    label="Live updates"
                   />
                   <Tab
                     icon={
@@ -752,7 +752,7 @@ export function Activity() {
                       />
                     }
                     iconPosition="start"
-                    label="Providers"
+                    label="Sending services"
                   />
                 </Tabs>
                 <Divider />
@@ -766,7 +766,7 @@ export function Activity() {
                       <Status value={connected ? "LIVE" : "RECONNECTING"} />
                       <TextField
                         select
-                        label="Event filter"
+                        label="Show updates"
                         value={eventFilter}
                         onChange={(e) => setEventFilter(e.target.value)}
                         sx={{ maxWidth: 220 }}
@@ -800,7 +800,7 @@ export function Activity() {
                           sx={{ fontSize: 13 }}
                           color="text.secondary"
                         >
-                          Waiting for campaign events…
+                          Waiting for campaign updates…
                         </Typography>
                       ) : (
                         events
@@ -962,8 +962,7 @@ export function Activity() {
                       color="text.secondary"
                       sx={{ fontSize: 13, mb: 2 }}
                     >
-                      Attempt counts include retries. Recipient totals are shown
-                      above.
+                      Send-attempt counts include retries. Recipient totals are shown above.
                     </Typography>
                     {!summary.providers.length ? (
                       <Typography color="text.secondary">
@@ -975,7 +974,7 @@ export function Activity() {
                       ].map((id) => (
                         <Box key={id} sx={{ py: 1.5 }}>
                           <Typography sx={{ fontWeight: 700 }}>
-                            {names[id] ?? "Archived provider"}
+                            {names[id] ?? "Removed sending service"}
                           </Typography>
                           <Stack
                             direction="row"
@@ -1028,14 +1027,14 @@ export function Activity() {
       <ResponsiveDialog
         open={suppressionOpen}
         onClose={() => setSuppressionOpen(false)}
-        title="Suppressed recipients"
+        title="Do-not-send list"
         width={600}
         mobileFullScreen
       >
         <DialogContent>
           <Typography color="text.secondary" sx={{ fontSize: 14, mb: 2 }}>
-            Hard bounces, complaints, and unsubscribes are excluded from future
-            sends in your account.
+            Addresses in this list are skipped in future campaigns because of a
+            hard bounce, complaint, unsubscribe, or manual block.
           </Typography>
           <Failure error={error} />
           <Stack sx={{ gap: 1 }} direction="row">
@@ -1069,11 +1068,11 @@ export function Activity() {
               }
             }}
           >
-            Suppress address
+            Add to do-not-send list
           </Button>
           {!suppressions.length ? (
             <Typography color="text.secondary">
-              No matching suppressions.
+              No matching addresses in the do-not-send list.
             </Typography>
           ) : (
             suppressions.map((s) => (
