@@ -19,7 +19,21 @@ const seconds = (milliseconds: number) => {
   return `${Number.isInteger(value) ? value.toFixed(0) : value.toFixed(1)}s`;
 };
 
-const words = (value: string) => value.replaceAll("-", " ");
+const encodingLabel = (
+  value: ActivityExperimentVariables["transportEncoding"],
+) => (value === "provider-default" ? "Automatic" : value);
+
+const messageTypeLabel = (
+  value: ActivityExperimentVariables["contentMode"],
+) =>
+  ({
+    html: "HTML email",
+    text: "Plain text",
+    "cid-inline": "Embedded image",
+    "hosted-image": "Web-hosted image",
+    "attachment-only": "Attachment only",
+    "image-dominant": "Image-first",
+  })[value];
 
 export function experimentConfigurationLabels(
   variables: ActivityExperimentVariables,
@@ -27,14 +41,14 @@ export function experimentConfigurationLabels(
   const labels = [`Sending pattern: ${variables.pacingProfile === "bounded-burst" ? "small groups" : "steady"}`];
   if (variables.pacingIntervalMs !== undefined)
     labels.push(
-      `${variables.pacingProfile === "bounded-burst" ? "Group window" : "Send interval"}: ${seconds(variables.pacingIntervalMs)}`,
+      `${variables.pacingProfile === "bounded-burst" ? "Group window" : "Time between sends"}: ${seconds(variables.pacingIntervalMs)}`,
     );
   if (variables.pacingBurstSize !== undefined)
     labels.push(`Group size: ${variables.pacingBurstSize.toLocaleString()}`);
   if (variables.concurrency !== undefined)
     labels.push(`Emails at once: ${variables.concurrency.toLocaleString()}`);
-  labels.push(`Email encoding: ${words(variables.transportEncoding)}`);
-  labels.push(`Text format: ${variables.charset.toUpperCase()}`);
-  labels.push(`Message type: ${words(variables.contentMode).replace("cid inline", "embedded image")}`);
+  labels.push(`Email format: ${encodingLabel(variables.transportEncoding)}`);
+  labels.push(`Character support: ${variables.charset.toUpperCase()}`);
+  labels.push(`Message type: ${messageTypeLabel(variables.contentMode)}`);
   return labels;
 }
