@@ -666,8 +666,8 @@ export const connectionSchema = z
     perSecond: z.number().int().min(1).max(100).default(1),
     perMinute: z.number().int().min(1).max(6000).default(30),
     concurrency: z.number().int().min(1).max(20).default(1),
-    dailyBudget: z.number().int().min(1).max(10000000).nullable().default(null),
-    monthlyBudget: z.number().int().min(1).max(300000000).nullable().default(null),
+    dailyBudget: z.number().int().min(1).max(10000000).default(5000),
+    monthlyBudget: z.number().int().min(1).max(300000000).default(150000),
   })
   .strict()
   .superRefine((v, ctx) => {
