@@ -25,6 +25,8 @@ import {
   Tooltip,
   FormControlLabel,
   Switch,
+  Checkbox,
+  ListItemText,
 } from "@mui/material";
 import {
   UploadFileOutlined,
@@ -64,6 +66,8 @@ type Flight = {
     domainId: string;
     email: string;
     domain: string;
+    domains: string[];
+    domainCount: number;
     aliasCount: number;
     eligibleProviderCount: number;
   };
@@ -101,6 +105,7 @@ export function Blast() {
     [form, setForm] = useState({
       name: "",
       senderDomainId: "",
+      senderDomainIds: [] as string[],
       senderIdentityId: "",
       from: "",
       fromName: "",
@@ -179,11 +184,12 @@ export function Blast() {
           );
           if (firstDomain && first) {
             setForm((s) =>
-              s.senderDomainId
+              s.senderDomainIds.length
                 ? s
                 : {
                     ...s,
                     senderDomainId: firstDomain.id,
+                    senderDomainIds: [firstDomain.id],
                     senderIdentityId: first.id,
                     from: first.email,
                     fromName: first.displayName,
@@ -277,9 +283,10 @@ export function Blast() {
         (domain) => domain.status === "VERIFIED" && domain.senders.length > 0,
       ) ?? [];
   const hasEligibleSender = eligibleDomains.length > 0;
-  const selectedDomain = eligibleDomains.find(
-    (domain) => domain.id === form.senderDomainId,
+  const selectedDomains = eligibleDomains.filter((domain) =>
+    form.senderDomainIds.includes(domain.id),
   );
+  const selectedDomain = selectedDomains[0];
   return (
     <>
       <PageTitle
@@ -511,34 +518,82 @@ export function Blast() {
               />
               <TextField
                 select
-                label="Sending domain"
-                value={form.senderDomainId}
+                label="Sending domains"
+                value={form.senderDomainIds}
                 onChange={(event) => {
-                  const domain = eligibleDomains.find(
-                    (item) => item.id === event.target.value,
-                  );
+                  const raw = event.target.value;
+                  const ids =
+                    typeof raw === "string" ? raw.split(",") : (raw as string[]);
+                  const domain = eligibleDomains.find((item) => item.id === ids[0]);
                   const sender = domain?.senders[0];
-                  if (!domain || !sender) return;
+                  if (!domain || !sender) {
+                    setForm((current) => ({
+                      ...current,
+                      senderDomainId: "",
+                      senderDomainIds: [],
+                      senderIdentityId: "",
+                      from: "",
+                      fromName: "",
+                      replyTo: "",
+                    }));
+                    setTestProvider("");
+                    invalid();
+                    return;
+                  }
                   setForm((current) => ({
                     ...current,
                     senderDomainId: domain.id,
+                    senderDomainIds: ids.slice(0, 10),
                     senderIdentityId: sender.id,
                     from: sender.email,
                     fromName: sender.displayName,
                     replyTo: sender.replyTo,
                   }));
-                  setTestProvider(domain.providerIds[0] ?? "");
+                  const providerIds = [
+                    ...new Set(
+                      eligibleDomains
+                        .filter((item) => ids.includes(item.id))
+                        .flatMap((item) => item.providerIds),
+                    ),
+                  ];
+                  setTestProvider(providerIds[0] ?? "");
                   invalid();
                 }}
                 required
-                helperText="Aliases and eligible providers are handled automatically for the selected verified domain."
+                helperText="Choose one or more verified domains. EmailSystem rotates only across currently eligible domains, aliases and provider connections, while preserving each route's own limits."
+                slotProps={{
+                  select: {
+                    multiple: true,
+                    renderValue: (selected) =>
+                      eligibleDomains
+                        .filter((domain) =>
+                          (selected as string[]).includes(domain.id),
+                        )
+                        .map((domain) => domain.domain)
+                        .join(", "),
+                    MenuProps: {
+                      slotProps: {
+                        paper: {
+                          sx: {
+                            maxHeight: 320,
+                            overscrollBehavior: "contain",
+                          },
+                        },
+                      },
+                    },
+                  },
+                }}
               >
                 {eligibleDomains.map((domain) => (
                   <MenuItem key={domain.id} value={domain.id}>
-                    {domain.domain} · {domain.senders.length} alias
-                    {domain.senders.length === 1 ? "" : "es"} ·{" "}
-                    {domain.providerIds.length} provider
-                    {domain.providerIds.length === 1 ? "" : "s"}
+                    <Checkbox
+                      size="small"
+                      checked={form.senderDomainIds.includes(domain.id)}
+                    />
+                    <ListItemText
+                      primary={domain.domain}
+                      secondary={`${domain.senders.length} alias${domain.senders.length === 1 ? "" : "es"} · ${domain.providerIds.length} provider${domain.providerIds.length === 1 ? "" : "s"}`}
+                    />
                   </MenuItem>
                 ))}
               </TextField>
@@ -564,9 +619,9 @@ export function Blast() {
                 <AccordionDetails>
                   <Stack spacing={2}>
                     <Typography variant="body2" color="text.secondary">
-                      Sender aliases, display names and Reply-To values are
-                      managed with the selected domain in Providers → Domains &
-                      aliases.
+                      Sender aliases, display names and Reply-To values stay
+                      attached to their provider/domain configuration. This
+                      campaign only rotates across the domains selected above.
                     </Typography>
 
                     <FormControlLabel
@@ -1005,7 +1060,7 @@ export function Blast() {
                         flight.providers.length > 0,
                       ],
                       [
-                        `Domain · ${flight.sender.domain} · ${flight.sender.aliasCount} ${flight.sender.aliasCount === 1 ? "alias" : "aliases"}`,
+                        `Domains · ${flight.sender.domainCount} · ${flight.sender.aliasCount} ${flight.sender.aliasCount === 1 ? "alias" : "aliases"}`,
                         flight.sender.eligibleProviderCount > 0,
                       ],
                       ["HTML prepared", !!flight.previewHtml],
