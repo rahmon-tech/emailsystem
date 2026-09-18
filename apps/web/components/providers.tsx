@@ -509,7 +509,12 @@ export function Providers() {
                   key={p.id}
                   onClick={() => {
                     setPicker(false);
-                    setSelected({ type: p.id });
+                    setSelected({
+                      type: p.id,
+                      initialWebhookSecret: emailSystemManagedWebhookSecret(p.id)
+                        ? generateWebhookSecret()
+                        : undefined,
+                    });
                   }}
                   sx={{
                     flexDirection: "column",
@@ -734,14 +739,6 @@ function ProviderForm({
     [busy, setBusy] = useState(false),
     [error, setError] = useState("");
   const fields = credentialFields(type, transport, settings);
-  useEffect(() => {
-    if (!row && emailSystemManagedWebhookSecret(type))
-      setSecrets((current) =>
-        current.webhookSecret
-          ? current
-          : { ...current, webhookSecret: generateWebhookSecret() },
-      );
-  }, [row, type]);
   const change = (key: string, value: unknown) =>
     setSettings((s) => ({ ...s, [key]: value }));
   return (
