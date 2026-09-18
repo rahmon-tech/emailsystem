@@ -147,6 +147,7 @@ export async function selectDeliverySender(
   anchorSenderId: string,
   deliveryId: string,
   rotate: boolean,
+  domainIds?: string[],
 ) {
   const anchor = await tx.senderIdentity.findFirst({
     where: { id: anchorSenderId, userId },
@@ -157,10 +158,13 @@ export async function selectDeliverySender(
     const providers = eligibleProvidersForSender(anchor);
     return providers.length ? { sender: anchor, providers } : null;
   }
+  const scopedDomainIds = [
+    ...new Set((domainIds?.length ? domainIds : [anchor.authorizedDomainId])),
+  ];
   const identities = await tx.senderIdentity.findMany({
     where: {
       userId,
-      authorizedDomainId: anchor.authorizedDomainId,
+      authorizedDomainId: { in: scopedDomainIds },
       enabled: true,
     },
     include: senderInclude,
