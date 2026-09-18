@@ -159,6 +159,7 @@ export function Providers() {
     [selected, setSelected] = useState<{
       type: ProviderType;
       row?: ProviderRow;
+      initialWebhookSecret?: string;
     } | null>(null),
     [test, setTest] = useState<ProviderRow | null>(null),
     [remove, setRemove] = useState<ProviderRow | null>(null),
@@ -544,15 +545,20 @@ export function Providers() {
           type={selected.type}
           row={selected.row}
           appUrl={appUrl}
+          initialWebhookSecret={selected.initialWebhookSecret}
           onClose={() => setSelected(null)}
-          onSaved={async (saved) => {
+          onSaved={async (saved, initialWebhookSecret) => {
             await reload();
             if (selected.row) {
               setSelected(null);
               setToast("Sending service updated. Delivery updates are active.");
             } else {
-              setSelected({ type: saved.type, row: saved });
-              setToast("Connection saved. Finish delivery-update setup to receive delivered, bounced, and complaint results.");
+              setSelected({
+                type: saved.type,
+                row: saved,
+                initialWebhookSecret,
+              });
+              setToast("Connection saved. Copy the webhook URL and finish the delivery webhook setup.");
             }
           }}
         />
@@ -654,14 +660,19 @@ function ProviderForm({
   type,
   row,
   appUrl,
+  initialWebhookSecret,
   onClose,
   onSaved,
 }: {
   type: ProviderType;
   row?: ProviderRow;
   appUrl: string;
+  initialWebhookSecret?: string;
   onClose: () => void;
-  onSaved: (saved: ProviderRow) => Promise<void>;
+  onSaved: (
+    saved: ProviderRow,
+    initialWebhookSecret?: string,
+  ) => Promise<void>;
 }) {
   const d = definition(type);
   const [transport, setTransport] = useState<"api" | "smtp">(
@@ -707,7 +718,9 @@ function ProviderForm({
       timeout: row?.settings.timeout ?? 20000,
       mockMode: row?.settings.mockMode ?? "success",
     }),
-    [secrets, setSecrets] = useState<Record<string, string>>({}),
+    [secrets, setSecrets] = useState<Record<string, string>>(
+      initialWebhookSecret ? { webhookSecret: initialWebhookSecret } : {},
+    ),
     [weight, setWeight] = useState(String(row?.weight ?? 1)),
     [second, setSecond] = useState(String(row?.perSecond ?? 1)),
     [minute, setMinute] = useState(String(row?.perMinute ?? 30)),
@@ -1144,7 +1157,9 @@ function ProviderForm({
                         helperText={
                           row && !secrets.webhookSecret
                             ? "The saved secret is hidden. Leave it unchanged, or generate a new one to rotate the callback authentication."
-                            : "EmailSystem generated this secret. Copy it into the sending service's webhook authentication settings."
+                            : row
+                              ? "This is the secret created during the first save. Copy it now with the webhook URL; it will be hidden the next time you open this connection."
+                              : "EmailSystem generated this secret. It will be saved with the connection and shown once more alongside the permanent webhook URL."
                         }
                       />
                       <Stack direction="row" sx={{ gap: 1, flexWrap: "wrap" }}>
@@ -1333,7 +1348,12 @@ function ProviderForm({
                 },
                 row ? "PUT" : "POST",
               );
-              await onSaved(saved);
+              await onSaved(
+                saved,
+                emailSystemManagedWebhookSecret(type)
+                  ? secrets.webhookSecret
+                  : undefined,
+              );
             } catch (e) {
               setError((e as Error).message);
             } finally {
