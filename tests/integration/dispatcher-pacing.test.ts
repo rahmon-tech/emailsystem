@@ -63,7 +63,14 @@ test("same-domain connection capacity aggregates while smooth pacing still preve
   );
 
   const firstToken = crypto.randomUUID();
-  const first = await acquireProvider(user, providers, firstToken, providers, true);
+  const first = await acquireProvider(
+    user,
+    providers,
+    firstToken,
+    providers,
+    true,
+    "high_capacity",
+  );
   assert(first);
   await releaseProvider(
     user,
@@ -88,6 +95,7 @@ test("same-domain connection capacity aggregates while smooth pacing still preve
     crypto.randomUUID(),
     providers,
     true,
+    "high_capacity",
   );
   assert.equal(immediate, null);
 });
