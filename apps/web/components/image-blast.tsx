@@ -13,6 +13,8 @@ import {
   DialogContent,
   FormControlLabel,
   MenuItem,
+  Checkbox,
+  ListItemText,
   Stack,
   Switch,
   TextField,
@@ -62,6 +64,8 @@ type Flight = {
     domainId: string;
     email: string;
     domain: string;
+    domains: string[];
+    domainCount: number;
     aliasCount: number;
     eligibleProviderCount: number;
   };
@@ -124,6 +128,7 @@ export function ImageBlast() {
   const [importId, setImportId] = useState("");
   const [name, setName] = useState("");
   const [senderDomainId, setSenderDomainId] = useState("");
+  const [senderDomainIds, setSenderDomainIds] = useState<string[]>([]);
   const [senderIdentityId, setSenderIdentityId] = useState("");
   const [subject, setSubject] = useState("");
   const [preheader, setPreheader] = useState("");
@@ -182,6 +187,7 @@ export function ImageBlast() {
         );
         if (firstDomain && first) {
           setSenderDomainId(firstDomain.id);
+          setSenderDomainIds([firstDomain.id]);
           setSenderIdentityId(first.id);
         }
       })
@@ -204,6 +210,7 @@ export function ImageBlast() {
     name,
     importId,
     senderDomainId,
+    senderDomainIds,
     senderIdentityId,
     subject,
     preheader,
@@ -436,27 +443,54 @@ export function ImageBlast() {
               />
               <TextField
                 select
-                label="Sending domain"
-                value={senderDomainId}
+                label="Sending domains"
+                value={senderDomainIds}
                 onChange={(event) => {
-                  const domain = eligibleDomains.find(
-                    (item) => item.id === event.target.value,
-                  );
+                  const raw = event.target.value;
+                  const ids =
+                    typeof raw === "string" ? raw.split(",") : (raw as string[]);
+                  const domain = eligibleDomains.find((item) => item.id === ids[0]);
                   const sender = domain?.senders[0];
-                  if (!domain || !sender) return;
-                  setSenderDomainId(domain.id);
-                  setSenderIdentityId(sender.id);
+                  setSenderDomainIds(ids.slice(0, 10));
+                  setSenderDomainId(domain?.id ?? "");
+                  setSenderIdentityId(sender?.id ?? "");
                   invalidate();
                 }}
-                helperText="The verified alias pool and eligible providers are handled automatically."
+                helperText="Choose one or more verified domains. Rotation and failover use only currently eligible domains, aliases and provider connections."
                 required
+                slotProps={{
+                  select: {
+                    multiple: true,
+                    renderValue: (selected) =>
+                      eligibleDomains
+                        .filter((domain) =>
+                          (selected as string[]).includes(domain.id),
+                        )
+                        .map((domain) => domain.domain)
+                        .join(", "),
+                    MenuProps: {
+                      slotProps: {
+                        paper: {
+                          sx: {
+                            maxHeight: 320,
+                            overscrollBehavior: "contain",
+                          },
+                        },
+                      },
+                    },
+                  },
+                }}
               >
                 {eligibleDomains.map((domain) => (
                   <MenuItem key={domain.id} value={domain.id}>
-                    {domain.domain} · {domain.senders.length} alias
-                    {domain.senders.length === 1 ? "" : "es"} ·{" "}
-                    {domain.providerIds.length} provider
-                    {domain.providerIds.length === 1 ? "" : "s"}
+                    <Checkbox
+                      size="small"
+                      checked={senderDomainIds.includes(domain.id)}
+                    />
+                    <ListItemText
+                      primary={domain.domain}
+                      secondary={`${domain.senders.length} alias${domain.senders.length === 1 ? "" : "es"} · ${domain.providerIds.length} provider${domain.providerIds.length === 1 ? "" : "s"}`}
+                    />
                   </MenuItem>
                 ))}
               </TextField>
@@ -754,7 +788,7 @@ export function ImageBlast() {
                   !!busy ||
                   !importId ||
                   !name.trim() ||
-                  !senderDomainId ||
+                  !senderDomainIds.length ||
                   !senderIdentityId ||
                   !subject.trim() ||
                   !image ||
@@ -789,7 +823,7 @@ export function ImageBlast() {
                 message={payload()}
                 disabled={
                   !!busy ||
-                  !senderDomainId ||
+                  !senderDomainIds.length ||
                   !senderIdentityId ||
                   !subject.trim() ||
                   !image ||
