@@ -316,10 +316,10 @@ export async function processDelivery(
             now() + 60000,
             now(),
             needsInlineTransport
-              ? "No healthy eligible provider supports the campaign's inline CID assets"
+              ? "None of the available sending services can send this message with its embedded image right now."
               : c.experimentRunId
-                ? "No healthy eligible provider remains inside the approved experiment scope"
-                : "No healthy eligible provider · review connections, cooldowns and provider quota",
+                ? "None of the approved sending services is available for this controlled experiment right now."
+                : "No sending service is available right now. Check whether a connection is turned off, temporarily paused, or has reached its limit.",
           );
           return false;
         }
