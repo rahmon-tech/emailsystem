@@ -1,4 +1,4 @@
-# Architecture
+# EmailBlast architecture
 
 ## Boundaries
 
