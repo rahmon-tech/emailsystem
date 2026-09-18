@@ -707,11 +707,7 @@ function ProviderForm({
       timeout: row?.settings.timeout ?? 20000,
       mockMode: row?.settings.mockMode ?? "success",
     }),
-    [secrets, setSecrets] = useState<Record<string, string>>(() =>
-      !row && emailSystemManagedWebhookSecret(type)
-        ? { webhookSecret: generateWebhookSecret() }
-        : {},
-    ),
+    [secrets, setSecrets] = useState<Record<string, string>>({}),
     [weight, setWeight] = useState(String(row?.weight ?? 1)),
     [second, setSecond] = useState(String(row?.perSecond ?? 1)),
     [minute, setMinute] = useState(String(row?.perMinute ?? 30)),
@@ -725,6 +721,14 @@ function ProviderForm({
     [busy, setBusy] = useState(false),
     [error, setError] = useState("");
   const fields = credentialFields(type, transport, settings);
+  useEffect(() => {
+    if (!row && emailSystemManagedWebhookSecret(type))
+      setSecrets((current) =>
+        current.webhookSecret
+          ? current
+          : { ...current, webhookSecret: generateWebhookSecret() },
+      );
+  }, [row, type]);
   const change = (key: string, value: unknown) =>
     setSettings((s) => ({ ...s, [key]: value }));
   return (
