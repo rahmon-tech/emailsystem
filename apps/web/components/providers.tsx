@@ -326,7 +326,7 @@ export function Providers() {
                       "Sending domain"}
                   </Typography>
                   <Typography variant="caption" color="text.secondary">
-                    {(p.settings.senderAliases?.length ?? 1)} alias
+                    {(p.settings.senderAliases?.length ?? 1)} From address
                     {(p.settings.senderAliases?.length ?? 1) === 1 ? "" : "es"} ·{" "}
                     {p.dailyBudgetOverride?.toLocaleString() ?? "Shared limit"}/24h ·{" "}
                     {p.monthlyBudgetOverride?.toLocaleString() ?? "No monthly limit"}/month
@@ -629,8 +629,8 @@ const labels: Record<string, string> = {
   sessionToken: "Session token (optional)",
   username: "SMTP username",
   password: "SMTP password",
-  webhookSecret: "Webhook secret / signing key",
-  webhookPublicKey: "Webhook verification public key",
+  webhookSecret: "Delivery update signing key",
+  webhookPublicKey: "Delivery update public key",
   snsTopicArn: "SNS topic ARN",
 };
 function ProviderForm({
@@ -970,7 +970,7 @@ function ProviderForm({
                   }}
                 >
                   <TextField
-                    label="Traffic share"
+                    label="Share of sending traffic"
                     type="number"
                     value={weight}
                     onChange={(e) => setWeight(Number(e.target.value))}
@@ -1062,8 +1062,8 @@ function ProviderForm({
               {d.webhook === "none" ? (
                 <Alert severity="info">
                   Standard SMTP can confirm that the mail server accepted an email,
-                  but final delivered, bounced, or complaint updates are unavailable
-                  unless this service supports delivery-event webhooks.
+                  but final delivered, bounced, or complaint results are available
+                  only if this service can send delivery updates back to EmailSystem.
                 </Alert>
               ) : !row ? (
                 <Alert severity="info">
@@ -1139,7 +1139,7 @@ function ProviderForm({
               const localParts = aliasValues(aliases);
               const domain = senderDomain.trim().toLowerCase();
               if (!domain || !localParts.length)
-                throw new Error("Enter a sending domain and at least one sender alias.");
+                throw new Error("Enter a sending domain and at least one From address.");
               const providerSettings = {
                 ...settings,
                 senderDomain: domain,
