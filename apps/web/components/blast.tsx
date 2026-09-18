@@ -290,8 +290,8 @@ export function Blast() {
   return (
     <>
       <PageTitle
-        title="Blast"
-        description="Prepare, preview, and launch your next email."
+        title="Create campaign"
+        description="Write your email, check it, and choose when to send."
         inlineAction
         action={
           <Button
@@ -564,7 +564,7 @@ export function Blast() {
                   invalid();
                 }}
                 required
-                helperText="Choose one or more verified domains. EmailSystem rotates only across currently eligible domains, aliases and provider connections, while preserving each route's own limits."
+                helperText="Choose one or more verified domains. EmailSystem will use the available From addresses and sending services under those domains without exceeding their limits."
                 slotProps={{
                   select: {
                     multiple: true,
@@ -596,7 +596,7 @@ export function Blast() {
                     />
                     <ListItemText
                       primary={domain.domain}
-                      secondary={`${domain.senders.length} alias${domain.senders.length === 1 ? "" : "es"} · ${domain.providerIds.length} provider${domain.providerIds.length === 1 ? "" : "s"}`}
+                      secondary={`${domain.senders.length} From ${domain.senders.length === 1 ? "address" : "addresses"} · ${domain.providerIds.length} sending ${domain.providerIds.length === 1 ? "service" : "services"}`}
                     />
                   </MenuItem>
                 ))}
@@ -623,9 +623,9 @@ export function Blast() {
                 <AccordionDetails>
                   <Stack spacing={2}>
                     <Typography variant="body2" color="text.secondary">
-                      Sender aliases, display names and Reply-To values stay
-                      attached to their provider/domain configuration. This
-                      campaign only rotates across the domains selected above.
+                      From addresses, display names, and Reply-To settings are
+                      managed with each sending service. This campaign will use
+                      only the domains you selected above.
                     </Typography>
 
                     <FormControlLabel
@@ -642,7 +642,7 @@ export function Blast() {
                     />
                     <Typography variant="caption" color="text.secondary">
                       {tracking.enabled
-                        ? `Links use ${trackingConfig?.appUrl ?? "this app"}/r/…; scanner visits are only heuristic analytics.`
+                        ? `Tracked links use ${trackingConfig?.appUrl ?? "this app"}/r/…. Some visits may come from automated link scanners.`
                         : "Safe links stay direct. "}
                       {!tracking.enabled && (
                         <Link href="/providers">Manage link settings</Link>
@@ -1165,9 +1165,8 @@ export function Blast() {
       >
         <DialogContent>
           <Failure error={errorAction === "send" ? error : ""} />
-          {flight?.count.toLocaleString()} individual emails will enter the
-          background queue. You can follow progress and pause sending in
-          Activity.
+          {flight?.count.toLocaleString()} emails will be prepared for sending.
+          You can follow progress and pause the campaign in Activity.
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setConfirm(false)}>Keep editing</Button>
@@ -1184,7 +1183,7 @@ export function Blast() {
               })
             }
           >
-            {busy === "send" ? "Queuing…" : "Confirm send"}
+            {busy === "send" ? "Starting…" : "Confirm send"}
           </Button>
         </DialogActions>
       </ResponsiveDialog>
@@ -1270,7 +1269,7 @@ export function Blast() {
                 });
                 setTestResult(
                   result.safeError ??
-                    `Provider ${result.status} this test. This is separate from campaign statistics.`,
+                    `The sending service reported “${result.status}” for this test. Test emails are not included in campaign results.`,
                 );
               })
             }
