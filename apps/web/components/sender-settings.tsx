@@ -87,8 +87,8 @@ function DomainSenders({
           </Typography>
           <Status value={domain.status} />
           <Typography variant="caption" color="text.secondary">
-            {domain.senders.length} sender
-            {domain.senders.length === 1 ? "" : "s"}
+            {domain.senders.length} From address
+            {domain.senders.length === 1 ? "" : "es"}
           </Typography>
         </Stack>
       </AccordionSummary>
