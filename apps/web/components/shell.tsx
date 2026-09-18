@@ -163,6 +163,9 @@ export function Shell({
             bgcolor: "background.paper",
             borderBottom: 1,
             borderColor: "divider",
+            position: { xs: "sticky", md: "static" },
+            top: { xs: 0, md: "auto" },
+            zIndex: { xs: 1100, md: "auto" },
           }}
         >
           <Stack sx={{ alignItems: "center", minWidth: 0 }} direction="row" spacing={1}>
