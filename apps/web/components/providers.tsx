@@ -159,6 +159,7 @@ export function Providers() {
     [selected, setSelected] = useState<{
       type: ProviderType;
       row?: ProviderRow;
+      draftId?: string;
       initialWebhookSecret?: string;
     } | null>(null),
     [test, setTest] = useState<ProviderRow | null>(null),
@@ -511,6 +512,7 @@ export function Providers() {
                     setPicker(false);
                     setSelected({
                       type: p.id,
+                      draftId: crypto.randomUUID(),
                       initialWebhookSecret: emailSystemManagedWebhookSecret(p.id)
                         ? generateWebhookSecret()
                         : undefined,
@@ -546,9 +548,10 @@ export function Providers() {
       </ResponsiveDialog>
       {selected && (
         <ProviderForm
-          key={selected.row?.id ?? selected.type}
+          key={selected.row?.id ?? selected.draftId ?? selected.type}
           type={selected.type}
           row={selected.row}
+          draftId={selected.draftId}
           appUrl={appUrl}
           initialWebhookSecret={selected.initialWebhookSecret}
           onClose={() => setSelected(null)}
@@ -664,6 +667,7 @@ const generateWebhookSecret = () => {
 function ProviderForm({
   type,
   row,
+  draftId,
   appUrl,
   initialWebhookSecret,
   onClose,
@@ -671,6 +675,7 @@ function ProviderForm({
 }: {
   type: ProviderType;
   row?: ProviderRow;
+  draftId?: string;
   appUrl: string;
   initialWebhookSecret?: string;
   onClose: () => void;
@@ -740,7 +745,9 @@ function ProviderForm({
     [error, setError] = useState(""),
     [webhookCopied, setWebhookCopied] = useState(false);
   const fields = credentialFields(type, transport, settings);
-  const webhookUrl = row ? `${appUrl}/api/webhooks/${row.id}` : "";
+  const connectionId = row?.id ?? draftId;
+  const webhookUrl =
+    appUrl && connectionId ? `${appUrl}/api/webhooks/${connectionId}` : "";
   const copyWebhookUrl = async () => {
     if (!webhookUrl) return;
 
@@ -1150,7 +1157,7 @@ function ProviderForm({
                     so it can report Delivered, Bounced, Complaint, and other
                     delivery events back to this connection.
                   </Typography>
-                  {row ? (
+                  {webhookUrl ? (
                     <>
                       <Box
                         sx={{
@@ -1198,16 +1205,15 @@ function ProviderForm({
                         </Button>
                       </Box>
                       <Typography variant="caption" color="text.secondary">
-                        Copy this exact URL into the webhook, event, or callback
-                        settings for {d.name}.
+                        {row
+                          ? `Copy this exact URL into the webhook, event, or callback settings for ${d.name}.`
+                          : `This is the permanent webhook URL for this new ${d.name} connection. You can copy it now; EmailBlast will keep the same URL when you save.`}
                       </Typography>
                     </>
                   ) : (
                     <Alert severity="info">
-                      Save this connection once and EmailBlast will create its
-                      permanent webhook URL automatically. It will look like{" "}
-                      <strong>{appUrl}/api/webhooks/…</strong>. You do not create
-                      or supply this URL yourself.
+                      EmailBlast could not prepare the webhook URL. Close this
+                      form and add the sending service again.
                     </Alert>
                   )}
 
