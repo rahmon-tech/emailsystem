@@ -70,6 +70,37 @@ test("HTTP sessions, CSRF, tenant access and secret responses are enforced on th
     ).status,
     403,
   );
+
+  const draftConnectionId = crypto.randomUUID();
+  const draftCreate = await call("providers", session.token, "POST", {
+    connectionId: draftConnectionId,
+    name: "Preallocated webhook",
+    type: "mock",
+    transport: "api",
+    settings: { fromEmail: "webhook@example.com" },
+    credentials: {},
+  });
+  assert.equal(draftCreate.status, 201);
+  assert.equal((await draftCreate.json()).id, draftConnectionId);
+
+  const collision = await call("providers", session.token, "POST", {
+    connectionId: draftConnectionId,
+    name: "Must not overwrite",
+    type: "mock",
+    transport: "api",
+    settings: { fromEmail: "other@example.com" },
+    credentials: {},
+  });
+  assert.equal(collision.status, 409);
+  assert.equal(
+    (
+      await db.providerConnection.findUniqueOrThrow({
+        where: { id: draftConnectionId },
+        select: { name: true },
+      })
+    ).name,
+    "Preallocated webhook",
+  );
   const provider = await saveProvider(u.id, {
     name: "Confidential",
     type: "mock",
