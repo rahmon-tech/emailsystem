@@ -210,7 +210,7 @@ test("login, provider setup, HTML import, preview, test, campaign controls, reco
   });
   await expect(pendingWebhookUrl).toBeVisible();
   const pendingWebhookText = await pendingWebhookUrl.textContent();
-  assert(pendingWebhookText);
+  expect(pendingWebhookText).toBeTruthy();
   await page.getByLabel("Name this connection").fill("Browser verification");
   await page.getByLabel("Sending domain").fill("invalid-address");
   await page
