@@ -30,6 +30,7 @@ export type EventKind =
   | "deferred"
   | "soft_bounce"
   | "hard_bounce"
+  | "failed"
   | "complaint"
   | "unsubscribe"
   | "open"
@@ -80,6 +81,7 @@ export function deliveryAfterEvent(
   if (kind === "hard_bounce") return "HARD_BOUNCED";
   if (kind === "delivered") return "DELIVERED";
   if (state === "DELIVERED") return state;
+  if (kind === "failed") return "FAILED";
   if (kind === "soft_bounce") return "SOFT_BOUNCED";
   // Provider deferrals are provider-owned; never re-enqueue a message already accepted.
   if (kind === "deferred") return state;
