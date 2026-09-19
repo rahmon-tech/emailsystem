@@ -116,7 +116,8 @@ const friendlyLabels: Record<string, string> = {
   PENDING: "Waiting",
   QUEUED: "Waiting to send",
   PROCESSING: "Sending",
-  PROVIDER_ACCEPTED: "Accepted by sending service",
+  PROVIDER_ACCEPTED: "Accepted for delivery",
+  ACCEPTED: "Accepted for delivery",
   DELIVERED: "Delivered",
   DEFERRED: "Waiting to retry",
   SOFT_BOUNCED: "Temporary bounce",
@@ -278,7 +279,7 @@ export function Activity() {
   const metrics: [string, number][] = summary
     ? [
         ["Delivered", summary.counts.DELIVERED ?? 0],
-        ["Accepted by sending service", summary.acceptedCount],
+        ["Accepted for delivery", summary.acceptedCount],
         ["Failed", summary.counts.FAILED ?? 0],
         [
           "Remaining",
@@ -633,8 +634,8 @@ export function Activity() {
                       </Typography>
                       <Tooltip
                         title={
-                          name === "Accepted by sending service"
-                            ? "The sending service accepted the email. Final delivery may arrive later through delivery updates."
+                          name === "Accepted for delivery"
+                            ? "The sending service accepted the email for delivery. Final delivery is confirmed separately by delivery updates."
                             : name === "Remaining"
                               ? "Recipients still waiting to send, sending now, or waiting to retry."
                               : name
@@ -844,7 +845,7 @@ export function Activity() {
                                   {new Date(e.createdAt).toLocaleTimeString()}
                                 </Box>
                                 <Box sx={{ color: "text.primary" }}>
-                                  {e.providerName ?? "EmailSystem"}
+                                  {e.providerName ?? "EmailBlast"}
                                 </Box>
                                 <Box>{e.maskedEmail}</Box>
                                 <Box
