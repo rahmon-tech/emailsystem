@@ -209,8 +209,10 @@ test("login, provider setup, HTML import, preview, test, campaign controls, reco
     hasText: /\/emailblast\/api\/webhooks\/[0-9a-f-]{36}$/i,
   });
   await expect(pendingWebhookUrl).toBeVisible();
-  const pendingWebhookText = await pendingWebhookUrl.textContent();
-  expect(pendingWebhookText).toBeTruthy();
+  const pendingWebhookText = (await pendingWebhookUrl.textContent()) ?? "";
+  expect(pendingWebhookText).toMatch(
+    /\/emailblast\/api\/webhooks\/[0-9a-f-]{36}$/i,
+  );
   await page.getByLabel("Name this connection").fill("Browser verification");
   await page.getByLabel("Sending domain").fill("invalid-address");
   await page
