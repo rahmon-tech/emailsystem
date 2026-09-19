@@ -86,6 +86,26 @@ test("login, provider setup, HTML import, preview, test, campaign controls, reco
     (await (await context.request.get(appPath("/api/safety"))).json())
       .accountDaily,
   ).toBe(12000);
+  const webhookGuideProof: Record<
+    string,
+    { title: string; event: string }
+  > = {
+    Resend: { title: "Resend webhook setup", event: "email.failed" },
+    "Amazon SES": {
+      title: "Amazon SES delivery notifications",
+      event: "Complaint",
+    },
+    Mailgun: { title: "Mailgun webhook setup", event: "permanent_fail" },
+    SendGrid: { title: "SendGrid Event Webhook", event: "dropped" },
+    Brevo: { title: "Brevo transactional webhook", event: "Blocked" },
+    Postmark: { title: "Postmark webhook setup", event: "Delivery" },
+    Mailjet: { title: "Mailjet event tracking", event: "blocked" },
+    SMTP2GO: { title: "SMTP2GO webhook setup", event: "reject" },
+    "Elastic Email": {
+      title: "Elastic Email notifications",
+      event: "Bounce / Error",
+    },
+  };
   for (const [provider, credential] of [
     ["Resend", "API key"],
     ["Amazon SES", "Access Key ID"],
@@ -125,6 +145,16 @@ test("login, provider setup, HTML import, preview, test, campaign controls, reco
     await expect(
       dialog.getByRole("button", { name: "Copy", exact: true }),
     ).toBeVisible();
+    const guideProof = webhookGuideProof[provider];
+    await expect(
+      dialog.getByText(guideProof.title, { exact: true }),
+    ).toBeVisible();
+    await expect(
+      dialog.getByText(guideProof.event, { exact: true }),
+    ).toBeVisible();
+    await expect(
+      dialog.getByRole("link", { name: /Open .* webhook guide/ }),
+    ).toHaveAttribute("href", /^https:/);
     await expect(
       dialog.getByRole("link", { name: new RegExp("Where do I get") }).first(),
     ).toHaveAttribute("href", /^https:/);
@@ -184,6 +214,14 @@ test("login, provider setup, HTML import, preview, test, campaign controls, reco
   await expect(customCallbackSecret).toHaveValue(/^eswh_/);
   await expect(
     page.getByText(/Plain SMTP has no universal delivery webhook/),
+  ).toBeVisible();
+  await expect(
+    page.getByText("Custom SMTP delivery callbacks", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("Useful events when your SMTP service offers them", {
+      exact: true,
+    }),
   ).toBeVisible();
   await expect(
     page.locator("code").filter({
