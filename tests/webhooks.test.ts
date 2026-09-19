@@ -77,6 +77,110 @@ test("native event normalization keeps acceptance distinct from delivery", () =>
   );
 });
 
+test("provider webhook failures and current event names normalize safely", () => {
+  const cases: {
+    type: Parameters<typeof normalizeWebhook>[0];
+    payload: unknown;
+    kind: string;
+  }[] = [
+    {
+      type: "resend",
+      payload: {
+        type: "email.failed",
+        created_at: new Date().toISOString(),
+        data: { email_id: "resend-failed", to: ["a@example.com"] },
+      },
+      kind: "failed",
+    },
+    {
+      type: "mailgun",
+      payload: {
+        "event-data": {
+          event: "temporary_fail",
+          id: "mailgun-temp",
+          recipient: "a@example.com",
+          timestamp: Date.now() / 1000,
+          message: { headers: { "message-id": "mailgun-message" } },
+        },
+      },
+      kind: "deferred",
+    },
+    {
+      type: "mailgun",
+      payload: {
+        "event-data": {
+          event: "permanent_fail",
+          id: "mailgun-hard",
+          recipient: "a@example.com",
+          timestamp: Date.now() / 1000,
+          message: { headers: { "message-id": "mailgun-message-2" } },
+        },
+      },
+      kind: "hard_bounce",
+    },
+    {
+      type: "sendgrid",
+      payload: {
+        event: "dropped",
+        sg_message_id: "sendgrid-message",
+        sg_event_id: "sendgrid-drop",
+        email: "a@example.com",
+        timestamp: Math.floor(Date.now() / 1000),
+      },
+      kind: "failed",
+    },
+    {
+      type: "brevo",
+      payload: {
+        event: "blocked",
+        "message-id": "brevo-message",
+        id: "brevo-blocked",
+        email: "a@example.com",
+        ts_event: Math.floor(Date.now() / 1000),
+      },
+      kind: "failed",
+    },
+    {
+      type: "mailjet",
+      payload: {
+        event: "blocked",
+        MessageID: "mailjet-message",
+        email: "a@example.com",
+        time: Math.floor(Date.now() / 1000),
+      },
+      kind: "failed",
+    },
+    {
+      type: "smtp2go",
+      payload: {
+        event: "reject",
+        email_id: "smtp2go-message",
+        rcpt: "a@example.com",
+        id: "smtp2go-reject",
+        time: Math.floor(Date.now() / 1000),
+      },
+      kind: "failed",
+    },
+    {
+      type: "smtp",
+      payload: {
+        event: "rejected",
+        messageId: "smtp-message",
+        recipient: "a@example.com",
+        eventId: "smtp-reject",
+        timestamp: new Date().toISOString(),
+      },
+      kind: "failed",
+    },
+  ];
+
+  for (const entry of cases) {
+    const events = normalizeWebhook(entry.type, entry.payload, "request");
+    assert.equal(events.length, 1, entry.type);
+    assert.equal(events[0].kind, entry.kind, entry.type);
+  }
+});
+
 test("Mailgun authenticates timestamp/token and SendGrid authenticates exact raw bytes", async () => {
   const c = connection("mailgun");
   c.credentials.webhookSecret = "test-signing-key";
