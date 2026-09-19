@@ -227,6 +227,40 @@ test("authenticated delivery arriving before a lost response wins; duplicate web
     1,
   );
 });
+test("provider-reported generic failure fails delivery without suppressing the recipient", async () => {
+  const f = await fixture();
+  const delivery = f.deliveries[0];
+  await processDelivery(delivery.id, async () => ({
+    status: "accepted",
+    providerMessageId: "later-provider-failure",
+  }));
+
+  await ingestEvent(f.provider.id, {
+    eventKey: "provider-failed",
+    messageId: "later-provider-failure",
+    recipient: delivery.email,
+    kind: "failed",
+    occurredAt: new Date(),
+  });
+
+  assert.equal(
+    (await db.delivery.findUniqueOrThrow({ where: { id: delivery.id } })).state,
+    "FAILED",
+  );
+  assert.equal(
+    await db.suppression.count({
+      where: { userId: f.user.id, email: delivery.email },
+    }),
+    0,
+  );
+  assert.equal(
+    await db.activityEvent.count({
+      where: { deliveryId: delivery.id, kind: "FAILED" },
+    }),
+    1,
+  );
+});
+
 test("temporary rejection retries once eligible; unknown outcome never retries", async () => {
   const f = await fixture("temporary");
   const id = f.deliveries[0].id;
