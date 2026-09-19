@@ -16,6 +16,8 @@ test("late events cannot regress delivered or suppressed recipient truth", () =>
   assert.equal(deliveryAfterEvent("HARD_BOUNCED", "delivered"), "HARD_BOUNCED");
   assert.equal(deliveryAfterEvent("UNKNOWN", "delivered"), "DELIVERED");
   assert.equal(deliveryAfterEvent("DELIVERED", "complaint"), "COMPLAINED");
+  assert.equal(deliveryAfterEvent("PROVIDER_ACCEPTED", "failed"), "FAILED");
+  assert.equal(deliveryAfterEvent("DELIVERED", "failed"), "DELIVERED");
   assert.equal(deliveryAfterEvent("CANCELLED", "delivered"), "CANCELLED");
 });
 test("unknown and policy failures never automatically fail over; retries are bounded", () => {
