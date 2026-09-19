@@ -190,11 +190,23 @@ export async function api(request: Request, parts: string[]) {
           }),
         );
       }
-      if (method === "POST" && !id)
+      if (method === "POST" && !id) {
+        const input = z
+          .object({ connectionId: z.uuid().optional() })
+          .passthrough()
+          .parse(await readJson(request, 32000));
+        const { connectionId, ...providerInput } = input;
         return response(
-          await saveProvider(user.id, await readJson(request, 32000)),
+          await saveProvider(
+            user.id,
+            providerInput,
+            undefined,
+            {},
+            connectionId,
+          ),
           201,
         );
+      }
       if (id) uuid(id);
       if (method === "PUT" && id)
         return response(
