@@ -235,7 +235,7 @@ export async function applyEvent(id: string) {
           providerName: event.provider.name,
           maskedEmail: maskEmail(delivery.email),
           kind: event.kind.toUpperCase(),
-          message: message[event.kind],
+          message: message[event.kind as EventKind],
         },
       });
     }
