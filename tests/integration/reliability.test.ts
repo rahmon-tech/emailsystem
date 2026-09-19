@@ -120,6 +120,72 @@ test("two claims and cancel during an in-flight request preserve one accepted at
     1,
   );
 });
+test("provider acceptance callback does not duplicate the visible acceptance milestone", async () => {
+  const f = await fixture();
+  const delivery = f.deliveries[0];
+  await processDelivery(delivery.id, async () => ({
+    status: "accepted",
+    providerMessageId: "accepted-once",
+  }));
+  assert.equal(
+    await db.activityEvent.count({
+      where: {
+        deliveryId: delivery.id,
+        kind: { in: ["PROVIDER_ACCEPTED", "ACCEPTED"] },
+      },
+    }),
+    1,
+  );
+
+  await ingestEvent(f.provider.id, {
+    eventKey: "accepted-callback",
+    messageId: "accepted-once",
+    recipient: delivery.email,
+    kind: "accepted",
+    occurredAt: new Date(),
+  });
+
+  assert.equal(
+    (await db.delivery.findUniqueOrThrow({ where: { id: delivery.id } })).state,
+    "PROVIDER_ACCEPTED",
+  );
+  assert.equal(
+    await db.activityEvent.count({
+      where: {
+        deliveryId: delivery.id,
+        kind: { in: ["PROVIDER_ACCEPTED", "ACCEPTED"] },
+      },
+    }),
+    1,
+  );
+});
+
+test("acceptance callback arriving before the send response still shows one milestone", async () => {
+  const f = await fixture();
+  const delivery = f.deliveries[0];
+  await processDelivery(delivery.id, async (_connection, _message, context) => {
+    await ingestEvent(f.provider.id, {
+      eventKey: "early-accepted-callback",
+      messageId: "early-accepted",
+      attemptId: context.attemptId,
+      recipient: delivery.email,
+      kind: "accepted",
+      occurredAt: new Date(),
+    });
+    return { status: "accepted", providerMessageId: "early-accepted" };
+  });
+
+  assert.equal(
+    await db.activityEvent.count({
+      where: {
+        deliveryId: delivery.id,
+        kind: { in: ["PROVIDER_ACCEPTED", "ACCEPTED"] },
+      },
+    }),
+    1,
+  );
+});
+
 test("authenticated delivery arriving before a lost response wins; duplicate webhook is idempotent", async () => {
   const f = await fixture();
   const id = f.deliveries[0].id;
