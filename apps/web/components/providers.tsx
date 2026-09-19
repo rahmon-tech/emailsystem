@@ -1345,6 +1345,10 @@ function ProviderForm({
             setBusy(true);
             setError("");
             try {
+              if (!row && !draftId)
+                throw new Error(
+                  "This connection setup is incomplete. Close it and add the sending service again.",
+                );
               const localParts = aliasValues(aliases);
               const domain = senderDomain.trim().toLowerCase();
               if (!domain || !localParts.length)
@@ -1405,6 +1409,7 @@ function ProviderForm({
               const saved = await api<ProviderRow>(
                 row ? `providers/${row.id}` : "providers",
                 {
+                  ...(!row && draftId ? { connectionId: draftId } : {}),
                   name,
                   type,
                   transport,
