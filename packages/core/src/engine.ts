@@ -992,25 +992,26 @@ export async function processDelivery(
           },
         });
       }
-      await tx.activityEvent.create({
-        data: {
-          userId: initial.userId,
-          campaignId: initial.campaignId,
-          deliveryId: id,
-          providerName: provider!.name,
-          maskedEmail: maskEmail(initial.email),
-          kind:
-            outcome.status === "accepted"
-              ? "PROVIDER_ACCEPTED"
-              : outcome.status === "unknown"
-                ? "UNKNOWN"
-                : outcome.error.category.toUpperCase(),
-          message:
-            outcome.status === "accepted"
-              ? "Provider accepted the message."
-              : outcome.error.message,
-        },
-      });
+      if (outcome.status !== "accepted" || pending)
+        await tx.activityEvent.create({
+          data: {
+            userId: initial.userId,
+            campaignId: initial.campaignId,
+            deliveryId: id,
+            providerName: provider!.name,
+            maskedEmail: maskEmail(initial.email),
+            kind:
+              outcome.status === "accepted"
+                ? "PROVIDER_ACCEPTED"
+                : outcome.status === "unknown"
+                  ? "UNKNOWN"
+                  : outcome.error.category.toUpperCase(),
+            message:
+              outcome.status === "accepted"
+                ? "The sending service accepted the email for delivery."
+                : outcome.error.message,
+          },
+        });
     });
     log("delivery.attempt.completed", {
       campaignId: initial.campaignId,
@@ -1169,7 +1170,7 @@ export async function recoverStalled() {
         data: {
           state: "UNKNOWN",
           safeError:
-            "Sending was interrupted. EmailSystem must confirm the previous result before retrying.",
+            "Sending was interrupted. EmailBlast must confirm the previous result before retrying.",
         },
       });
       if (n.count) {
