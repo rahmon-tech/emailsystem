@@ -120,6 +120,7 @@ export async function saveProvider(
   input: unknown,
   id?: string,
   dependencies: Dependencies = {},
+  createId?: string,
 ) {
   const previous = id ? await getConnection(userId, id) : null;
   let candidate = input;
@@ -156,7 +157,19 @@ export async function saveProvider(
       "MOCK_DISABLED",
       "The development-only sending service is disabled.",
     );
-  const providerId = id ?? randomUUID();
+  const providerId = id ?? createId ?? randomUUID();
+  if (!previous && createId) {
+    const collision = await db.providerConnection.findUnique({
+      where: { id: providerId },
+      select: { id: true },
+    });
+    if (collision)
+      throw new AppError(
+        409,
+        "PROVIDER_ID",
+        "This connection setup is no longer available. Close it and add the sending service again.",
+      );
+  }
   if (
     previous &&
     (previous.type !== parsed.type || previous.transport !== parsed.transport)
