@@ -57,6 +57,7 @@ import {
   supportsTestMode,
 } from "@emailsystem/providers/catalog";
 import type { ProviderType } from "@emailsystem/providers/catalog";
+import { webhookSetupGuide } from "@emailsystem/providers/webhook-guides";
 import { api, date } from "./api-client";
 import {
   PageTitle,
@@ -664,6 +665,76 @@ const generateWebhookSecret = () => {
     .replaceAll("=", "");
   return `eswh_${value}`;
 };
+
+function WebhookSetupHelp({
+  type,
+  messageStreamType,
+}: {
+  type: ProviderType;
+  messageStreamType?: string;
+}) {
+  const guide = webhookSetupGuide(type, { messageStreamType });
+  return (
+    <Box sx={{ bgcolor: "background.paper", borderRadius: 1.5, p: 1.5 }}>
+      <Typography sx={{ fontSize: 13, fontWeight: 700 }}>
+        {guide.title}
+      </Typography>
+      <Stack spacing={0.5} sx={{ mt: 1 }}>
+        {guide.steps.map((step, index) => (
+          <Typography key={step} variant="caption" color="text.secondary">
+            {index + 1}. {step}
+          </Typography>
+        ))}
+      </Stack>
+      {!!guide.events.length && (
+        <Box sx={{ mt: 1.25 }}>
+          <Typography
+            variant="caption"
+            sx={{ display: "block", fontWeight: 700, mb: 0.75 }}
+          >
+            {guide.eventLabel ?? "Events to enable"}
+          </Typography>
+          <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.75 }}>
+            {guide.events.map((event) => (
+              <Box
+                key={event}
+                component="code"
+                sx={{
+                  px: 0.75,
+                  py: 0.35,
+                  borderRadius: 1,
+                  bgcolor: "action.hover",
+                  fontFamily: "monospace",
+                  fontSize: 11.5,
+                  lineHeight: 1.35,
+                }}
+              >
+                {event}
+              </Box>
+            ))}
+          </Box>
+        </Box>
+      )}
+      {guide.note && (
+        <Typography
+          variant="caption"
+          color="text.secondary"
+          sx={{ display: "block", mt: 1.25 }}
+        >
+          {guide.note}
+        </Typography>
+      )}
+      {guide.docsUrl && (
+        <Typography variant="caption" sx={{ display: "block", mt: 1 }}>
+          <a href={guide.docsUrl} target="_blank" rel="noreferrer">
+            Open {definition(type).name} webhook guide
+          </a>
+        </Typography>
+      )}
+    </Box>
+  );
+}
+
 function ProviderForm({
   type,
   row,
@@ -1216,6 +1287,11 @@ function ProviderForm({
                       form and add the sending service again.
                     </Alert>
                   )}
+
+                  <WebhookSetupHelp
+                    type={type}
+                    messageStreamType={settings.messageStreamType}
+                  />
 
                   {emailSystemManagedWebhookSecret(type) ? (
                     <>
