@@ -336,11 +336,20 @@ export function normalizeWebhook(
       delivery: "delivered",
       delivery_delayed: "deferred",
       deferred: "deferred",
+      temporary_fail: "deferred",
       soft_bounce: "soft_bounce",
       softbounce: "soft_bounce",
       hard_bounce: "hard_bounce",
       hardbounce: "hard_bounce",
+      permanent_fail: "hard_bounce",
       bounced: "hard_bounce",
+      failed: "failed",
+      dropped: "failed",
+      reject: "failed",
+      rejected: "failed",
+      invalid: "failed",
+      blocked: "failed",
+      suppressed: "failed",
       complained: "complaint",
       complaint: "complaint",
       spamcomplaint: "complaint",
@@ -356,7 +365,13 @@ export function normalizeWebhook(
       open: "open",
       click: "click",
       clicked: "click",
-      error: bounceType === "hard" ? "hard_bounce" : "soft_bounce",
+      error: /hard|permanent|nomailbox/i.test(bounceType)
+        ? "hard_bounce"
+        : /soft|temporary/i.test(bounceType)
+          ? "soft_bounce"
+          : type === "elastic"
+            ? "soft_bounce"
+            : "failed",
       bounce: /hard|permanent/i.test(bounceType)
         ? "hard_bounce"
         : "soft_bounce",
