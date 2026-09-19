@@ -149,6 +149,7 @@ export async function applyEvent(id: string) {
           "hard_bounce",
           "soft_bounce",
           "complaint",
+          "failed",
           "open",
           "click",
         ].includes(event.kind)
@@ -172,6 +173,7 @@ export async function applyEvent(id: string) {
         "hard_bounce",
         "soft_bounce",
         "complaint",
+        "failed",
         "open",
         "click",
       ].includes(event.kind)
@@ -196,7 +198,7 @@ export async function applyEvent(id: string) {
         },
         update: { reason: event.kind },
       });
-    if (["hard_bounce", "complaint", "soft_bounce"].includes(event.kind))
+    if (["hard_bounce", "complaint", "soft_bounce", "failed"].includes(event.kind))
       await tx.campaign.updateMany({
         where: { id: delivery.campaignId, state: "COMPLETED" },
         data: { state: "COMPLETED_WITH_ERRORS" },
@@ -209,17 +211,34 @@ export async function applyEvent(id: string) {
         attempt.userId,
         delivery.campaignId,
       );
-    await tx.activityEvent.create({
-      data: {
-        userId: attempt.userId,
-        campaignId: delivery.campaignId,
-        deliveryId: delivery.id,
-        providerName: event.provider.name,
-        maskedEmail: maskEmail(delivery.email),
-        kind: event.kind.toUpperCase(),
-        message: `Provider reported ${event.kind.replaceAll("_", " ")}.`,
-      },
-    });
+    const visibleEvent =
+      event.kind !== "accepted" ||
+      (delivery.state !== "PROVIDER_ACCEPTED" && state === "PROVIDER_ACCEPTED");
+    if (visibleEvent) {
+      const message: Record<EventKind, string> = {
+        accepted: "Delivery update confirmed the email was accepted for delivery.",
+        delivered: "Delivery update confirmed delivery to the recipient's mail server.",
+        deferred: "The sending service reported a temporary delivery delay.",
+        soft_bounce: "The sending service reported a temporary bounce.",
+        hard_bounce: "The sending service reported a permanent bounce.",
+        failed: "The sending service reported that delivery failed.",
+        complaint: "The sending service reported a spam complaint.",
+        unsubscribe: "The sending service reported an unsubscribe.",
+        open: "The sending service reported an open.",
+        click: "The sending service reported a link click.",
+      };
+      await tx.activityEvent.create({
+        data: {
+          userId: attempt.userId,
+          campaignId: delivery.campaignId,
+          deliveryId: delivery.id,
+          providerName: event.provider.name,
+          maskedEmail: maskEmail(delivery.email),
+          kind: event.kind.toUpperCase(),
+          message: message[event.kind],
+        },
+      });
+    }
   });
 }
 export async function reconcileEvents() {
