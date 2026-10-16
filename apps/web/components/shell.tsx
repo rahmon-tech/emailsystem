@@ -1,4 +1,5 @@
 "use client";
+
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -25,11 +26,15 @@ import {
   PersonOutlined,
 } from "@mui/icons-material";
 import { api } from "./api-client";
+
+const SIDEBAR_WIDTH = 232;
+
 const sections = [
   { label: "Create campaign", path: "/blast", icon: SendOutlined },
   { label: "Sending services", path: "/providers", icon: HubOutlined },
   { label: "Activity", path: "/activity", icon: TerminalOutlined },
 ];
+
 export function Shell({
   email,
   children,
@@ -39,8 +44,13 @@ export function Shell({
 }) {
   const router = useRouter();
   const pathname = usePathname();
-  const [mobile, setMobile] = useState(false),
-    [anchor, setAnchor] = useState<HTMLElement | null>(null);
+  const [mobile, setMobile] = useState(false);
+  const [anchor, setAnchor] = useState<HTMLElement | null>(null);
+  const activeSection = sections.find(
+    ({ path }) => pathname === path || pathname.startsWith(`${path}/`),
+  );
+  const currentTitle = activeSection?.label ?? "Workspace";
+
   useEffect(() => {
     const refresh = () => {
       void api("session/refresh").catch(() => {
@@ -51,61 +61,102 @@ export function Shell({
     const timer = window.setInterval(refresh, 12 * 60 * 60 * 1000);
     return () => window.clearInterval(timer);
   }, []);
+
   const navigation = (
     <Box
-      sx={{ p: 2.5, height: "100%", display: "flex", flexDirection: "column" }}
+      sx={{
+        px: 2,
+        pt: 2.5,
+        pb: 2,
+        height: "100%",
+        minHeight: 0,
+        display: "flex",
+        flexDirection: "column",
+      }}
     >
-      <Stack direction="row" spacing={1.3} sx={{ alignItems: "center", mb: 5 }}>
+      <Stack direction="row" spacing={1.25} sx={{ alignItems: "center", px: 1, mb: 4 }}>
         <Avatar
           variant="rounded"
-          sx={{ bgcolor: "primary.main", width: 30, height: 30 }}
+          sx={{
+            bgcolor: "primary.main",
+            width: 34,
+            height: 34,
+            borderRadius: "9px",
+          }}
         >
           <MailOutlined fontSize="small" />
         </Avatar>
-        <Typography
-          sx={{ fontWeight: 700, fontSize: 17, letterSpacing: "-.04em" }}
-        >
-          EmailSystem
-        </Typography>
+        <Box sx={{ minWidth: 0 }}>
+          <Typography sx={{ fontSize: 16, fontWeight: 750, letterSpacing: "-.035em", lineHeight: 1.2 }}>
+            EmailBlast
+          </Typography>
+          <Typography sx={{ fontSize: 11, color: "text.secondary", mt: 0.2 }}>
+            Campaign workspace
+          </Typography>
+        </Box>
       </Stack>
-      <Stack component="nav" aria-label="Main navigation" spacing={0.5}>
-        {sections.map((s) => (
-          <Button
-            component={Link}
-            key={s.path}
-            href={s.path}
-            onClick={() => setMobile(false)}
-            startIcon={<s.icon />}
-            aria-current={pathname === s.path ? "page" : undefined}
-            sx={{
-              justifyContent: "flex-start",
-              px: 1.5,
-              py: 1.2,
-              color: pathname === s.path ? "primary.main" : "text.secondary",
-              bgcolor: pathname === s.path ? "action.selected" : "transparent",
-            }}
-          >
-            {s.label}
-          </Button>
-        ))}
-      </Stack>
-      <Stack
-        direction="row"
+
+      <Typography
+        variant="caption"
         sx={{
-          mt: "auto",
-          pt: 3,
-          gap: 1,
-          alignItems: "center",
+          px: 1.5,
+          pb: 1.25,
           color: "text.secondary",
+          fontSize: 11,
+          fontWeight: 650,
+          letterSpacing: ".08em",
+          textTransform: "uppercase",
         }}
       >
-        <PersonOutlined fontSize="small" />
-        <Typography variant="caption" noWrap title={email}>
-          {email}
-        </Typography>
+        Workspace
+      </Typography>
+      <Stack component="nav" aria-label="Main navigation" spacing={0.5}>
+        {sections.map((section) => {
+          const selected = activeSection?.path === section.path;
+          return (
+            <Button
+              component={Link}
+              key={section.path}
+              href={section.path}
+              onClick={() => setMobile(false)}
+              startIcon={<section.icon sx={{ fontSize: 19 }} />}
+              aria-current={selected ? "page" : undefined}
+              sx={{
+                minHeight: 43,
+                justifyContent: "flex-start",
+                px: 1.5,
+                py: 1,
+                borderRadius: "8px",
+                color: selected ? "primary.main" : "text.secondary",
+                bgcolor: selected ? "action.selected" : "transparent",
+                fontWeight: selected ? 700 : 550,
+                "&:hover": {
+                  bgcolor: selected ? "action.selected" : "action.hover",
+                },
+                "& .MuiButton-startIcon": { mr: 1.15 },
+              }}
+            >
+              {section.label}
+            </Button>
+          );
+        })}
       </Stack>
+
+      <Box sx={{ flex: 1 }} />
+      <Box sx={{ borderTop: 1, borderColor: "divider", pt: 2, px: 1 }}>
+        <Typography variant="caption" sx={{ color: "text.secondary", display: "block", mb: 0.5 }}>
+          Signed in as
+        </Typography>
+        <Stack direction="row" spacing={1} sx={{ alignItems: "center", minWidth: 0 }}>
+          <PersonOutlined sx={{ fontSize: 18, color: "text.secondary", flexShrink: 0 }} />
+          <Typography variant="body2" noWrap title={email} sx={{ fontWeight: 550 }}>
+            {email}
+          </Typography>
+        </Stack>
+      </Box>
     </Box>
   );
+
   return (
     <Box
       sx={{
@@ -119,7 +170,7 @@ export function Shell({
       <Box
         component="aside"
         sx={{
-          width: 208,
+          width: SIDEBAR_WIDTH,
           display: { xs: "none", md: "block" },
           position: "fixed",
           inset: "0 auto 0 0",
@@ -135,7 +186,7 @@ export function Shell({
         onClose={() => setMobile(false)}
         sx={{
           "& .MuiDrawer-paper": {
-            width: 250,
+            width: 256,
             maxWidth: "calc(100vw - 24px)",
           },
         }}
@@ -144,9 +195,9 @@ export function Shell({
       </Drawer>
       <Box
         sx={{
-          width: { xs: "100%", md: "calc(100% - 208px)" },
+          width: { xs: "100%", md: `calc(100% - ${SIDEBAR_WIDTH}px)` },
           minWidth: 0,
-          ml: { xs: 0, md: "208px" },
+          ml: { xs: 0, md: `${SIDEBAR_WIDTH}px` },
           overflowX: "clip",
         }}
       >
@@ -156,24 +207,25 @@ export function Shell({
             height: 64,
             width: "100%",
             minWidth: 0,
-            px: { xs: 2, md: 4 },
+            px: { xs: 2, md: 3, lg: 4 },
             display: "flex",
             alignItems: "center",
+            gap: 1,
             justifyContent: "space-between",
             bgcolor: "background.paper",
             borderBottom: 1,
             borderColor: "divider",
-            position: { xs: "sticky", md: "static" },
-            top: { xs: 0, md: "auto" },
-            zIndex: { xs: 1100, md: "auto" },
+            position: "sticky",
+            top: 0,
+            zIndex: 1100,
           }}
         >
-          <Stack sx={{ alignItems: "center", minWidth: 0 }} direction="row" spacing={1}>
+          <Stack sx={{ alignItems: "center", minWidth: 0, flex: 1 }} direction="row" spacing={1}>
             <IconButton
               aria-label="Open navigation"
               aria-expanded={mobile}
               onClick={() => setMobile(true)}
-              sx={{ display: { md: "none" } }}
+              sx={{ display: { md: "none" }, ml: -0.5 }}
             >
               <MenuRounded />
             </IconButton>
@@ -190,16 +242,28 @@ export function Shell({
                 color: "text.secondary",
               }}
             />
-            <Typography sx={{ fontSize: 13, fontWeight: 600 }}>
-              {sections.find((s) => s.path === pathname)?.label}
+            <Typography sx={{ fontSize: 13, fontWeight: 650 }} noWrap>
+              {currentTitle}
             </Typography>
           </Stack>
+          {activeSection?.path !== "/blast" && (
+            <Button
+              component={Link}
+              href="/blast"
+              variant="contained"
+              size="small"
+              startIcon={<SendOutlined sx={{ fontSize: 18 }} />}
+              sx={{ display: { xs: "none", sm: "inline-flex" }, flexShrink: 0, minHeight: 36 }}
+            >
+              New campaign
+            </Button>
+          )}
           <Button
             aria-label="Account menu"
             color="inherit"
             onClick={(e) => setAnchor(e.currentTarget)}
-            endIcon={<ExpandMore />}
-            sx={{ minWidth: 0, flexShrink: 0 }}
+            endIcon={<ExpandMore sx={{ fontSize: 18 }} />}
+            sx={{ minWidth: 0, flexShrink: 0, pl: 0.75, pr: 0.25 }}
           >
             <Avatar
               sx={{
@@ -220,7 +284,7 @@ export function Shell({
                 whiteSpace: "nowrap",
                 fontSize: 13,
                 textAlign: "left",
-                maxWidth: 180,
+                maxWidth: 160,
                 overflow: "hidden",
                 textOverflow: "ellipsis",
               }}
@@ -260,7 +324,7 @@ export function Shell({
             sx={{
               width: "100%",
               minWidth: 0,
-              maxWidth: 1480,
+              maxWidth: 1360,
               mx: "auto",
               "& > *": { minWidth: 0, maxWidth: "100%" },
               "& .MuiCard-root": { minWidth: 0, maxWidth: "100%" },
