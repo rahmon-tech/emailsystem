@@ -24,11 +24,20 @@ test("workspace shell stays usable and selected from phone through desktop", asy
   await page.getByLabel("Email address").fill(E2E_EMAIL);
   await page.getByLabel("Password").fill(E2E_PASSWORD);
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
-  await expect(page).toHaveURL(/providers|blast/);
+  await expect(page).toHaveURL(/providers/);
+  const authCookie = (await page.context().cookies()).find(
+    (cookie) => cookie.name === "emailsystem_session",
+  );
+  expect(authCookie, "sign-in must set the session cookie").toBeTruthy();
+  expect(authCookie?.path).toBe(process.env.NEXT_PUBLIC_BASE_PATH || "/");
 
   for (const width of widths) {
     await page.setViewportSize({ width, height: width < 600 ? 844 : 900 });
     await page.goto(appPath("/providers"));
+    await expect(page).toHaveURL(/\/providers\/?$/);
+    await expect(
+      page.getByRole("button", { name: "Account menu", exact: true }),
+    ).toBeVisible();
     await assertNoViewportOverflow(page);
 
     const newCampaign = page.getByRole("link", {
@@ -43,6 +52,14 @@ test("workspace shell stays usable and selected from phone through desktop", asy
       exact: true,
     });
     if (width < 900) {
+      const mobileDebug = await page.evaluate(() => ({
+        url: location.href,
+        innerWidth: window.innerWidth,
+        clientWidth: document.documentElement.clientWidth,
+        triggerCount: document.querySelectorAll('button[aria-label="Open navigation"]').length,
+        bodyText: document.body.innerText.slice(0, 600),
+      }));
+      console.log("WORKSPACE_MOBILE_DEBUG", JSON.stringify(mobileDebug));
       await expect(mobileTrigger).toBeVisible();
       await mobileTrigger.click();
       const drawerNav = page
