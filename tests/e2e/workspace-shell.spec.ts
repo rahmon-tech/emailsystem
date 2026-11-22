@@ -2,6 +2,28 @@ import { test, expect } from "@playwright/test";
 import { mkdirSync } from "node:fs";
 import { appPath } from "@emailsystem/core/paths";
 import { E2E_EMAIL, E2E_PASSWORD } from "./credentials";
+import { saveProvider } from "@emailsystem/core/providers";
+import { db } from "@emailsystem/db";
+
+async function ensureWorkspaceProvider() {
+  const user = await db.user.findUnique({
+    where: { email: E2E_EMAIL },
+    select: { id: true },
+  });
+  expect(user, "the browser-test account must exist").not.toBeNull();
+  const existing = await db.providerConnection.count({
+    where: { userId: user!.id, deletedAt: null },
+  });
+  if (existing === 0) {
+    await saveProvider(user!.id, {
+      name: "Workspace shell mock",
+      type: "mock",
+      transport: "api",
+      credentials: {},
+      settings: { fromEmail: "sender@example.com" },
+    });
+  }
+}
 
 const widths = [320, 375, 390, 768, 1024, 1440] as const;
 
@@ -30,6 +52,9 @@ test("workspace shell stays usable and selected from phone through desktop", asy
   );
   expect(authCookie, "sign-in must set the session cookie").toBeTruthy();
   expect(authCookie?.path).toBe(process.env.NEXT_PUBLIC_BASE_PATH || "/");
+  // The isolated browser-test account starts without a provider. Add a mock
+  // connection so both standard and image-first composer routes are reachable.
+  await ensureWorkspaceProvider();
 
   for (const width of widths) {
     await page.setViewportSize({ width, height: width < 600 ? 844 : 900 });
@@ -52,28 +77,6 @@ test("workspace shell stays usable and selected from phone through desktop", asy
       exact: true,
     });
     if (width < 900) {
-      const mobileDebug = await page.evaluate(() => ({
-        url: location.href,
-        innerWidth: window.innerWidth,
-        clientWidth: document.documentElement.clientWidth,
-        triggerCount: document.querySelectorAll('button[aria-label="Open navigation"]').length,
-        triggerStyle: (() => {
-          const el = document.querySelector<HTMLButtonElement>('button[aria-label="Open navigation"]');
-          if (!el) return null;
-          const style = getComputedStyle(el);
-          const rect = el.getBoundingClientRect();
-          return {
-            display: style.display,
-            visibility: style.visibility,
-            opacity: style.opacity,
-            width: rect.width,
-            height: rect.height,
-            parentDisplay: getComputedStyle(el.parentElement!).display,
-          };
-        })(),
-        bodyText: document.body.innerText.slice(0, 600),
-      }));
-      console.log("WORKSPACE_MOBILE_DEBUG", JSON.stringify(mobileDebug));
       await expect(mobileTrigger).toBeVisible();
       await mobileTrigger.click();
       const drawerNav = page
