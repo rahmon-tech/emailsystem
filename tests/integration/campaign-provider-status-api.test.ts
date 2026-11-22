@@ -12,6 +12,8 @@ const adaptiveKeys: string[] = [];
 after(async () => {
   if (adaptiveKeys.length) await redis.del(...adaptiveKeys);
   await db.campaign.deleteMany({ where: { userId: { in: users } } });
+  await db.experimentRun.deleteMany({ where: { userId: { in: users } } });
+  await db.experimentProfile.deleteMany({ where: { userId: { in: users } } });
   await db.user.deleteMany({ where: { id: { in: users } } });
   await db.$disconnect();
   await redis.quit();
