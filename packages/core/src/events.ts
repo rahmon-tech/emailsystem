@@ -16,6 +16,7 @@ import { deliveryAfterEvent } from "./domain";
 import type { EventKind } from "./domain";
 import { maskEmail, digest, verifySignedToken } from "./security";
 import { config } from "./config";
+import { consumeLimit } from "./redis";
 export async function receiveWebhook(
   providerId: string,
   raw: string,
@@ -29,14 +30,26 @@ export async function receiveWebhook(
   const c = unlocked(row);
   if (!(await authenticateWebhook(c, raw, headers, url)))
     throw new AppError(401, "SIGNATURE", "Webhook authentication failed.");
-  const payload =
-    c.type === "elastic"
-      ? Object.fromEntries(url.searchParams)
-      : headers
-            .get("content-type")
-            ?.includes("application/x-www-form-urlencoded")
-        ? Object.fromEntries(new URLSearchParams(raw))
-        : JSON.parse(raw);
+  if (!(await consumeLimit(`webhook:provider:${providerId}`, 3000, 60)))
+    throw new AppError(429, "RATE", "Webhook rate limit reached.");
+
+  let payload: unknown;
+  try {
+    payload =
+      c.type === "elastic"
+        ? Object.fromEntries(url.searchParams)
+        : headers
+              .get("content-type")
+              ?.includes("application/x-www-form-urlencoded")
+          ? Object.fromEntries(new URLSearchParams(raw))
+          : JSON.parse(raw);
+  } catch {
+    throw new AppError(
+      400,
+      "WEBHOOK_PAYLOAD",
+      "Webhook payload is invalid.",
+    );
+  }
   const events = normalizeWebhook(
     c.type,
     payload,
