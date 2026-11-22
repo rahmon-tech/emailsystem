@@ -564,7 +564,7 @@ export function Blast() {
                   invalid();
                 }}
                 required
-                helperText="Choose one or more verified domains. EmailSystem will use the available From addresses and sending services under those domains without exceeding their limits."
+                helperText="Choose one or more verified domains. EmailBlast will use the available From addresses and sending services under those domains without exceeding their limits."
                 slotProps={{
                   select: {
                     multiple: true,

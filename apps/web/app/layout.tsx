@@ -2,7 +2,7 @@ import { AppRouterCacheProvider } from "@mui/material-nextjs/v16-appRouter";
 import { Theme } from "../components/theme";
 import "./globals.css";
 export const metadata = {
-  title: { default: "EmailSystem", template: "%s · EmailSystem" },
+  title: { default: "EmailBlast", template: "%s · EmailBlast" },
   description:
     "Manage sending providers, prepare email campaigns, and follow delivery activity.",
 };

@@ -70,6 +70,8 @@ test("workspace shell stays usable and selected from phone through desktop", asy
   mkdirSync("test-results/ux-review", { recursive: true });
 
   await page.goto(appPath("/login"));
+  await expect(page).toHaveTitle(/EmailBlast/);
+  await expect(page.getByText("EmailBlast", { exact: true })).toBeVisible();
   await page.getByLabel("Email address").fill(E2E_EMAIL);
   await page.getByLabel("Password").fill(E2E_PASSWORD);
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
