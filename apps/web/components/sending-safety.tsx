@@ -243,6 +243,8 @@ export function SendingSafety() {
   return (
     <>
       <Button
+        size="small"
+        sx={{ minHeight: 40, px: 1.25, fontSize: 12.5 }}
         startIcon={<ShieldOutlined />}
         onClick={() => {
           setError("");
