@@ -25,7 +25,7 @@ overrides:
   nodemailer@>=3.0.0 <10.1.4: ^10.1.4
   nodemailer@>=3.0.0 <=10.0.12: ^10.0.13
   nodemailer@>=3.0.0 <=10.0.9: ^10.0.10
-  prisma>mysql2: 3.22.0
+  prisma>mysql2: 3.23.1
   sanitize-html@<2.18.0: ^2.18.0
   sanitize-html@>=2.17.7 <2.18.0: ^2.18.0
   source-map-js@>=1.0.0 <1.2.2: ^1.2.2
@@ -3118,8 +3118,8 @@ packages:
   msgpackr@2.1.0:
     resolution: {integrity: sha512-p/pBCVO63CsvvpkomUnNNag6+n38rULuDA6HHe70o2gtC8ODI52foF/4ko2qQcp6OiErJXTmrZeXmsGGHsIQNQ==}
 
-  mysql2@3.22.0:
-    resolution: {integrity: sha512-4jaJYBObj7FhD3lnZhqX1yDMuZN4mQNz+IolDySDXT7fbozMBpeGQNcuWXKUqo4ahkAEfkjUHPjnwuDI0/6VKw==}
+  mysql2@3.23.1:
+    resolution: {integrity: sha512-tTuRnC7qCet2IOfSNMYZ5SwXuBnfvBPAcIA28P0gtruXyZlU1LMxA6uha32kYypoFgyYklMqhLWwt4laYwXR/Q==}
     engines: {node: '>= 8.0'}
     peerDependencies:
       '@types/node': '>= 8'
@@ -7254,7 +7254,7 @@ snapshots:
     optionalDependencies:
       msgpackr-extract: 3.0.4
 
-  mysql2@3.22.0(@types/node@26.5.0):
+  mysql2@3.23.1(@types/node@26.5.0):
     dependencies:
       '@types/node': 26.5.0
       aws-ssl-profiles: 1.1.2
@@ -7558,7 +7558,7 @@ snapshots:
       '@prisma/dev': 0.24.17(typescript@6.0.3)
       '@prisma/engines': 7.10.0
       '@prisma/studio-core': 0.33.0(@types/react-dom@19.2.7(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
-      mysql2: 3.22.0(@types/node@26.5.0)
+      mysql2: 3.23.1(@types/node@26.5.0)
       postgres: 3.4.7
     optionalDependencies:
       typescript: 6.0.3
