@@ -158,7 +158,7 @@ test("workspace shell stays usable and selected from phone through desktop", asy
     await assertNoViewportOverflow(page);
 
     await page.goto(appPath("/blast"));
-    await expect(page).toHaveURL(/\\/blast\\/?$/);
+    await expect(page).toHaveURL(new RegExp("blast/?$"));
     await expect(
       page.getByRole("heading", { name: "Create campaign", exact: true }),
     ).toBeVisible();
@@ -193,7 +193,7 @@ test("workspace shell stays usable and selected from phone through desktop", asy
     }
 
     await page.goto(appPath("/activity"));
-    await expect(page).toHaveURL(/\\/activity\\/?$/);
+    await expect(page).toHaveURL(new RegExp("activity/?$"));
     await expect(
       page.getByRole("heading", { name: "Activity", exact: true }),
     ).toBeVisible();
