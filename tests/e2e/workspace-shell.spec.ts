@@ -57,6 +57,20 @@ test("workspace shell stays usable and selected from phone through desktop", asy
         innerWidth: window.innerWidth,
         clientWidth: document.documentElement.clientWidth,
         triggerCount: document.querySelectorAll('button[aria-label="Open navigation"]').length,
+        triggerStyle: (() => {
+          const el = document.querySelector<HTMLButtonElement>('button[aria-label="Open navigation"]');
+          if (!el) return null;
+          const style = getComputedStyle(el);
+          const rect = el.getBoundingClientRect();
+          return {
+            display: style.display,
+            visibility: style.visibility,
+            opacity: style.opacity,
+            width: rect.width,
+            height: rect.height,
+            parentDisplay: getComputedStyle(el.parentElement!).display,
+          };
+        })(),
         bodyText: document.body.innerText.slice(0, 600),
       }));
       console.log("WORKSPACE_MOBILE_DEBUG", JSON.stringify(mobileDebug));
