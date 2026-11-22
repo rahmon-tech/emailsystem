@@ -16,6 +16,7 @@ import {
   prepareCampaign,
 } from "@emailsystem/core/campaigns";
 import { processDelivery } from "@emailsystem/core/engine";
+import { AppError } from "@emailsystem/core/errors";
 
 const owners: string[] = [];
 after(async () => {
@@ -164,7 +165,7 @@ test("address-specific proof does not authorize sibling aliases or foreign/arbit
         importId: otherImport.id,
         senderIdentityId: verified.id,
       }),
-    /authorized sender identity/i,
+    (error: unknown) => error instanceof AppError && error.code === "SENDER",
   );
 });
 

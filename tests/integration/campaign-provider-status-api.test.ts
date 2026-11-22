@@ -11,6 +11,9 @@ const adaptiveKeys: string[] = [];
 
 after(async () => {
   if (adaptiveKeys.length) await redis.del(...adaptiveKeys);
+  await db.campaign.deleteMany({ where: { userId: { in: users } } });
+  await db.experimentRun.deleteMany({ where: { userId: { in: users } } });
+  await db.experimentProfile.deleteMany({ where: { userId: { in: users } } });
   await db.user.deleteMany({ where: { id: { in: users } } });
   await db.$disconnect();
   await redis.quit();
@@ -211,15 +214,23 @@ test("campaign provider status is tenant scoped and follows campaign transport s
       maxRecipients: 10,
       maxAttempts: 20,
       maxDurationSeconds: 1800,
-      providerScopes: {
-        create: [
-          { userId: owner.id, providerId: healthy.id },
-          { userId: owner.id, providerId: alternateOnly.id },
-        ],
+    },
+  });
+  await db.experimentProviderScope.createMany({
+    data: [
+      { userId: owner.id, profileId: profile.id, providerId: healthy.id },
+      {
+        userId: owner.id,
+        profileId: profile.id,
+        providerId: alternateOnly.id,
       },
-      senderScopes: {
-        create: [{ userId: owner.id, senderIdentityId: sender.id }],
-      },
+    ],
+  });
+  await db.experimentSenderScope.create({
+    data: {
+      userId: owner.id,
+      profileId: profile.id,
+      senderIdentityId: sender.id,
     },
   });
   const run = await db.experimentRun.create({
