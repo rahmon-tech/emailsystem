@@ -225,7 +225,7 @@ export function Shell({
               aria-label="Open navigation"
               aria-expanded={mobile}
               onClick={() => setMobile(true)}
-              sx={{ display: { md: "none" }, ml: -0.5 }}
+              sx={{ display: { xs: "inline-flex", md: "none" }, ml: -0.5 }}
             >
               <MenuRounded />
             </IconButton>
