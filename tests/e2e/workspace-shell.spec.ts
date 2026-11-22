@@ -37,6 +37,33 @@ async function assertNoViewportOverflow(page: import("@playwright/test").Page) {
   expect(geometry.bodyScrollWidth).toBeLessThanOrEqual(geometry.viewport + 1);
 }
 
+async function verifySendingServiceDialogs(page: import("@playwright/test").Page) {
+  await page.getByRole("button", { name: "Add sending service", exact: true }).click();
+  const addDialog = page.getByRole("dialog", { name: "Add sending service" });
+  await expect(addDialog).toBeVisible();
+  await expect(addDialog.getByRole("button", { name: "Resend", exact: true })).toBeVisible();
+  await assertNoViewportOverflow(page);
+  await page.keyboard.press("Escape");
+  await expect(addDialog).toBeHidden();
+
+  const sharedDialogs = [
+    {
+      button: "Open sending limits and protection",
+      title: "Sending limits & protection",
+    },
+    { button: "Sending addresses", title: "Sending addresses" },
+    { button: "Link tracking", title: "Links & tracking" },
+  ];
+  for (const item of sharedDialogs) {
+    await page.getByRole("button", { name: item.button, exact: true }).click();
+    const dialog = page.getByRole("dialog", { name: item.title });
+    await expect(dialog).toBeVisible();
+    await assertNoViewportOverflow(page);
+    await page.keyboard.press("Escape");
+    await expect(dialog).toBeHidden();
+  }
+}
+
 test("workspace shell stays usable and selected from phone through desktop", async ({
   page,
 }) => {
@@ -63,6 +90,10 @@ test("workspace shell stays usable and selected from phone through desktop", asy
     await expect(
       page.getByRole("button", { name: "Account menu", exact: true }),
     ).toBeVisible();
+    await expect(page.getByText("Workspace shell mock", { exact: true }).first()).toBeVisible();
+    if (width === 320 || width === 1440) {
+      await verifySendingServiceDialogs(page);
+    }
     await assertNoViewportOverflow(page);
 
     const newCampaign = page.getByRole("link", {

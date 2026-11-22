@@ -243,13 +243,16 @@ export function SendingSafety() {
   return (
     <>
       <Button
+        size="small"
+        sx={{ minHeight: 40, px: 1.25, fontSize: 12.5 }}
+        aria-label="Open sending limits and protection"
         startIcon={<ShieldOutlined />}
         onClick={() => {
           setError("");
           setOpen(true);
         }}
       >
-        Sending limits & protection
+        Safety & limits
       </Button>
       <ResponsiveDialog
         open={open}
