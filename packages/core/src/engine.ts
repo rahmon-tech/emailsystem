@@ -976,26 +976,24 @@ export async function processDelivery(
           initial.campaignId,
         );
       if (initial.campaign.experimentRunId) {
-        const [attemptAfter, deliveryAfter, providerAfter] = await Promise.all([
-          tx.deliveryAttempt.findUniqueOrThrow({
-            where: { id: attemptId },
-            select: {
-              state: true,
-              providerMessageId: true,
-              category: true,
-              safeError: true,
-              finishedAt: true,
-            },
-          }),
-          tx.delivery.findUniqueOrThrow({
-            where: { id },
-            select: { state: true, nextAttemptAt: true },
-          }),
-          tx.providerConnection.findUniqueOrThrow({
-            where: { id: provider!.id },
-            select: { health: true, enabled: true, cooldownUntil: true },
-          }),
-        ]);
+        const attemptAfter = await tx.deliveryAttempt.findUniqueOrThrow({
+          where: { id: attemptId },
+          select: {
+            state: true,
+            providerMessageId: true,
+            category: true,
+            safeError: true,
+            finishedAt: true,
+          },
+        });
+        const deliveryAfter = await tx.delivery.findUniqueOrThrow({
+          where: { id },
+          select: { state: true, nextAttemptAt: true },
+        });
+        const providerAfter = await tx.providerConnection.findUniqueOrThrow({
+          where: { id: provider!.id },
+          select: { health: true, enabled: true, cooldownUntil: true },
+        });
         await appendExperimentEvidence(tx, {
           userId: initial.userId,
           runId: initial.campaign.experimentRunId,
