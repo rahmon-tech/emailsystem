@@ -25,6 +25,7 @@ import {
 } from "@emailsystem/core/safety";
 import { reviewSafety, safetyOutcomes } from "@emailsystem/core/safety-brakes";
 import { ingestEvent } from "@emailsystem/core/events";
+import { AppError } from "@emailsystem/core/errors";
 const users: string[] = [];
 async function fixture(count = 1, settings = {}, copies = false) {
   const user = await db.user.create({
@@ -577,7 +578,8 @@ test("controlled test sends consume safety capacity without entering campaign st
   await testProvider(f.user.id, f.provider.id, "controlled@example.net");
   await assert.rejects(
     () => testProvider(f.user.id, f.provider.id, "second@example.net"),
-    /Daily safety limit/,
+    (error: unknown) =>
+      error instanceof AppError && error.code === "SAFETY_BUDGET",
   );
   await rebuildSafety(f.user.id);
   const capacity = await safetyCapacity(f.user.id, f.input.from, f.campaign.id);
