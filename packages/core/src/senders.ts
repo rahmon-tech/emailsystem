@@ -77,6 +77,19 @@ const providerStructurallyUsable = (provider: {
   (provider.settings as ConnectionInput["settings"]).messageStreamType !==
     "transactional";
 
+const providerUsable = (
+  provider: {
+    enabled: boolean;
+    health: string;
+    cooldownUntil: Date | null;
+    deletedAt: Date | null;
+    settings: unknown;
+  },
+  now = new Date(),
+) =>
+  providerStructurallyUsable(provider) &&
+  (!provider.cooldownUntil || provider.cooldownUntil <= now);
+
 export function routableProvidersForSender(sender: SenderWithAuthorizations) {
   if (!sender.enabled || sender.authorizedDomain.status !== "VERIFIED")
     return [];
@@ -93,8 +106,8 @@ export function eligibleProvidersForSender(
   sender: SenderWithAuthorizations,
   now = new Date(),
 ) {
-  return routableProvidersForSender(sender).filter(
-    (provider) => !provider.cooldownUntil || provider.cooldownUntil <= now,
+  return routableProvidersForSender(sender).filter((provider) =>
+    providerUsable(provider, now),
   );
 }
 
