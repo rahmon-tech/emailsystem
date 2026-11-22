@@ -163,12 +163,11 @@ export async function validateExperimentCampaignScope(
 ) {
   const now = input.now ?? new Date();
   await lockExperimentControl(tx, input.userId, input.runId);
-  const [user, run] = await Promise.all([
-    tx.user.findUnique({
+  const user = await tx.user.findUnique({
       where: { id: input.userId },
       select: { experimentKillSwitchAt: true },
-    }),
-    tx.experimentRun.findFirst({
+    });
+  const run = await tx.experimentRun.findFirst({
       where: { id: input.runId, userId: input.userId },
       select: {
         id: true,
@@ -189,8 +188,7 @@ export async function validateExperimentCampaignScope(
           },
         },
       },
-    }),
-  ]);
+    });
   if (!run)
     throw new AppError(404, "EXPERIMENT_RUN", "Experiment run not found.");
   if (user?.experimentKillSwitchAt)
@@ -291,12 +289,11 @@ export async function experimentDispatchScope(
 > {
   if (!input.runId) return { allowed: true, providerIds: null };
   const now = input.now ?? new Date();
-  const [user, run] = await Promise.all([
-    tx.user.findUnique({
+  const user = await tx.user.findUnique({
       where: { id: input.userId },
       select: { experimentKillSwitchAt: true },
-    }),
-    tx.experimentRun.findFirst({
+    });
+  const run = await tx.experimentRun.findFirst({
       where: { id: input.runId, userId: input.userId },
       select: {
         id: true,
@@ -312,8 +309,7 @@ export async function experimentDispatchScope(
           },
         },
       },
-    }),
-  ]);
+    });
   if (!run) return { allowed: false, reason: "Experiment run is unavailable." };
   if (user?.experimentKillSwitchAt)
     return {
@@ -393,12 +389,11 @@ export async function reserveExperimentTransport(
     return { allowed: true, experimentRunId: null, controls: null };
   const now = input.now ?? new Date();
   await lockExperimentControl(tx, input.userId, input.runId);
-  const [user, run] = await Promise.all([
-    tx.user.findUnique({
+  const user = await tx.user.findUnique({
       where: { id: input.userId },
       select: { experimentKillSwitchAt: true },
-    }),
-    tx.experimentRun.findFirst({
+    });
+  const run = await tx.experimentRun.findFirst({
       where: { id: input.runId, userId: input.userId },
       select: {
         id: true,
@@ -419,8 +414,7 @@ export async function reserveExperimentTransport(
           },
         },
       },
-    }),
-  ]);
+    });
   if (!run) return { allowed: false, reason: "Experiment run is unavailable." };
   if (user?.experimentKillSwitchAt) {
     await tx.experimentRun.updateMany({
@@ -664,29 +658,27 @@ export async function createExperimentProfile(userId: string, raw: unknown) {
       },
       select: { id: true },
     });
-    await Promise.all([
-      tx.experimentProviderScope.createMany({
-        data: providerIds.map((providerId) => ({
-          userId,
-          profileId: profile.id,
-          providerId,
-        })),
-      }),
-      tx.experimentSenderScope.createMany({
-        data: senderIdentityIds.map((senderIdentityId) => ({
-          userId,
-          profileId: profile.id,
-          senderIdentityId,
-        })),
-      }),
-      tx.experimentRecipient.createMany({
-        data: recipients.map((email) => ({
-          userId,
-          profileId: profile.id,
-          email,
-        })),
-      }),
-    ]);
+    await tx.experimentProviderScope.createMany({
+      data: providerIds.map((providerId) => ({
+        userId,
+        profileId: profile.id,
+        providerId,
+      })),
+    });
+    await tx.experimentSenderScope.createMany({
+      data: senderIdentityIds.map((senderIdentityId) => ({
+        userId,
+        profileId: profile.id,
+        senderIdentityId,
+      })),
+    });
+    await tx.experimentRecipient.createMany({
+      data: recipients.map((email) => ({
+        userId,
+        profileId: profile.id,
+        email,
+      })),
+    });
     await tx.auditEvent.create({
       data: {
         userId,
