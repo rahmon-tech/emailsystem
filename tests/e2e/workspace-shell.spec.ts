@@ -38,7 +38,7 @@ test("nested image-first route keeps campaign navigation and breadcrumb selected
   for (const width of [390, 1440]) {
     await page.setViewportSize({ width, height: 900 });
     await page.goto(appPath("/blast/image"));
-    await expect(page).toHaveURL(/\\/blast\\/image\\/?$/);
+    await expect(page).toHaveURL(new RegExp("blast/image/?$"));
     await expect(
       page.getByRole("banner").getByText("Create campaign", { exact: true }),
     ).toBeVisible();
