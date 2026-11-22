@@ -168,27 +168,19 @@ export async function validateExperimentCampaignScope(
       select: { experimentKillSwitchAt: true },
     });
   const run = await tx.experimentRun.findFirst({
-      where: { id: input.runId, userId: input.userId },
-      select: {
-        id: true,
-        profileId: true,
-        state: true,
-        maxRecipients: true,
-        maxAttempts: true,
-        recipientsUsed: true,
-        attemptsUsed: true,
-        startsAt: true,
-        expiresAt: true,
-        campaign: { select: { id: true } },
-        profile: {
-          select: {
-            providerScopes: { select: { providerId: true } },
-            senderScopes: { select: { senderIdentityId: true } },
-            recipients: { select: { email: true } },
-          },
-        },
-      },
-    });
+    where: { id: input.runId, userId: input.userId },
+    select: {
+      id: true,
+      profileId: true,
+      state: true,
+      maxRecipients: true,
+      maxAttempts: true,
+      recipientsUsed: true,
+      attemptsUsed: true,
+      startsAt: true,
+      expiresAt: true,
+    },
+  });
   if (!run)
     throw new AppError(404, "EXPERIMENT_RUN", "Experiment run not found.");
   if (user?.experimentKillSwitchAt)
@@ -206,24 +198,35 @@ export async function validateExperimentCampaignScope(
   const windowProblem = activeWindowProblem(run, now);
   if (windowProblem)
     throw new AppError(409, "EXPERIMENT_WINDOW", windowProblem);
-  if (run.campaign)
+  const boundCampaign = await tx.campaign.findFirst({
+    where: { experimentRunId: run.id, userId: input.userId },
+    select: { id: true },
+  });
+  if (boundCampaign)
     throw new AppError(
       409,
       "EXPERIMENT_RUN_BOUND",
       "This experiment run is already bound to a campaign.",
     );
-  if (
-    !run.profile.senderScopes.some(
-      (scope) => scope.senderIdentityId === input.senderIdentityId,
-    )
-  )
+  const senderAllowed = await tx.experimentSenderScope.count({
+    where: {
+      userId: input.userId,
+      profileId: run.profileId,
+      senderIdentityId: input.senderIdentityId,
+    },
+  });
+  if (!senderAllowed)
     throw new AppError(
       422,
       "EXPERIMENT_SENDER_SCOPE",
       "The selected sender is outside the approved experiment scope.",
     );
+  const providerScopes = await tx.experimentProviderScope.findMany({
+    where: { userId: input.userId, profileId: run.profileId },
+    select: { providerId: true },
+  });
   const eligible = new Set(input.eligibleProviderIds);
-  const providerIds = run.profile.providerScopes
+  const providerIds = providerScopes
     .map((scope) => scope.providerId)
     .filter((providerId) => eligible.has(providerId));
   if (!providerIds.length)
@@ -241,7 +244,12 @@ export async function validateExperimentCampaignScope(
       "EXPERIMENT_RECIPIENT_LIMIT",
       "The campaign recipient count exceeds the experiment recipient ceiling.",
     );
-  const allowedRecipients = run.profile.recipients.map((item) => item.email);
+  const allowedRecipients = (
+    await tx.experimentRecipient.findMany({
+      where: { userId: input.userId, profileId: run.profileId },
+      select: { email: true },
+    })
+  ).map((item) => item.email);
   const outsideAllowlist = await tx.importRecipient.count({
     where: {
       importId: input.importId,
@@ -294,22 +302,17 @@ export async function experimentDispatchScope(
       select: { experimentKillSwitchAt: true },
     });
   const run = await tx.experimentRun.findFirst({
-      where: { id: input.runId, userId: input.userId },
-      select: {
-        id: true,
-        state: true,
-        attemptsUsed: true,
-        maxAttempts: true,
-        startsAt: true,
-        expiresAt: true,
-        profile: {
-          select: {
-            providerScopes: { select: { providerId: true } },
-            senderScopes: { select: { senderIdentityId: true } },
-          },
-        },
-      },
-    });
+    where: { id: input.runId, userId: input.userId },
+    select: {
+      id: true,
+      profileId: true,
+      state: true,
+      attemptsUsed: true,
+      maxAttempts: true,
+      startsAt: true,
+      expiresAt: true,
+    },
+  });
   if (!run) return { allowed: false, reason: "Experiment run is unavailable." };
   if (user?.experimentKillSwitchAt)
     return {
@@ -345,18 +348,25 @@ export async function experimentDispatchScope(
       reason: "Experiment attempt ceiling reached; no further transport starts are allowed.",
     };
   }
-  if (
-    !run.profile.senderScopes.some(
-      (scope) => scope.senderIdentityId === input.senderIdentityId,
-    )
-  )
+  const senderAllowed = await tx.experimentSenderScope.count({
+    where: {
+      userId: input.userId,
+      profileId: run.profileId,
+      senderIdentityId: input.senderIdentityId,
+    },
+  });
+  if (!senderAllowed)
     return {
       allowed: false,
       reason: "Campaign sender is outside the approved experiment scope.",
     };
+  const providerScopes = await tx.experimentProviderScope.findMany({
+    where: { userId: input.userId, profileId: run.profileId },
+    select: { providerId: true },
+  });
   return {
     allowed: true,
-    providerIds: run.profile.providerScopes.map((scope) => scope.providerId),
+    providerIds: providerScopes.map((scope) => scope.providerId),
   };
 }
 
@@ -394,27 +404,19 @@ export async function reserveExperimentTransport(
       select: { experimentKillSwitchAt: true },
     });
   const run = await tx.experimentRun.findFirst({
-      where: { id: input.runId, userId: input.userId },
-      select: {
-        id: true,
-        profileId: true,
-        state: true,
-        maxRecipients: true,
-        maxAttempts: true,
-        recipientsUsed: true,
-        attemptsUsed: true,
-        startsAt: true,
-        expiresAt: true,
-        campaign: { select: { id: true } },
-        profile: {
-          select: {
-            variables: true,
-            providerScopes: { select: { providerId: true } },
-            senderScopes: { select: { senderIdentityId: true } },
-          },
-        },
-      },
-    });
+    where: { id: input.runId, userId: input.userId },
+    select: {
+      id: true,
+      profileId: true,
+      state: true,
+      maxRecipients: true,
+      maxAttempts: true,
+      recipientsUsed: true,
+      attemptsUsed: true,
+      startsAt: true,
+      expiresAt: true,
+    },
+  });
   if (!run) return { allowed: false, reason: "Experiment run is unavailable." };
   if (user?.experimentKillSwitchAt) {
     await tx.experimentRun.updateMany({
@@ -446,25 +448,39 @@ export async function reserveExperimentTransport(
       });
     return { allowed: false, reason: windowProblem };
   }
-  if (run.campaign?.id !== input.campaignId)
+  const boundCampaign = await tx.campaign.findFirst({
+    where: {
+      id: input.campaignId,
+      userId: input.userId,
+      experimentRunId: run.id,
+    },
+    select: { id: true },
+  });
+  if (!boundCampaign)
     return {
       allowed: false,
       reason: "Experiment run is not bound to this campaign.",
     };
-  if (
-    !run.profile.senderScopes.some(
-      (scope) => scope.senderIdentityId === input.senderIdentityId,
-    )
-  )
+  const senderAllowed = await tx.experimentSenderScope.count({
+    where: {
+      userId: input.userId,
+      profileId: run.profileId,
+      senderIdentityId: input.senderIdentityId,
+    },
+  });
+  if (!senderAllowed)
     return {
       allowed: false,
       reason: "Campaign sender is outside the approved experiment scope.",
     };
-  if (
-    !run.profile.providerScopes.some(
-      (scope) => scope.providerId === input.providerId,
-    )
-  )
+  const providerAllowed = await tx.experimentProviderScope.count({
+    where: {
+      userId: input.userId,
+      profileId: run.profileId,
+      providerId: input.providerId,
+    },
+  });
+  if (!providerAllowed)
     return {
       allowed: false,
       reason: "Selected provider is outside the approved experiment scope.",
@@ -483,7 +499,13 @@ export async function reserveExperimentTransport(
       reason: "Recipient is outside the controlled experiment allowlist.",
     };
 
-  const variables = experimentVariables.parse(run.profile.variables);
+  const profile = await tx.experimentProfile.findFirst({
+    where: { id: run.profileId, userId: input.userId },
+    select: { variables: true },
+  });
+  if (!profile)
+    return { allowed: false, reason: "Experiment profile is unavailable." };
+  const variables = experimentVariables.parse(profile.variables);
   let activeTransportsBeforeStart: number | null = null;
   if (variables.concurrency !== undefined) {
     activeTransportsBeforeStart = await tx.deliveryAttempt.count({
