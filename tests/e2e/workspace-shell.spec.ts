@@ -101,10 +101,24 @@ test("workspace shell stays usable and selected from phone through desktop", asy
     }
 
     await page.goto(appPath("/blast/image"));
-    const activeCreate = page
-      .getByRole("link", { name: "Create campaign", exact: true })
-      .filter({ visible: true });
-    await expect(activeCreate).toHaveAttribute("aria-current", "page");
+    await expect(page).toHaveURL(/\/blast\/image\/?$/);
+    if (width < 900) {
+      await mobileTrigger.click();
+      const drawerNav = page
+        .getByRole("navigation", { name: "Main navigation" })
+        .filter({ visible: true });
+      await expect(
+        drawerNav.getByRole("link", { name: "Create campaign", exact: true }),
+      ).toHaveAttribute("aria-current", "page");
+      await page.keyboard.press("Escape");
+    } else {
+      const desktopNav = page
+        .getByRole("navigation", { name: "Main navigation" })
+        .filter({ visible: true });
+      await expect(
+        desktopNav.getByRole("link", { name: "Create campaign", exact: true }),
+      ).toHaveAttribute("aria-current", "page");
+    }
     await assertNoViewportOverflow(page);
 
     await page.goto(appPath("/providers"));
