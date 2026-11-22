@@ -78,10 +78,12 @@ jobs:
         run: pnpm typecheck
       - name: Run unit tests with critical coverage visibility
         run: |
+          set -o pipefail
           mkdir -p test-results/coverage
           pnpm test:coverage | tee test-results/coverage/unit.txt
       - name: Run integration tests with critical coverage visibility
         run: |
+          set -o pipefail
           mkdir -p test-results/coverage
           pnpm test:integration:coverage | tee test-results/coverage/integration.txt
       - name: Build production web application
