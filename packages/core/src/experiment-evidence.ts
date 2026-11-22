@@ -56,23 +56,21 @@ export async function appendExperimentEvidence(
 ): ReturnType<typeof appendExperimentEvidenceBase> {
   let payload = input.payload;
   if (input.kind === "transport.started" && input.runId && input.attemptId) {
-    const [pacing, run, campaign] = await Promise.all([
-      readExperimentBurstPacingEvidence(
-        input.userId,
-        input.runId,
-        input.attemptId,
-      ),
-      tx.experimentRun.findFirst({
-        where: { id: input.runId, userId: input.userId },
-        select: { profile: { select: { variables: true } } },
-      }),
-      input.campaignId
-        ? tx.campaign.findFirst({
-            where: { id: input.campaignId, userId: input.userId },
-            select: { message: true },
-          })
-        : Promise.resolve(null),
-    ]);
+    const pacing = await readExperimentBurstPacingEvidence(
+      input.userId,
+      input.runId,
+      input.attemptId,
+    );
+    const run = await tx.experimentRun.findFirst({
+      where: { id: input.runId, userId: input.userId },
+      select: { profile: { select: { variables: true } } },
+    });
+    const campaign = input.campaignId
+      ? await tx.campaign.findFirst({
+          where: { id: input.campaignId, userId: input.userId },
+          select: { message: true },
+        })
+      : null;
     const variables = run
       ? experimentVariables.parse(run.profile.variables)
       : null;

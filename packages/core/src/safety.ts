@@ -57,16 +57,15 @@ export async function sharedMonthlyUsage(
   const reservationCutoff = new Date(Math.max(start, now - RESERVATION_MS));
   const scopedDomains = [...new Set(domains.map((domain) => domain.toLowerCase()))];
 
-  const [transmitted, reserved, tests] = await Promise.all([
-    tx.deliveryAttempt.groupBy({
+  const transmitted = await tx.deliveryAttempt.groupBy({
       by: ["senderDomain"],
       where: {
         userId,
         transmissionStartedAt: { gte: monthStart },
       },
       _sum: { messageUnits: true },
-    }),
-    tx.deliveryAttempt.groupBy({
+    });
+  const reserved = await tx.deliveryAttempt.groupBy({
       by: ["senderDomain"],
       where: {
         userId,
@@ -75,16 +74,15 @@ export async function sharedMonthlyUsage(
         safetyReservedAt: { gte: reservationCutoff },
       },
       _sum: { messageUnits: true },
-    }),
-    tx.providerTestDelivery.groupBy({
+    });
+  const tests = await tx.providerTestDelivery.groupBy({
       by: ["senderDomain"],
       where: {
         provider: { userId },
         safetyAt: { gte: monthStart },
       },
       _count: { _all: true },
-    }),
-  ]);
+    });
 
   const byDomain = new Map<string, number>();
   let account = 0;
@@ -117,8 +115,7 @@ export async function providerMonthlyUsage(
   const monthStart = new Date(start);
   const reservationCutoff = new Date(Math.max(start, now - RESERVATION_MS));
 
-  const [transmitted, reserved, tests] = await Promise.all([
-    tx.deliveryAttempt.groupBy({
+  const transmitted = await tx.deliveryAttempt.groupBy({
       by: ["providerId"],
       where: {
         userId,
@@ -126,8 +123,8 @@ export async function providerMonthlyUsage(
         transmissionStartedAt: { gte: monthStart },
       },
       _sum: { messageUnits: true },
-    }),
-    tx.deliveryAttempt.groupBy({
+    });
+  const reserved = await tx.deliveryAttempt.groupBy({
       by: ["providerId"],
       where: {
         userId,
@@ -137,8 +134,8 @@ export async function providerMonthlyUsage(
         safetyReservedAt: { gte: reservationCutoff },
       },
       _sum: { messageUnits: true },
-    }),
-    tx.providerTestDelivery.groupBy({
+    });
+  const tests = await tx.providerTestDelivery.groupBy({
       by: ["providerId"],
       where: {
         providerId: { in: ids },
@@ -146,8 +143,7 @@ export async function providerMonthlyUsage(
         safetyAt: { gte: monthStart },
       },
       _count: { _all: true },
-    }),
-  ]);
+    });
 
   const usage = new Map(ids.map((id) => [id, 0]));
   for (const row of transmitted)
