@@ -29,7 +29,6 @@ test("workspace shell stays usable and selected from phone through desktop", asy
   for (const width of widths) {
     await page.setViewportSize({ width, height: width < 600 ? 844 : 900 });
     await page.goto(appPath("/providers"));
-    await expect(page.getByText("EmailBlast", { exact: true }).first()).toBeVisible();
     await assertNoViewportOverflow(page);
 
     const newCampaign = page.getByRole("link", {
@@ -51,11 +50,17 @@ test("workspace shell stays usable and selected from phone through desktop", asy
         .filter({ visible: true });
       await expect(drawerNav).toBeVisible();
       await expect(
+        page.getByText("EmailBlast", { exact: true }).filter({ visible: true }),
+      ).toBeVisible();
+      await expect(
         drawerNav.getByRole("link", { name: "Sending services", exact: true }),
       ).toHaveAttribute("aria-current", "page");
       await page.keyboard.press("Escape");
     } else {
       await expect(mobileTrigger).toBeHidden();
+      await expect(
+        page.getByText("EmailBlast", { exact: true }).filter({ visible: true }),
+      ).toBeVisible();
       const desktopNav = page
         .getByRole("navigation", { name: "Main navigation" })
         .filter({ visible: true });
