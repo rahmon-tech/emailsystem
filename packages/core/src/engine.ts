@@ -251,10 +251,6 @@ export async function processDelivery(
             deletedAt: null,
             enabled: true,
             health: "HEALTHY",
-            OR: [
-              { cooldownUntil: null },
-              { cooldownUntil: { lte: new Date(now()) } },
-            ],
           },
         });
         const routeDailyUsage = routeProviders.length
@@ -323,24 +319,43 @@ export async function processDelivery(
         };
         domain = senderDomain(selectedSender.email);
         const authorized = senderSelection.providers;
+        const campaignCompatible = (p: (typeof authorized)[number]) =>
+          (p.quotaRemaining === null || p.quotaRemaining >= cost) &&
+          (!scopedProviderIds || scopedProviderIds.has(p.id)) &&
+          (!needsInlineTransport || supportsInlineAttachmentTransport(p));
         const eligible = authorized.filter(
           (p) =>
-            (p.quotaRemaining === null || p.quotaRemaining >= cost) &&
-            (!scopedProviderIds || scopedProviderIds.has(p.id)) &&
-            (!needsInlineTransport || supportsInlineAttachmentTransport(p)),
+            campaignCompatible(p) &&
+            (!p.cooldownUntil || p.cooldownUntil.getTime() <= now()),
         );
         if (!eligible.length) {
+          const nextCooldownAt = authorized
+            .filter(
+              (p) =>
+                campaignCompatible(p) &&
+                p.cooldownUntil &&
+                p.cooldownUntil.getTime() > now(),
+            )
+            .reduce<number | null>(
+              (earliest, p) =>
+                earliest === null
+                  ? p.cooldownUntil!.getTime()
+                  : Math.min(earliest, p.cooldownUntil!.getTime()),
+              null,
+            );
           await waitForSafety(
             tx,
             c,
             [],
-            now() + 60000,
+            nextCooldownAt ?? now() + 60000,
             now(),
-            needsInlineTransport
-              ? "None of the available sending services can send this message with its embedded image right now."
-              : c.experimentRunId
-                ? "None of the approved sending services is available for this controlled experiment right now."
-                : "No sending service is available right now. Check whether a connection is turned off, temporarily paused, or has reached its limit.",
+            nextCooldownAt
+              ? "All eligible sending services are temporarily cooling down. EmailSystem will continue at the earliest available time."
+              : needsInlineTransport
+                ? "None of the available sending services can send this message with its embedded image right now."
+                : c.experimentRunId
+                  ? "None of the approved sending services is available for this controlled experiment right now."
+                  : "No sending service is available right now. Check whether a connection is turned off, temporarily paused, or has reached its limit.",
           );
           return false;
         }
@@ -494,7 +509,7 @@ export async function processDelivery(
           }
           experimentPacingReserved = true;
         }
-        permitAt = Date.now();
+        permitAt = now();
         const chosen = await acquireProvider(
           initial.userId,
           candidates,
@@ -634,7 +649,7 @@ export async function processDelivery(
         });
         if (
           a.state !== "RESERVED" ||
-          Date.now() - permitAt > 20000 ||
+          now() - permitAt > 20000 ||
           !["QUEUED", "SENDING"].includes(c.state) ||
           user.safetyPausedReason ||
           c.safetyPausedReason ||
@@ -818,13 +833,22 @@ export async function processDelivery(
       const d = await tx.delivery.findUniqueOrThrow({ where: { id } });
       const pending =
         ["PROCESSING", "UNKNOWN"].includes(d.state) && d.claimId === attemptId;
+      const outcomeAt = new Date(now());
+      const hintedRetryAfterMs =
+        outcome.status === "accepted" ? 0 : outcome.error.retryAfterMs;
+      const retryAfterMs =
+        typeof hintedRetryAfterMs === "number" &&
+        Number.isFinite(hintedRetryAfterMs) &&
+        hintedRetryAfterMs > 0
+          ? hintedRetryAfterMs
+          : 0;
       if (outcome.status === "accepted") {
         await tx.deliveryAttempt.update({
           where: { id: attemptId },
           data: {
             state: "ACCEPTED",
             providerMessageId: outcome.providerMessageId,
-            finishedAt: new Date(),
+            finishedAt: outcomeAt,
           },
         });
         if (pending)
@@ -832,7 +856,7 @@ export async function processDelivery(
             where: { id },
             data: {
               state: "PROVIDER_ACCEPTED",
-              acceptedAt: new Date(),
+              acceptedAt: outcomeAt,
               safeError: null,
             },
           });
@@ -854,7 +878,7 @@ export async function processDelivery(
             state: outcome.status === "unknown" ? "UNKNOWN" : "REJECTED",
             category: outcome.error.category,
             safeError: outcome.error.message,
-            finishedAt: new Date(),
+            finishedAt: outcomeAt,
           },
         });
         if (pending)
@@ -866,8 +890,7 @@ export async function processDelivery(
               ...(typeof decision === "number"
                 ? {
                     nextAttemptAt: new Date(
-                      Date.now() +
-                        Math.max(decision, outcome.error.retryAfterMs ?? 0),
+                      outcomeAt.getTime() + Math.max(decision, retryAfterMs),
                     ),
                   }
                 : {}),
@@ -895,7 +918,7 @@ export async function processDelivery(
               where: { id },
               data: {
                 state: "DEFERRED",
-                nextAttemptAt: new Date(Date.now() + 1000),
+                nextAttemptAt: new Date(outcomeAt.getTime() + 1000),
                 safeError:
                   "This sending service became unavailable. Trying another available service.",
               },
@@ -923,21 +946,28 @@ export async function processDelivery(
               where: { id },
               data: {
                 state: "DEFERRED",
-                nextAttemptAt: new Date(Date.now() + 1000),
+                nextAttemptAt: new Date(outcomeAt.getTime() + 1000),
                 safeError:
                   "This connection was turned off after a permanent setup error. Trying another available connection.",
               },
             });
         }
-        else if (["temporary", "rate_limit"].includes(outcome.error.category))
+        else if (["temporary", "rate_limit"].includes(outcome.error.category)) {
+          const cooldownUntil = new Date(
+            outcomeAt.getTime() + Math.max(30000, retryAfterMs),
+          );
           await tx.providerConnection.updateMany({
-            where: { id: provider!.id, revision: provider!.revision },
-            data: {
-              cooldownUntil: new Date(
-                Date.now() + Math.max(30000, outcome.error.retryAfterMs ?? 0),
-              ),
+            where: {
+              id: provider!.id,
+              revision: provider!.revision,
+              OR: [
+                { cooldownUntil: null },
+                { cooldownUntil: { lt: cooldownUntil } },
+              ],
             },
+            data: { cooldownUntil },
           });
+        }
       }
       if (outcome.status === "accepted")
         await checkExistingSafetyOutcomes(
@@ -973,14 +1003,14 @@ export async function processDelivery(
           attemptId,
           providerId: provider!.id,
           campaignId: initial.campaignId,
-          createdAt: attemptAfter.finishedAt ?? new Date(),
+          createdAt: attemptAfter.finishedAt ?? outcomeAt,
           payload: {
             status: outcome.status,
             providerMessageId: attemptAfter.providerMessageId,
             category: attemptAfter.category,
             safeError: attemptAfter.safeError,
             retryAfterMs:
-              outcome.status === "accepted" ? null : outcome.error.retryAfterMs ?? null,
+              outcome.status === "accepted" ? null : retryAfterMs || null,
             attemptState: attemptAfter.state,
             deliveryState: deliveryAfter.state,
             nextAttemptAt: deliveryAfter.nextAttemptAt,
