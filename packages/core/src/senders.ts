@@ -758,29 +758,48 @@ export async function providerStillAuthorized(
 ) {
   const sender = await tx.senderIdentity.findFirst({
     where: { id: senderId, userId, enabled: true },
-    include: {
-      authorizedDomain: {
-        include: {
-          providerAuthorizations: {
-            where: { providerConnectionId: providerId },
-            include: {
-              providerConnection: true,
-              senderAuthorizations: {
-                select: { senderIdentityId: true },
-              },
-            },
-          },
-        },
+    select: { id: true, authorizedDomainId: true },
+  });
+  if (!sender) return false;
+
+  const domain = await tx.authorizedDomain.findFirst({
+    where: { id: sender.authorizedDomainId, userId },
+    select: { status: true },
+  });
+  if (domain?.status !== "VERIFIED") return false;
+
+  const authorization = await tx.providerDomainAuthorization.findFirst({
+    where: {
+      userId,
+      providerConnectionId: providerId,
+      authorizedDomainId: sender.authorizedDomainId,
+    },
+    select: { id: true, status: true, scope: true },
+  });
+  if (!authorization || authorization.status !== "VERIFIED") return false;
+
+  if (authorization.scope === "ADDRESS_SPECIFIC") {
+    const senderAuthorization = await tx.providerSenderAuthorization.count({
+      where: {
+        userId,
+        providerDomainAuthorizationId: authorization.id,
+        senderIdentityId: sender.id,
       },
+    });
+    if (!senderAuthorization) return false;
+  } else if (authorization.scope !== "DOMAIN_WIDE") {
+    return false;
+  }
+
+  const provider = await tx.providerConnection.findFirst({
+    where: { id: providerId, userId },
+    select: {
+      enabled: true,
+      health: true,
+      cooldownUntil: true,
+      deletedAt: true,
+      settings: true,
     },
   });
-  const authorization = sender?.authorizedDomain.providerAuthorizations[0];
-  return !!(
-    sender &&
-    sender.authorizedDomain.status === "VERIFIED" &&
-    authorization &&
-    authorizationAllowsSender(authorization, sender) &&
-    providerUsable(authorization.providerConnection) &&
-    !authorization.providerConnection.deletedAt
-  );
+  return !!(provider && providerUsable(provider));
 }
