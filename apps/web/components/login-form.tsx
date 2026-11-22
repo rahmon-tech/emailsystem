@@ -59,7 +59,7 @@ export function LoginForm() {
             <Typography
               sx={{ fontSize: 16, fontWeight: 650, letterSpacing: "-.025em" }}
             >
-              EmailSystem
+              EmailBlast
             </Typography>
           </Stack>
           <Box>
