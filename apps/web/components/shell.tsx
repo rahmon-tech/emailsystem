@@ -41,6 +41,10 @@ export function Shell({
   const pathname = usePathname();
   const [mobile, setMobile] = useState(false),
     [anchor, setAnchor] = useState<HTMLElement | null>(null);
+  const activeSection = sections.find(
+    ({ path }) => pathname === path || pathname.startsWith(`${path}/`),
+  );
+  const currentTitle = activeSection?.label ?? "Workspace";
   useEffect(() => {
     const refresh = () => {
       void api("session/refresh", {}).catch(() => {
@@ -76,13 +80,13 @@ export function Shell({
             href={s.path}
             onClick={() => setMobile(false)}
             startIcon={<s.icon />}
-            aria-current={pathname === s.path ? "page" : undefined}
+            aria-current={activeSection?.path === s.path ? "page" : undefined}
             sx={{
               justifyContent: "flex-start",
               px: 1.5,
               py: 1.2,
-              color: pathname === s.path ? "primary.main" : "text.secondary",
-              bgcolor: pathname === s.path ? "action.selected" : "transparent",
+              color: activeSection?.path === s.path ? "primary.main" : "text.secondary",
+              bgcolor: activeSection?.path === s.path ? "action.selected" : "transparent",
             }}
           >
             {s.label}
@@ -191,7 +195,7 @@ export function Shell({
               }}
             />
             <Typography sx={{ fontSize: 13, fontWeight: 600 }}>
-              {sections.find((s) => s.path === pathname)?.label}
+              {currentTitle}
             </Typography>
           </Stack>
           <Button
