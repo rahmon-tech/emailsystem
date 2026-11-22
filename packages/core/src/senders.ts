@@ -65,29 +65,37 @@ type SenderWithAuthorizations = Prisma.SenderIdentityGetPayload<{
   include: typeof senderInclude;
 }>;
 
-const providerUsable = (provider: {
+const providerStructurallyUsable = (provider: {
   enabled: boolean;
   health: string;
-  cooldownUntil: Date | null;
+  deletedAt: Date | null;
   settings: unknown;
 }) =>
   provider.enabled &&
   provider.health === "HEALTHY" &&
-  (!provider.cooldownUntil || provider.cooldownUntil <= new Date()) &&
+  !provider.deletedAt &&
   (provider.settings as ConnectionInput["settings"]).messageStreamType !==
     "transactional";
 
-export function eligibleProvidersForSender(sender: SenderWithAuthorizations) {
+export function routableProvidersForSender(sender: SenderWithAuthorizations) {
   if (!sender.enabled || sender.authorizedDomain.status !== "VERIFIED")
     return [];
   return sender.authorizedDomain.providerAuthorizations
     .filter(
       (authorization) =>
         authorizationAllowsSender(authorization, sender) &&
-        providerUsable(authorization.providerConnection) &&
-        !authorization.providerConnection.deletedAt,
+        providerStructurallyUsable(authorization.providerConnection),
     )
     .map((authorization) => authorization.providerConnection);
+}
+
+export function eligibleProvidersForSender(
+  sender: SenderWithAuthorizations,
+  now = new Date(),
+) {
+  return routableProvidersForSender(sender).filter(
+    (provider) => !provider.cooldownUntil || provider.cooldownUntil <= now,
+  );
 }
 
 export async function eligibleProvidersForSenderId(
@@ -156,7 +164,7 @@ export async function selectDeliverySender(
   });
   if (!anchor) return null;
   if (!rotate) {
-    const providers = eligibleProvidersForSender(anchor);
+    const providers = routableProvidersForSender(anchor);
     return providers.length ? { sender: anchor, providers } : null;
   }
   const scopedDomainIds = [
@@ -176,7 +184,7 @@ export async function selectDeliverySender(
   const viable = identities
     .map((sender) => ({
       sender,
-      providers: eligibleProvidersForSender(sender).filter(
+      providers: routableProvidersForSender(sender).filter(
         (provider) => !allowedProviderIds || allowedProviderIds.has(provider.id),
       ),
     }))
