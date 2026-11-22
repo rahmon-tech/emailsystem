@@ -157,6 +157,77 @@ test("workspace shell stays usable and selected from phone through desktop", asy
     }
     await assertNoViewportOverflow(page);
 
+    await page.goto(appPath("/blast"));
+    await expect(page).toHaveURL(/\\/blast\\/?$/);
+    await expect(
+      page.getByRole("heading", { name: "Create campaign", exact: true }),
+    ).toBeVisible();
+    await expect(page.getByLabel("Campaign name")).toBeVisible();
+    await expect(page.getByLabel("Subject")).toBeVisible();
+    if (width < 900) {
+      await mobileTrigger.click();
+      const drawerNav = page
+        .getByRole("navigation", { name: "Main navigation" })
+        .filter({ visible: true });
+      await expect(
+        drawerNav.getByRole("link", { name: "Create campaign", exact: true }),
+      ).toHaveAttribute("aria-current", "page");
+      await page.keyboard.press("Escape");
+    } else {
+      const desktopNav = page
+        .getByRole("navigation", { name: "Main navigation" })
+        .filter({ visible: true });
+      await expect(
+        desktopNav.getByRole("link", { name: "Create campaign", exact: true }),
+      ).toHaveAttribute("aria-current", "page");
+    }
+    await assertNoViewportOverflow(page);
+    if (width === 320 || width === 1440) {
+      await page.screenshot({
+        path: `test-results/ux-review/campaign-${width}.jpg`,
+        type: "jpeg",
+        quality: 80,
+        fullPage: true,
+        animations: "disabled",
+      });
+    }
+
+    await page.goto(appPath("/activity"));
+    await expect(page).toHaveURL(/\\/activity\\/?$/);
+    await expect(
+      page.getByRole("heading", { name: "Activity", exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Do-not-send list", exact: true }),
+    ).toBeVisible();
+    if (width < 900) {
+      await mobileTrigger.click();
+      const drawerNav = page
+        .getByRole("navigation", { name: "Main navigation" })
+        .filter({ visible: true });
+      await expect(
+        drawerNav.getByRole("link", { name: "Activity", exact: true }),
+      ).toHaveAttribute("aria-current", "page");
+      await page.keyboard.press("Escape");
+    } else {
+      const desktopNav = page
+        .getByRole("navigation", { name: "Main navigation" })
+        .filter({ visible: true });
+      await expect(
+        desktopNav.getByRole("link", { name: "Activity", exact: true }),
+      ).toHaveAttribute("aria-current", "page");
+    }
+    await assertNoViewportOverflow(page);
+    if (width === 320 || width === 1440) {
+      await page.screenshot({
+        path: `test-results/ux-review/activity-${width}.jpg`,
+        type: "jpeg",
+        quality: 80,
+        fullPage: true,
+        animations: "disabled",
+      });
+    }
+
     await page.goto(appPath("/providers"));
     const account = page.getByRole("button", {
       name: "Account menu",
