@@ -238,6 +238,8 @@ export function SenderSettings() {
   return (
     <>
       <Button
+        size="small"
+        sx={{ minHeight: 40, px: 1.25, fontSize: 12.5 }}
         startIcon={<AlternateEmail />}
         onClick={() => {
           setOpen(true);
