@@ -90,7 +90,7 @@ test("workspace shell stays usable and selected from phone through desktop", asy
     await expect(
       page.getByRole("button", { name: "Account menu", exact: true }),
     ).toBeVisible();
-    await expect(page.getByText("Workspace shell mock", { exact: true })).toBeVisible();
+    await expect(page.getByText("Workspace shell mock", { exact: true }).first()).toBeVisible();
     if (width === 320 || width === 1440) {
       await verifySendingServiceDialogs(page);
     }
