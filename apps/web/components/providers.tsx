@@ -291,6 +291,7 @@ export function Providers() {
             </Typography>
           </Stack>
           <Box
+            data-testid="provider-grid"
             sx={{
               display: "grid",
               gridTemplateColumns: { xs: "1fr", md: "repeat(2,minmax(0,1fr))" },
