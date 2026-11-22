@@ -43,7 +43,7 @@ export function Shell({
     [anchor, setAnchor] = useState<HTMLElement | null>(null);
   useEffect(() => {
     const refresh = () => {
-      void api("session/refresh").catch(() => {
+      void api("session/refresh", {}).catch(() => {
         /* The API client redirects only when the session is actually invalid. */
       });
     };
