@@ -134,15 +134,15 @@ function ProviderMark({ type }: { type: ProviderType }) {
       sx={{
         display: "grid",
         placeItems: "center",
-        width: 42,
-        height: 42,
+        width: 36,
+        height: 36,
         flexShrink: 0,
-        borderRadius: 2.5,
+        borderRadius: 1.5,
         bgcolor: alpha(definition(type).color, 0.12),
         color: "text.primary",
       }}
     >
-      <Icon sx={{ fontSize: 23 }} />
+      <Icon sx={{ fontSize: 20 }} />
     </Box>
   );
 }
@@ -218,7 +218,16 @@ export function Providers() {
           </Button>
         }
       />
-      <Card sx={{ p: { xs: 1.5, sm: 2 }, mb: 2.5 }}>
+      <Card
+        sx={{
+          p: { xs: 1.5, sm: 1.75 },
+          mb: 2,
+          border: "1px solid",
+          borderColor: "divider",
+          borderRadius: 1.25,
+          boxShadow: "none",
+        }}
+      >
         <Stack
           direction={{ xs: "column", sm: "row" }}
           sx={{
@@ -229,16 +238,15 @@ export function Providers() {
         >
           <Box sx={{ minWidth: 0 }}>
             <Typography sx={{ fontSize: 13, fontWeight: 700 }}>
-              Settings shared across all sending services
+              Shared controls
             </Typography>
             <Typography variant="caption" color="text.secondary">
-              These settings affect all sending services. Login details, sending
-              domains, From addresses, limits, and delivery updates stay with each service.
+              Limits, sending addresses and link tracking apply across the workspace.
             </Typography>
           </Box>
           <Stack
             direction="row"
-            sx={{ gap: 0.5, flexWrap: "wrap", flexShrink: 0 }}
+            sx={{ gap: 0.75, flexWrap: "wrap", flexShrink: 0 }}
           >
             <SendingSafety />
             <SenderSettings />
@@ -286,23 +294,24 @@ export function Providers() {
             sx={{
               display: "grid",
               gridTemplateColumns: { xs: "1fr", lg: "repeat(2,minmax(0,1fr))" },
-              gap: 2,
+              gap: 1.5,
             }}
           >
             {items.map((p) => (
               <Card
                 key={p.id}
                 sx={{
-                  p: { xs: 2, sm: 2.5 },
+                  p: 2,
                   alignSelf: "start",
-                  transition: "box-shadow 160ms ease, transform 160ms ease",
-                  "&:hover": {
-                    boxShadow:
-                      "0 2px 4px rgb(22 31 49 / 5%), 0 10px 28px rgb(22 31 49 / 6%)",
-                  },
+                  border: "1px solid",
+                  borderColor: "divider",
+                  borderRadius: 1.25,
+                  boxShadow: "none",
+                  transition: "border-color 160ms ease",
+                  "&:hover": { borderColor: "primary.light" },
                 }}
               >
-                <Stack direction="row" sx={{ alignItems: "center", gap: 1.5 }}>
+                <Stack direction="row" sx={{ alignItems: "center", gap: 1.25 }}>
                   <ProviderMark type={p.type} />
                   <Box sx={{ flex: 1, minWidth: 0 }}>
                     <Typography sx={{ fontWeight: 650 }}>{p.name}</Typography>
@@ -322,7 +331,7 @@ export function Providers() {
                     </IconButton>
                   </Tooltip>
                 </Stack>
-                <Stack spacing={0.35} sx={{ mt: 2 }}>
+                <Stack spacing={0.25} sx={{ mt: 1.5 }}>
                   <Typography sx={{ fontSize: 13, fontWeight: 600 }}>
                     {p.settings.senderDomain ??
                       p.settings.fromEmail.split("@")[1] ??
@@ -338,7 +347,7 @@ export function Providers() {
                 <Stack
                   direction="row"
                   sx={{
-                    mt: 1.5,
+                    mt: 1.25,
                     alignItems: "center",
                     gap: 1,
                     justifyContent: "space-between",
@@ -374,8 +383,10 @@ export function Providers() {
                   sx={{
                     alignItems: "center",
                     justifyContent: "space-between",
-                    mt: 1.5,
-                    pt: 0.5,
+                    mt: 1.25,
+                    pt: 1,
+                    borderTop: 1,
+                    borderColor: "divider",
                     gap: 1,
                   }}
                 >
@@ -417,7 +428,7 @@ export function Providers() {
                   </Stack>
                 </Stack>
                 {p.verifications[0] && (
-                  <Accordion>
+                  <Accordion sx={{ mt: 1, borderTop: 1, borderColor: "divider" }}>
                     <AccordionSummary expandIcon={<ExpandMore />}>
                       <Typography variant="body2">
                         Connection check details
