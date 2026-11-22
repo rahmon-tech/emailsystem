@@ -51,6 +51,8 @@ export function TrackingSettings() {
   return (
     <>
       <Button
+        size="small"
+        sx={{ minHeight: 40, px: 1.25, fontSize: 12.5 }}
         startIcon={<LinkOutlined />}
         onClick={() => {
           setOpen(true);
