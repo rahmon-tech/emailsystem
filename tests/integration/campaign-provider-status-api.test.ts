@@ -211,15 +211,23 @@ test("campaign provider status is tenant scoped and follows campaign transport s
       maxRecipients: 10,
       maxAttempts: 20,
       maxDurationSeconds: 1800,
-      providerScopes: {
-        create: [
-          { userId: owner.id, providerId: healthy.id },
-          { userId: owner.id, providerId: alternateOnly.id },
-        ],
+    },
+  });
+  await db.experimentProviderScope.createMany({
+    data: [
+      { userId: owner.id, profileId: profile.id, providerId: healthy.id },
+      {
+        userId: owner.id,
+        profileId: profile.id,
+        providerId: alternateOnly.id,
       },
-      senderScopes: {
-        create: [{ userId: owner.id, senderIdentityId: sender.id }],
-      },
+    ],
+  });
+  await db.experimentSenderScope.create({
+    data: {
+      userId: owner.id,
+      profileId: profile.id,
+      senderIdentityId: sender.id,
     },
   });
   const run = await db.experimentRun.create({
