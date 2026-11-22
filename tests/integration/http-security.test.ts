@@ -13,6 +13,7 @@ import { api } from "@emailsystem/core/api";
 import { importRecipients } from "@emailsystem/core/imports";
 import { saveProvider } from "@emailsystem/core/providers";
 import { createCampaign, prepareCampaign } from "@emailsystem/core/campaigns";
+import { POST as refreshSessionRoute } from "../../apps/web/app/api/session/refresh/route.ts";
 const users: string[] = [];
 after(async () => {
   await db.deliveryAttempt.deleteMany({ where: { userId: { in: users } } });
@@ -38,6 +39,54 @@ test("HTTP sessions, CSRF, tenant access and secret responses are enforced on th
   );
   const other = await login(b.email, "Another strong password 2026", "test-ip");
   const origin = new URL(process.env.APP_URL!).origin;
+  const refresh = (token: string, requestOrigin = origin) =>
+    refreshSessionRoute(
+      new Request(origin + "/api/session/refresh", {
+        method: "POST",
+        headers: {
+          Cookie: sessionCookie + "=" + token,
+          Origin: requestOrigin,
+        },
+      }),
+    );
+  const sessionRow = await db.session.findFirstOrThrow({
+    where: { userId: u.id },
+    select: { tokenHash: true },
+  });
+  const fixedExpiry = new Date(Date.now() + 60_000);
+  await db.session.update({
+    where: { tokenHash: sessionRow.tokenHash },
+    data: { expiresAt: fixedExpiry },
+  });
+  const rejectedRefresh = await refresh(
+    session.token,
+    "https://attacker.invalid",
+  );
+  assert.equal(rejectedRefresh.status, 403);
+  assert.equal(
+    (
+      await db.session.findUniqueOrThrow({
+        where: { tokenHash: sessionRow.tokenHash },
+        select: { expiresAt: true },
+      })
+    ).expiresAt.getTime(),
+    fixedExpiry.getTime(),
+  );
+  const acceptedRefresh = await refresh(session.token);
+  assert.equal(acceptedRefresh.status, 200);
+  assert.match(
+    acceptedRefresh.headers.get("set-cookie") ?? "",
+    new RegExp(`^${sessionCookie}=${session.token};`),
+  );
+  assert(
+    (
+      await db.session.findUniqueOrThrow({
+        where: { tokenHash: sessionRow.tokenHash },
+        select: { expiresAt: true },
+      })
+    ).expiresAt.getTime() > fixedExpiry.getTime(),
+  );
+
   const call = (
     path: string,
     token: string,
