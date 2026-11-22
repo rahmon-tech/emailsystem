@@ -346,7 +346,7 @@ export function SendingSafety() {
                       {pacingField("domainPerMinute", "Each domain / minute")}
                       {pacingField("campaignPerMinute", "Each campaign / minute")}
                       <Typography variant="caption" color="text.secondary">
-                        EmailSystem always follows the lowest limit that applies
+                        EmailBlast always follows the lowest limit that applies
                         to the account, domain, campaign, or sending service.
                       </Typography>
                     </Stack>
@@ -389,7 +389,7 @@ export function SendingSafety() {
                 </Accordion>
                 <Typography variant="caption" color="text.secondary">
                   Your email service limits still apply. These optional account
-                  and domain limits can only reduce how much EmailSystem sends.
+                  and domain limits can only reduce how much EmailBlast sends.
                 </Typography>
               </>
             )}
