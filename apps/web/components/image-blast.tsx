@@ -5,6 +5,9 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import {
   Alert,
+  Accordion,
+  AccordionDetails,
+  AccordionSummary,
   Box,
   Button,
   Card,
@@ -23,6 +26,7 @@ import {
 import {
   AttachFileOutlined,
   FactCheckOutlined,
+  ExpandMoreOutlined,
   ImageOutlined,
   SendOutlined,
   UploadFileOutlined,
@@ -126,6 +130,7 @@ export function ImageBlast() {
   const [trackingConfig, setTrackingConfig] = useState<TrackingConfig | null>(null);
   const [tracking, setTracking] = useState({ enabled: false });
   const [importId, setImportId] = useState("");
+  const [paste, setPaste] = useState("");
   const [name, setName] = useState("");
   const [senderDomainId, setSenderDomainId] = useState("");
   const [senderDomainIds, setSenderDomainIds] = useState<string[]>([]);
@@ -255,15 +260,24 @@ export function ImageBlast() {
     }
   };
 
-  const importRecipients = async (file: File) => {
+  const importRecipients = async (file?: File) => {
     await run("import", async () => {
-      if (file.size > 10_000_000)
+      if (file && file.size > 10_000_000)
         throw new Error("Choose a recipient file under 10 MB.");
       const body = new FormData();
-      body.set("file", file);
+      if (file) {
+        body.set("file", file);
+      } else {
+        // The shared import API accepts newline-separated addresses as pasted.txt.
+        const addresses = paste.split(/[,;\n\r]+/).map((item) => item.trim()).filter(Boolean);
+        if (!addresses.length)
+          throw new Error("Paste at least one email address.");
+        body.set("paste", addresses.join("\n"));
+      }
       const result = await api<ImportRow>("imports", body);
       setImports((rows) => [result, ...rows]);
       setImportId(result.id);
+      if (!file) setPaste("");
       invalidate();
     });
   };
@@ -317,25 +331,23 @@ export function ImageBlast() {
   };
 
   const selectedImport = imports.find((row) => row.id === importId);
-  const eligibleDomains =
-    senders?.domains
-      .map((domain) => {
-        const eligibleSenders = domain.senders.filter(
-          (sender) => sender.enabled && sender.availableProviderIds.length > 0,
-        );
-        return {
-          ...domain,
-          senders: eligibleSenders,
-          providerIds: [
-            ...new Set(
-              eligibleSenders.flatMap((sender) => sender.availableProviderIds),
-            ),
-          ],
-        };
-      })
-      .filter(
-        (domain) => domain.status === "VERIFIED" && domain.senders.length > 0,
-      ) ?? [];
+  // Show every configured domain, including those not yet ready for sending.
+  // Only verified domains with a usable From address and service are selectable.
+  const domainOptions =
+    senders?.domains.map((domain) => {
+      const readySenders = domain.senders.filter(
+        (sender) => sender.enabled && sender.availableProviderIds.length > 0,
+      );
+      return {
+        ...domain,
+        senders: readySenders,
+        ready: domain.status === "VERIFIED" && readySenders.length > 0,
+        providerIds: [
+          ...new Set(readySenders.flatMap((sender) => sender.availableProviderIds)),
+        ],
+      };
+    }) ?? [];
+  const eligibleDomains = domainOptions.filter((domain) => domain.ready);
   const imageDataUrl = image
     ? `data:${image.contentType};base64,${image.content}`
     : "";
@@ -412,7 +424,7 @@ export function ImageBlast() {
                   </MenuItem>
                 ))}
               </TextField>
-              <Button component="label" startIcon={<UploadFileOutlined />}>
+              <Button component="label" startIcon={<UploadFileOutlined />} disabled={!!busy}>
                 {busy === "import" ? "Importing…" : "Upload recipient file"}
                 <input
                   hidden
@@ -426,6 +438,31 @@ export function ImageBlast() {
                   }}
                 />
               </Button>
+              <Accordion disableGutters sx={{ "&:before": { display: "none" } }}>
+                <AccordionSummary expandIcon={<ExpandMoreOutlined />}>
+                  <Typography sx={{ fontSize: 14 }}>Or paste email addresses</Typography>
+                </AccordionSummary>
+                <AccordionDetails>
+                  <TextField
+                    fullWidth
+                    label="One email per line"
+                    placeholder="name@example.com"
+                    multiline
+                    minRows={4}
+                    value={paste}
+                    onChange={(event) => setPaste(event.target.value)}
+                    disabled={!!busy}
+                    helperText="You can also separate addresses with commas or semicolons. Duplicates and suppressed addresses are filtered during import."
+                  />
+                  <Button
+                    sx={{ mt: 1 }}
+                    disabled={!!busy || !paste.trim()}
+                    onClick={() => void importRecipients()}
+                  >
+                    {busy === "import" ? "Importing…" : "Import pasted addresses"}
+                  </Button>
+                </AccordionDetails>
+              </Accordion>
             </Stack>
           </Card>
 
@@ -449,14 +486,23 @@ export function ImageBlast() {
                   const raw = event.target.value;
                   const ids =
                     typeof raw === "string" ? raw.split(",") : (raw as string[]);
-                  const domain = eligibleDomains.find((item) => item.id === ids[0]);
+                  const validIds = ids
+                    .filter((id) => eligibleDomains.some((domain) => domain.id === id))
+                    .slice(0, 10);
+                  const domain = eligibleDomains.find((item) => item.id === validIds[0]);
                   const sender = domain?.senders[0];
-                  setSenderDomainIds(ids.slice(0, 10));
+                  setSenderDomainIds(validIds);
                   setSenderDomainId(domain?.id ?? "");
                   setSenderIdentityId(sender?.id ?? "");
                   invalidate();
                 }}
-                helperText="Choose one or more verified domains. EmailSystem automatically uses only domains, From addresses, and sending services that are available."
+                helperText={
+                  domainOptions.length === 0
+                    ? "No sending domains configured. Add and verify a sending service first."
+                    : eligibleDomains.length === 0
+                      ? "No domains are ready. Check the status below and verify a From address and sending service."
+                      : "Select verified domains with available sending services. Other configured domains are shown but cannot send yet."
+                }
                 required
                 slotProps={{
                   select: {
@@ -481,19 +527,33 @@ export function ImageBlast() {
                   },
                 }}
               >
-                {eligibleDomains.map((domain) => (
-                  <MenuItem key={domain.id} value={domain.id}>
+                {domainOptions.map((domain) => (
+                  <MenuItem key={domain.id} value={domain.id} disabled={!domain.ready}>
                     <Checkbox
                       size="small"
                       checked={senderDomainIds.includes(domain.id)}
                     />
                     <ListItemText
                       primary={domain.domain}
-                      secondary={`${domain.senders.length} From ${domain.senders.length === 1 ? "address" : "addresses"} · ${domain.providerIds.length} sending ${domain.providerIds.length === 1 ? "service" : "services"}`}
+                      secondary={
+                        domain.ready
+                          ? `${domain.senders.length} From ${domain.senders.length === 1 ? "address" : "addresses"} · ${domain.providerIds.length} sending ${domain.providerIds.length === 1 ? "service" : "services"}`
+                          : domain.status !== "VERIFIED"
+                            ? `Not ready · domain status: ${domain.status.toLowerCase()}`
+                            : "Not ready · no active From address with an available sending service"
+                      }
                     />
                   </MenuItem>
                 ))}
               </TextField>
+              {eligibleDomains.length === 0 && (
+                <Alert severity="info">
+                  {domainOptions.length
+                    ? "Your configured sending domains are not ready for this campaign."
+                    : "No sending domain has been configured yet."}{" "}
+                  <Link href="/providers">Check sending services and verification</Link>.
+                </Alert>
+              )}
               <TextField
                 label="Subject"
                 value={subject}
