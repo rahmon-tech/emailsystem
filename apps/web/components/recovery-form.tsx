@@ -34,7 +34,7 @@ export function RecoveryForm({ available }: { available: boolean }) {
     }}>
       <Card sx={{ p: { xs: 3, sm: 4 }, width: "100%", maxWidth: 440 }}>
         <Stack spacing={3}>
-          <Stack direction="row" spacing={1} alignItems="center">
+          <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
             <Avatar variant="rounded" sx={{ width: 32, height: 32, bgcolor: "primary.main" }}>
               <KeyOutlined fontSize="small" />
             </Avatar>
@@ -106,7 +106,7 @@ export function RecoveryForm({ available }: { available: boolean }) {
                 onChange={(e) => setCode(e.target.value.trim())}
                 helperText="Request this code from the Railway workspace administrator." />
               <TextField label="New password" type="password"
-                autoComplete="new-password" required inputProps={{ minLength: 12 }}
+                autoComplete="new-password" required slotProps={{ htmlInput: { minLength: 12 } }}
                 value={password} onChange={(e) => setPassword(e.target.value)}
                 helperText="Use at least 12 characters." />
               <TextField label="Confirm new password" type="password"
