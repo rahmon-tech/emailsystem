@@ -1,4 +1,4 @@
-import { recoverySettings } from "@emailsystem/core/account-recovery";
+import { recoverySettings } from "@emailsystem/core/account-recovery-config";
 import { RecoveryForm } from "../../components/recovery-form";
 
 export const dynamic = "force-dynamic";
