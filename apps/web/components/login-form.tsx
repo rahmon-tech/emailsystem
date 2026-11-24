@@ -13,6 +13,7 @@ import {
 } from "@mui/material";
 import { MailOutlined, ArrowForward } from "@mui/icons-material";
 import { api } from "./api-client";
+import { appPath } from "@emailsystem/core/paths";
 
 export function LoginForm() {
   const router = useRouter();
@@ -96,9 +97,9 @@ export function LoginForm() {
           >
             {busy ? "Signing in…" : "Sign in"}
           </Button>
-          <Typography sx={{ fontSize: 13 }} color="text.secondary">
-            Need access? Contact your workspace administrator.
-          </Typography>
+          <Button href={appPath("/recover")} variant="text" size="small">
+            Forgot password?
+          </Button>
         </Stack>
       </Card>
     </Box>
