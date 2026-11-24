@@ -327,11 +327,37 @@ async function saveVerification(
     const current = await tx.providerConnection.findFirst({
       where: { id, userId },
     });
+    // A Resend "Sending access" key cannot read /domains. If this exact
+    // connection already has persisted proof from a successful domain lookup
+    // or an explicit accepted controlled test, the read-only probe must not
+    // erase that proof. New, untested keys remain unavailable.
+    const readPermissionUnknown =
+      current?.type === "resend" &&
+      current.transport === "api" &&
+      current.health === "HEALTHY" &&
+      current.enabled === true &&
+      current.revision === revision &&
+      v.status === "UNVERIFIED" &&
+      v.checks.some(
+        (check) => check.name === "Read permission" && check.status === "unknown",
+      ) &&
+      v.checks.some(
+        (check) => check.name === "Send permission" && check.status === "unknown",
+      );
+    const retainExistingProof =
+      readPermissionUnknown &&
+      (await tx.providerDomainAuthorization.count({
+        where: {
+          providerConnectionId: id,
+          userId,
+          status: "VERIFIED",
+        },
+      })) > 0;
     const changed = await tx.providerConnection.updateMany({
       where: { id, userId, revision, deletedAt: null },
       data: {
-        health: v.status,
-        enabled: v.usable,
+        health: retainExistingProof ? "HEALTHY" : v.status,
+        enabled: retainExistingProof || v.usable,
         verifiedAt: new Date(),
         cooldownUntil: null,
         ...(v.quotaRemaining !== undefined
