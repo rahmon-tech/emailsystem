@@ -8,6 +8,7 @@ import {
   compatible,
   unlocked,
   getConnection,
+  verifyProvider,
 } from "@emailsystem/core/providers";
 import { catalog } from "@emailsystem/providers";
 import type { Dependencies, ProviderMessage } from "@emailsystem/providers";
@@ -406,4 +407,71 @@ test("transactional Postmark stays excluded after a successful explicit SMTP tes
     ),
     false,
   );
+});
+
+test("Resend sending-only read denial preserves verified test proof but never grants a new or rotated key", async () => {
+  const suffix = crypto.randomUUID().slice(0, 8);
+  const email = `tested@${suffix}.example.org`;
+  const candidate = input("resend");
+  candidate.settings.fromEmail = email;
+  candidate.settings.senderDomain = `${suffix}.example.org`;
+  candidate.credentials.apiKey = "sending-only-credential";
+  const readOnly: Dependencies = {
+    fetch: async (url, init) => {
+      assert.equal(String(url), "https://api.resend.com/domains");
+      assert.equal(init?.method, "GET");
+      return Response.json({ name: "restricted_api_key" }, { status: 401 });
+    },
+  };
+  const initial = await saveProvider(userId, candidate, undefined, readOnly);
+  assert(initial);
+  assert.equal(initial.health, "UNVERIFIED");
+  assert.equal(initial.enabled, false);
+
+  let sent = 0;
+  const accepted = await testProvider(
+    userId,
+    initial.id,
+    "delivered@resend.dev",
+    false,
+    undefined,
+    {
+      fetch: async (url) => {
+        assert.equal(String(url), "https://api.resend.com/emails");
+        sent++;
+        return Response.json({ id: "accepted-test-only" }, { status: 200 });
+      },
+    },
+  );
+  assert.equal(accepted?.status, "accepted");
+  const tested = await getConnection(userId, initial.id);
+  assert.equal(tested.health, "HEALTHY");
+  assert.equal(tested.enabled, true);
+
+  const unknown = await verifyProvider(userId, initial.id, readOnly);
+  assert.equal(unknown.status, "UNVERIFIED");
+  const afterRead = await getConnection(userId, initial.id);
+  assert.equal(afterRead.health, "HEALTHY");
+  assert.equal(afterRead.enabled, true);
+  assert.equal(sent, 1, "A connection recheck must never send an email.");
+  assert.equal(
+    await db.providerDomainAuthorization.count({
+      where: { userId, providerConnectionId: initial.id, status: "VERIFIED", scope: "ADDRESS_SPECIFIC" },
+    }),
+    1,
+  );
+
+  // Credential changes clear any previous authorization and cannot inherit it.
+  const rotated = await saveProvider(
+    userId,
+    {
+      ...candidate,
+      credentials: { ...candidate.credentials, apiKey: "rotated-sending-credential" },
+    },
+    initial.id,
+    readOnly,
+  );
+  assert(rotated);
+  assert.equal(rotated.health, "UNVERIFIED");
+  assert.equal(rotated.enabled, false);
 });
