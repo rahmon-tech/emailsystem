@@ -384,12 +384,17 @@ export async function reviewSafety(userId: string, input: unknown) {
         safetySettings.parse(user.safetySettings).brakeScope === "domain"
       ) {
         const recentCampaigns = await tx.$queryRaw<{ id: string }[]>`
-          SELECT DISTINCT d."campaignId" AS id
+          SELECT MIN(d."campaignId") AS id
           FROM "DeliveryAttempt" a
           JOIN "Delivery" d ON d.id=a."deliveryId"
+          JOIN "Campaign" c ON c.id=d."campaignId"
           WHERE a."userId"=${userId}
             AND a.state='ACCEPTED'
             AND a."startedAt">=${new Date(Date.now() - 7 * 86400000)}
+          GROUP BY COALESCE(
+            NULLIF(a."senderDomain",''),
+            split_part(c.message->>'from','@',2)
+          )
         `;
         for (const recent of recentCampaigns)
           await evaluateSafetyBrakes(tx, userId, recent.id);
