@@ -350,31 +350,60 @@ export async function reviewSafety(userId: string, input: unknown) {
           "SAFETY",
           "Review the account-wide sending pause first.",
         );
+      const reviewedCampaign = data.campaignId
+        ? await tx.campaign.findFirst({
+            where: { id: data.campaignId, userId },
+          })
+        : null;
+      if (data.campaignId && !reviewedCampaign)
+        throw new AppError(404, "NOT_FOUND", "Campaign not found.");
       if (
-        data.campaignId &&
-        !(await tx.campaign.findFirst({
-          where: { id: data.campaignId, userId },
+        reviewedCampaign &&
+        (await tx.domainSafetyPause.count({
+          where: {
+            userId,
+            domain: { in: campaignSendingDomains(reviewedCampaign.message) },
+            pausedReason: { not: null },
+          },
         }))
       )
-        throw new AppError(404, "NOT_FOUND", "Campaign not found.");
+        throw new AppError(
+          409,
+          "SAFETY",
+          "Review the paused sending domain before reviewing this campaign.",
+        );
       const reviewedAt = new Date();
       if (!data.campaignId)
         await tx.user.update({
           where: { id: userId },
           data: { safetyPausedReason: null, safetyReviewedAt: reviewedAt },
         });
-      await tx.campaign.updateMany({
+      const pausedCampaigns = await tx.campaign.findMany({
         where: {
           userId,
           ...(data.campaignId ? { id: data.campaignId } : {}),
           safetyPausedReason: { not: null },
         },
-        data: {
-          safetyPausedReason: null,
-          safetyReviewedAt: reviewedAt,
-          safeError: null,
-        },
+        select: { id: true, message: true },
       });
+      for (const affected of pausedCampaigns) {
+        const domainPause = await tx.domainSafetyPause.findFirst({
+          where: {
+            userId,
+            domain: { in: campaignSendingDomains(affected.message) },
+            pausedReason: { not: null },
+          },
+          select: { pausedReason: true },
+        });
+        await tx.campaign.update({
+          where: { id: affected.id },
+          data: {
+            safetyPausedReason: domainPause?.pausedReason ?? null,
+            safetyReviewedAt: reviewedAt,
+            safeError: domainPause?.pausedReason ?? null,
+          },
+        });
+      }
       await tx.auditEvent.create({
         data: {
           userId,
