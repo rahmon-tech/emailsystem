@@ -20,7 +20,7 @@ export const safetySettings = z
     complaintRate: z.number().min(0.01).max(1).default(0.1),
     hardBounceRate: z.number().min(0.1).max(10).default(2),
     minimumSample: z.number().int().min(100).max(100000).default(100),
-    brakeScope: z.enum(["account", "campaign", "both"]).default("both"),
+    brakeScope: z.enum(["domain", "account", "campaign", "both"]).default("domain"),
   })
   .strict();
 export type SafetySettings = z.infer<typeof safetySettings>;

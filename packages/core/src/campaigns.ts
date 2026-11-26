@@ -1,4 +1,5 @@
 import { lockSafety, safetyCapacity, senderDomain } from "./safety";
+import { campaignSendingDomains } from "./safety-domain";
 import { dailyBudget, messageCost } from "./safety-config";
 import { db } from "@emailsystem/db";
 import type { CampaignState, Prisma } from "@emailsystem/db";
@@ -304,7 +305,8 @@ export async function preflight(userId: string, input: unknown) {
     problems.push(
       "One of your sending limits is too low for a single email plus its CC/BCC copies. Increase the limit or remove some copies.",
     );
-  if (safety.pausedReason) problems.push(safety.pausedReason);
+  for (const reason of new Set(safetyRows.map((row) => row.pausedReason).filter(Boolean)))
+    problems.push(reason!);
   const domainPoolAvailable = domainBudgets.reduce(
     (total, budget) =>
       total === Infinity || budget?.limit === null
@@ -473,6 +475,19 @@ export async function createCampaign(userId: string, input: unknown) {
     throw new AppError(422, "PREFLIGHT", result.problems.join(" "));
   // Unique owner + start key makes repeated browser submissions refer to one campaign.
   return db.$transaction(async (tx) => {
+    await lockSafety(tx, userId);
+    const blockedDomain = await tx.domainSafetyPause.findFirst({
+      where: {
+        userId,
+        domain: { in: result.sender.domains },
+        pausedReason: { not: null },
+      },
+    });
+    if (blockedDomain?.pausedReason)
+      throw new AppError(409, "SAFETY_REVIEW", blockedDomain.pausedReason);
+    const account = await tx.user.findUniqueOrThrow({ where: { id: userId } });
+    if (account.safetyPausedReason)
+      throw new AppError(409, "SAFETY_REVIEW", account.safetyPausedReason);
     if (result.data.experimentRunId)
       await validateExperimentCampaignScope(tx, {
         userId,
@@ -544,7 +559,15 @@ export async function prepareCampaign(id: string) {
       if (!c || c.preparedAt || !["PREPARING", "CANCELLING"].includes(c.state))
         return;
       const user = await tx.user.findUniqueOrThrow({ where: { id: c.userId } });
-      const paused = c.safetyPausedReason ?? user.safetyPausedReason;
+      const pausedDomain = await tx.domainSafetyPause.findFirst({
+        where: {
+          userId: c.userId,
+          domain: { in: campaignSendingDomains(c.message) },
+          pausedReason: { not: null },
+        },
+      });
+      const paused = user.safetyPausedReason ??
+        pausedDomain?.pausedReason ?? c.safetyPausedReason;
       const batch = await tx.importRecipient.findMany({
         where: {
           importId: c.importId,
@@ -656,7 +679,14 @@ export async function controlCampaign(
           "Retry failed is available only after a campaign finishes with failed recipients.",
         );
       const user = await tx.user.findUniqueOrThrow({ where: { id: userId } });
-      if (user.safetyPausedReason || c.safetyPausedReason)
+      const pausedDomain = await tx.domainSafetyPause.findFirst({
+        where: {
+          userId,
+          domain: { in: campaignSendingDomains(c.message) },
+          pausedReason: { not: null },
+        },
+      });
+      if (user.safetyPausedReason || c.safetyPausedReason || pausedDomain)
         throw new AppError(
           409,
           "SAFETY_REVIEW",
@@ -706,7 +736,14 @@ export async function controlCampaign(
     }
     if (action === "resume") {
       const user = await tx.user.findUniqueOrThrow({ where: { id: userId } });
-      if (user.safetyPausedReason || c.safetyPausedReason)
+      const pausedDomain = await tx.domainSafetyPause.findFirst({
+        where: {
+          userId,
+          domain: { in: campaignSendingDomains(c.message) },
+          pausedReason: { not: null },
+        },
+      });
+      if (user.safetyPausedReason || c.safetyPausedReason || pausedDomain)
         throw new AppError(
           409,
           "SAFETY_REVIEW",

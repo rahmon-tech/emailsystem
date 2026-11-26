@@ -1,3 +1,4 @@
+import { campaignSendingDomains } from "./safety-domain";
 import { db, type Prisma } from "@emailsystem/db";
 import { z } from "zod";
 import { redis } from "./redis";
@@ -241,7 +242,8 @@ export async function rebuildSafety(userId: string, clock?: () => number) {
 }
 export async function getSafetySettings(userId: string) {
   const user = await db.user.findUniqueOrThrow({ where: { id: userId } });
-  const providers = await db.providerConnection.findMany({
+  const [providers, domainPauses] = await Promise.all([
+    db.providerConnection.findMany({
     where: { userId, deletedAt: null },
     select: {
       id: true,
@@ -249,11 +251,18 @@ export async function getSafetySettings(userId: string) {
       dailyBudgetOverride: true,
       monthlyBudgetOverride: true,
     },
-  });
+    }),
+    db.domainSafetyPause.findMany({
+      where: { userId, pausedReason: { not: null } },
+      orderBy: { domain: "asc" },
+      select: { domain: true, pausedReason: true, pausedAt: true },
+    }),
+  ]);
   return {
     ...safetySettings.parse(user.safetySettings),
     pausedReason: user.safetyPausedReason,
     providers,
+    domainPauses,
   };
 }
 export async function saveSafetySettings(userId: string, input: unknown) {
@@ -387,6 +396,18 @@ export async function safetyCapacity(
           )
         : [];
       const domain = senderDomain(from);
+      const campaignDomains = campaign
+        ? campaignSendingDomains(campaign.message)
+        : [];
+      const safetyDomains = [...new Set([...campaignDomains, domain])];
+      const activeDomainPause = await tx.domainSafetyPause.findFirst({
+        where: {
+          userId,
+          domain: { in: safetyDomains },
+          pausedReason: { not: null },
+        },
+        orderBy: { domain: "asc" },
+      });
       const sharedMonthly = await sharedMonthlyUsage(
         tx,
         userId,
@@ -438,11 +459,17 @@ export async function safetyCapacity(
         available,
         reviewScope: user.safetyPausedReason
           ? ("account" as const)
-          : ("campaign" as const),
+          : activeDomainPause
+            ? ("domain" as const)
+            : ("campaign" as const),
+        reviewDomain: activeDomainPause?.domain ?? null,
         campaignDefault: settings.campaignDaily,
         domain,
         pausedReason:
-          user.safetyPausedReason ?? campaign?.safetyPausedReason ?? null,
+          user.safetyPausedReason ??
+          activeDomainPause?.pausedReason ??
+          campaign?.safetyPausedReason ??
+          null,
         waitReason: campaign?.safetyWaitReason ?? null,
         nextReleaseAt: campaign?.safetyWaitUntil?.getTime() ?? null,
       };
