@@ -373,6 +373,27 @@ export async function reviewSafety(userId: string, input: unknown) {
           "Review the paused sending domain before reviewing this campaign.",
         );
       const reviewedAt = new Date();
+      // An existing account-wide pause predates domain isolation. When an
+      // administrator switches to domain scope and acknowledges that legacy
+      // pause, recompute seven-day evidence for every impacted campaign
+      // before clearing the account flag. Otherwise the bad domain would be
+      // silently released alongside unrelated healthy domains.
+      if (
+        !data.campaignId &&
+        user.safetyPausedReason &&
+        safetySettings.parse(user.safetySettings).brakeScope === "domain"
+      ) {
+        const recentCampaigns = await tx.$queryRaw<{ id: string }[]>`
+          SELECT DISTINCT d."campaignId" AS id
+          FROM "DeliveryAttempt" a
+          JOIN "Delivery" d ON d.id=a."deliveryId"
+          WHERE a."userId"=${userId}
+            AND a.state='ACCEPTED'
+            AND a."startedAt">=${new Date(Date.now() - 7 * 86400000)}
+        `;
+        for (const recent of recentCampaigns)
+          await evaluateSafetyBrakes(tx, userId, recent.id);
+      }
       if (!data.campaignId)
         await tx.user.update({
           where: { id: userId },
