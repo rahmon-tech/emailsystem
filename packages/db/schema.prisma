@@ -55,6 +55,7 @@ model User {
   sessions Session[]
   providers ProviderConnection[]
   authorizedDomains AuthorizedDomain[]
+  domainSafetyPauses DomainSafetyPause[]
   senderIdentities SenderIdentity[]
   providerDomainAuthorizations ProviderDomainAuthorization[]
   imports ContactImport[]
@@ -63,6 +64,18 @@ model User {
   audit AuditEvent[]
   experimentProfiles ExperimentProfile[]
   experimentRuns ExperimentRun[]
+}
+// A durable, per-sending-domain safety brake independent of domain verification.
+// Removing or reconnecting a sending service cannot erase its review state.
+model DomainSafetyPause {
+  userId String
+  user User @relation(fields:[userId],references:[id],onDelete:Cascade)
+  domain String
+  pausedReason String?
+  pausedAt DateTime?
+  reviewedAt DateTime?
+  @@id([userId,domain])
+  @@index([userId,pausedReason])
 }
 model Session {
   tokenHash String @id
