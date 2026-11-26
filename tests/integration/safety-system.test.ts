@@ -474,7 +474,7 @@ async function acceptedFixture(count: number, settings = {}) {
   return f;
 }
 test("authoritative complaints require the minimum sample, deduplicate outcomes and exclude previously suppressed recipients", async () => {
-  const f = await acceptedFixture(101);
+  const f = await acceptedFixture(101, { brakeScope: "both" });
   await db.suppression.create({
     data: {
       userId: f.user.id,
@@ -521,6 +521,91 @@ test("authoritative complaints require the minimum sample, deduplicate outcomes 
   });
   assert.equal((await getSafetySettings(small.user.id)).pausedReason, null);
 });
+test("per-domain hard bounce pause leaves unrelated sending domains available and review is scoped", async () => {
+  const f = await acceptedFixture(100, { brakeScope: "domain" });
+  const otherProvider = await saveProvider(f.user.id, {
+    name: "Independent healthy domain",
+    type: "mock",
+    transport: "api",
+    credentials: {},
+    settings: { fromEmail: "hello@independent-domain.example" },
+    perSecond: 100,
+    perMinute: 6000,
+    concurrency: 20,
+  });
+  assert(otherProvider);
+  const separateInput = {
+    ...f.input,
+    name: "Independent domain campaign",
+    from: "hello@independent-domain.example",
+  };
+  const separateCampaign = await createCampaign(f.user.id, separateInput);
+  await prepareCampaign(separateCampaign.id);
+
+  for (const delivery of f.deliveries.slice(0, 2)) {
+    await ingestEvent(f.provider.id, {
+      eventKey: "domain-bounce-" + delivery.id,
+      messageId: delivery.id,
+      recipient: delivery.email,
+      kind: "hard_bounce",
+      occurredAt: new Date(),
+    });
+  }
+
+  assert.equal((await getSafetySettings(f.user.id)).pausedReason, null);
+  const blocked = await db.domainSafetyPause.findUniqueOrThrow({
+    where: { userId_domain: { userId: f.user.id, domain: "example.com" } },
+  });
+  assert.match(blocked.pausedReason!, /Hard bounce/);
+  assert.equal(
+    (await db.campaign.findUniqueOrThrow({ where: { id: f.campaign.id } })).state,
+    "PAUSED",
+  );
+  assert.equal(
+    (await db.campaign.findUniqueOrThrow({ where: { id: separateCampaign.id } })).state,
+    "QUEUED",
+  );
+  assert.equal((await safetyCapacity(f.user.id, "hello@independent-domain.example")).pausedReason, null);
+  assert.match((await safetyCapacity(f.user.id, "sender@example.com")).pausedReason!, /Hard bounce/);
+  const allowed = await preflight(f.user.id, separateInput);
+  assert.equal(allowed.ready, true, JSON.stringify(allowed.problems));
+  const forbidden = await preflight(f.user.id, f.input);
+  assert.equal(forbidden.ready, false);
+  assert(forbidden.problems.some((problem) => problem.includes("example.com")));
+  await assert.rejects(
+    () => createCampaign(f.user.id, { ...f.input, name: "Blocked domain attempt" }),
+    (error: unknown) => error instanceof AppError && error.code === "PREFLIGHT",
+  );
+
+  let sent = 0;
+  const next = await db.delivery.findFirstOrThrow({
+    where: { campaignId: separateCampaign.id },
+  });
+  await processDelivery(next.id, async () => {
+    sent++;
+    return { status: "accepted" as const, providerMessageId: crypto.randomUUID() };
+  });
+  assert.equal(sent, 1, "A healthy independent domain may still send.");
+  const barred = await db.delivery.findFirstOrThrow({
+    where: { campaignId: f.campaign.id },
+  });
+  await processDelivery(barred.id, async () => {
+    throw Error("Paused domain must not transmit.");
+  });
+  await assert.rejects(
+    () => reviewSafety(f.user.id, { domain: "example.com", acknowledgement: false }),
+  );
+  await reviewSafety(f.user.id, { domain: "example.com", acknowledgement: true });
+  assert.equal((await db.domainSafetyPause.findUniqueOrThrow({
+    where: { userId_domain: { userId: f.user.id, domain: "example.com" } },
+  })).pausedReason, null);
+  assert.equal(
+    (await db.campaign.findUniqueOrThrow({ where: { id: f.campaign.id } })).state,
+    "PAUSED",
+    "Reviewing a pause is not the same as resuming delivery.",
+  );
+});
+
 test("campaign hard-bounce brake pauses only the affected campaign and requires review", async () => {
   const f = await acceptedFixture(100, { brakeScope: "campaign" });
   const other = await createCampaign(f.user.id, {
@@ -595,7 +680,7 @@ test("controlled test sends consume safety capacity without entering campaign st
   );
 });
 test("the minimum sample crossing on a later acceptance evaluates earlier complaints", async () => {
-  const f = await acceptedFixture(100);
+  const f = await acceptedFixture(100, { brakeScope: "both" });
   const last = f.deliveries[99];
   await db.deliveryAttempt.deleteMany({ where: { deliveryId: last.id } });
   await db.delivery.update({
