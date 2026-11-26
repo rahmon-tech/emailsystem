@@ -29,6 +29,7 @@ import {
   sharedMonthlyUsage,
 } from "./safety";
 import { safetySettings, messageCost } from "./safety-config";
+import { campaignSendingDomains } from "./safety-domain";
 import type { Candidate } from "./dispatcher";
 import {
   providerStillAuthorized,
@@ -116,9 +117,18 @@ export async function processDelivery(
         const user = await tx.user.findUniqueOrThrow({
           where: { id: initial.userId },
         });
+        const pausedDomain = c && await tx.domainSafetyPause.findFirst({
+          where: {
+            userId: initial.userId,
+            domain: { in: campaignSendingDomains(c.message) },
+            pausedReason: { not: null },
+          },
+          select: { domain: true },
+        });
         if (
           !c ||
           !d ||
+          pausedDomain ||
           !["QUEUED", "SENDING"].includes(c.state) ||
           user.safetyPausedReason ||
           c.safetyPausedReason ||
@@ -647,7 +657,16 @@ export async function processDelivery(
         const p = await tx.providerConnection.findUniqueOrThrow({
           where: { id: provider!.id },
         });
+        const pausedDomain = await tx.domainSafetyPause.findFirst({
+          where: {
+            userId: initial.userId,
+            domain: { in: campaignSendingDomains(c.message) },
+            pausedReason: { not: null },
+          },
+          select: { domain: true },
+        });
         if (
+          pausedDomain ||
           a.state !== "RESERVED" ||
           now() - permitAt > 20000 ||
           !["QUEUED", "SENDING"].includes(c.state) ||
