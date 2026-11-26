@@ -29,6 +29,7 @@ import {
 } from "@emailsystem/core/safety-config";
 type Settings = SafetySettings & {
   pausedReason: string | null;
+  domainPauses: { domain: string; pausedReason: string; pausedAt: string }[];
   providers: { id: string; name: string; dailyBudgetOverride: number | null }[];
 };
 export type SafetySummary = {
@@ -49,17 +50,20 @@ export type SafetySummary = {
   pausedReason: string | null;
   waitReason: string | null;
   nextReleaseAt: number | null;
-  reviewScope: "account" | "campaign";
+  reviewScope: "account" | "campaign" | "domain";
+  reviewDomain?: string | null;
 };
 export function SafetyReview({
   open,
   close,
   campaignId,
+  domain,
   done,
 }: {
   open: boolean;
   close: () => void;
   campaignId?: string;
+  domain?: string;
   done: () => void;
 }) {
   const [ack, setAck] = useState(false),
@@ -76,8 +80,10 @@ export function SafetyReview({
         <Stack spacing={2}>
           <Failure error={error} />
           <Typography>
-            Review recent bounce and complaint results, then fix the cause before
-            sending more. Campaigns remain paused until you resume them.
+            {domain
+              ? `Review bounce and complaint results for ${domain}, correct the recipient-list problem, then acknowledge the review. Other domains remain unaffected unless there is a separate account-wide lock.`
+              : "Review recent bounce and complaint results, then fix the cause before sending more."}
+            {" "}Campaigns remain paused until you resume them.
           </Typography>
           <FormControlLabel
             control={
@@ -104,6 +110,7 @@ export function SafetyReview({
               await api("safety/review", {
                 acknowledgement: true,
                 ...(campaignId ? { campaignId } : {}),
+                ...(domain ? { domain } : {}),
               });
               setAck(false);
               done();
@@ -128,6 +135,7 @@ export function SendingSafety() {
     [busy, setBusy] = useState(false),
     [saved, setSaved] = useState(false),
     [review, setReview] = useState(false),
+    [reviewDomain, setReviewDomain] = useState<string | null>(null),
     [numberDrafts, setNumberDrafts] = useState<Record<string, string>>({});
   useEffect(() => {
     if (!open) return;
@@ -285,6 +293,19 @@ export function SendingSafety() {
                     {value.pausedReason}
                   </Alert>
                 )}
+                {value.domainPauses?.map((pause) => (
+                  <Alert
+                    key={pause.domain}
+                    severity="warning"
+                    action={
+                      <Button color="inherit" onClick={() => setReviewDomain(pause.domain)}>
+                        Review
+                      </Button>
+                    }
+                  >
+                    <strong>{pause.domain}</strong> · {pause.pausedReason}
+                  </Alert>
+                ))}
                 <Box
                   sx={{
                     display: "grid",
@@ -376,13 +397,17 @@ export function SendingSafety() {
                           })
                         }
                       >
-                        <MenuItem value="both">This campaign and all sending</MenuItem>
-                        <MenuItem value="account">All sending</MenuItem>
-                        <MenuItem value="campaign">Only this campaign</MenuItem>
+                        <MenuItem value="domain">Only the affected sending domain (recommended)</MenuItem>
+                        <MenuItem value="campaign">Only the affected campaign</MenuItem>
+                        <MenuItem value="account">All sending on this account</MenuItem>
+                        <MenuItem value="both">Affected campaign and entire account (strict)</MenuItem>
                       </TextField>
                       <Typography variant="caption" color="text.secondary">
                         Uses confirmed delivery results from the last seven days.
-                        A paused campaign stays stopped until an administrator reviews it.
+                        Domain protection checks the actual sending domain, including
+                        campaigns that share a domain and From aliases. A separate
+                        account-wide policy lock still overrides every domain.
+                        Existing pauses need explicit review even after this setting changes.
                       </Typography>
                     </Stack>
                   </AccordionDetails>
@@ -459,6 +484,14 @@ export function SendingSafety() {
           void api<Settings>("safety")
             .then(setValue)
             .catch((e) => setError(e.message));
+        }}
+      />
+      <SafetyReview
+        open={reviewDomain !== null}
+        close={() => setReviewDomain(null)}
+        domain={reviewDomain ?? undefined}
+        done={() => {
+          void api<Settings>("safety").then(setValue).catch((e) => setError(e.message));
         }}
       />
       <Snackbar
@@ -580,6 +613,7 @@ export function SafetyMetrics({
         open={review}
         close={() => setReview(false)}
         campaignId={safety.reviewScope === "campaign" ? campaignId : undefined}
+        domain={safety.reviewScope === "domain" ? safety.reviewDomain ?? undefined : undefined}
         done={refresh}
       />
     </Stack>
