@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { sessionCookie, userFromTokens } from "@emailsystem/core/auth";
 import { Shell } from "../../components/shell";
 import { absoluteAppUrl } from "@emailsystem/core/server-paths";
+import { getWorkspaceSettings } from "@emailsystem/core/workspace-settings";
 export const dynamic = "force-dynamic";
 export default async function WorkspaceLayout({
   children,
@@ -14,5 +15,13 @@ export default async function WorkspaceLayout({
     store.getAll(sessionCookie).map((cookie) => cookie.value),
   );
   if (!resolved) redirect(absoluteAppUrl("/login"));
-  return <Shell email={resolved.user.email}>{children}</Shell>;
+  const workspace = await getWorkspaceSettings(resolved.user.id);
+  return (
+    <Shell
+      email={resolved.user.email}
+      workspaceName={workspace.organizationName}
+    >
+      {children}
+    </Shell>
+  );
 }
