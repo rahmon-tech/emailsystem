@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { db, type Prisma } from "@emailsystem/db";
+import { db } from "@emailsystem/db";
 import { AppError } from "./errors";
 import { normalizeAddress } from "./imports";
 import { json } from "./providers";
