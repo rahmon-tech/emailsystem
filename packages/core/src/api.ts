@@ -42,7 +42,17 @@ import {
 } from "./senders";
 import { absoluteAppUrl } from "./server-paths";
 import { dashboard } from "./dashboard";
-import { listContacts, saveContact, updateContact } from "./audience";
+import {
+  listContacts,
+  saveContact,
+  updateContact,
+  listAudienceLists,
+  createAudienceList,
+  updateAudienceList,
+  snapshotAudienceList,
+  addContactToList,
+  removeContactFromList,
+} from "./audience";
 const uuid = (s: string) => z.uuid().parse(s);
 export async function api(request: Request, parts: string[]) {
   try {
@@ -259,6 +269,44 @@ export async function api(request: Request, parts: string[]) {
             orderBy: { createdAt: "desc" },
           }),
         );
+    }
+    if (area === "audience-lists") {
+      if (method === "GET" && !id)
+        return response(await listAudienceLists(user.id));
+      if (method === "POST" && !id)
+        return response(
+          await createAudienceList(user.id, await readJson(request, 4096)),
+          201,
+        );
+      if (id) uuid(id);
+      if (method === "PUT" && id && !action)
+        return response(
+          await updateAudienceList(
+            user.id,
+            id,
+            await readJson(request, 4096),
+          ),
+        );
+      if (method === "POST" && id && action === "snapshot")
+        return response(await snapshotAudienceList(user.id, id), 201);
+      if (method === "POST" && id && action === "members") {
+        const data = z
+          .object({ contactId: z.uuid() })
+          .strict()
+          .parse(await readJson(request, 2048));
+        return response(
+          await addContactToList(user.id, id, data.contactId),
+          201,
+        );
+      }
+      if (method === "DELETE" && id && action === "members") {
+        const contactId = z
+          .uuid()
+          .parse(url.searchParams.get("contactId"));
+        return response(
+          await removeContactFromList(user.id, id, contactId),
+        );
+      }
     }
     if (area === "contacts") {
       if (method === "GET" && !id)
