@@ -1,3 +1,6 @@
+ALTER TABLE "ContactImport"
+  ADD COLUMN "kind" TEXT NOT NULL DEFAULT 'LIST_IMPORT';
+
 CREATE TABLE "Contact" (
   "id" TEXT NOT NULL,
   "userId" TEXT NOT NULL,
