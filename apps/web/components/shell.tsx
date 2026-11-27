@@ -27,6 +27,7 @@ import {
   LogoutOutlined,
   ChevronRight,
   PersonOutlined,
+  SettingsOutlined,
 } from "@mui/icons-material";
 import { api } from "./api-client";
 
@@ -43,9 +44,11 @@ const sections = [
 
 export function Shell({
   email,
+  workspaceName,
   children,
 }: {
   email: string;
+  workspaceName: string;
   children: React.ReactNode;
 }) {
   const router = useRouter();
@@ -55,7 +58,9 @@ export function Shell({
   const activeSection = sections.find(
     ({ path }) => pathname === path || pathname.startsWith(`${path}/`),
   );
-  const currentTitle = activeSection?.label ?? "Workspace";
+  const currentTitle = pathname.startsWith("/settings")
+    ? "Settings"
+    : activeSection?.label ?? "Workspace";
 
   useEffect(() => {
     const refresh = () => {
@@ -96,8 +101,17 @@ export function Shell({
           <Typography sx={{ fontSize: 16, fontWeight: 750, letterSpacing: "-.035em", lineHeight: 1.2 }}>
             EmailBlast
           </Typography>
-          <Typography sx={{ fontSize: 11, color: "text.secondary", mt: 0.2 }}>
-            Campaign workspace
+          <Typography
+            noWrap
+            title={workspaceName}
+            sx={{
+              fontSize: 11,
+              color: "text.secondary",
+              mt: 0.2,
+              maxWidth: 150,
+            }}
+          >
+            {workspaceName}
           </Typography>
         </Box>
       </Stack>
@@ -304,6 +318,14 @@ export function Shell({
             onClose={() => setAnchor(null)}
           >
             <MenuItem disabled>{email}</MenuItem>
+            <MenuItem
+              component={Link}
+              href="/settings"
+              onClick={() => setAnchor(null)}
+            >
+              <SettingsOutlined fontSize="small" sx={{ mr: 1 }} />
+              Settings
+            </MenuItem>
             <MenuItem
               onClick={async () => {
                 await api("auth/logout", {});

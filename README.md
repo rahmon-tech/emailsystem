@@ -21,6 +21,7 @@ It combines campaign composition, recipient imports, provider-aware routing, bac
 - **Reusable recipient imports** — CSV, TXT, XLSX, or pasted addresses with normalization, deduplication, suppression checks, and import statistics.
 - **Audience workspace** — canonical contacts, editable reusable lists, manual contacts, suppressions, and immutable campaign snapshots so later list edits cannot change a prepared campaign.
 - **Reusable templates** — six built-in starters plus user-saved templates that preserve rich/source authoring mode and load directly into the normal campaign pipeline.
+- **Focused workspace settings** — organization identity, Activity timezone and self-service password rotation with complete session invalidation.
 - **Verified sender pools** — multiple domains and From addresses with provider/domain authorization and optional multi-connection routing.
 - **Durable background sending** — PostgreSQL owns campaign/delivery state; Redis and BullMQ coordinate asynchronous work, pacing, and concurrency.
 - **Conservative retry semantics** — definitive failures can be retried; uncertain post-transport outcomes are held for reconciliation.

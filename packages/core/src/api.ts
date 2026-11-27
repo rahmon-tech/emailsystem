@@ -11,6 +11,7 @@ import {
   cookieToken,
   sessionCookie,
   userFromToken,
+  changePassword,
 } from "./auth";
 import { response, errorResponse, readBounded, readJson } from "./http";
 import { AppError } from "./errors";
@@ -42,6 +43,7 @@ import {
 } from "./senders";
 import { absoluteAppUrl } from "./server-paths";
 import { dashboard } from "./dashboard";
+import { getWorkspaceSettings, saveWorkspaceSettings } from "./workspace-settings";
 import {
   listTemplates,
   getTemplate,
@@ -100,6 +102,33 @@ export async function api(request: Request, parts: string[]) {
           },
         },
       );
+    }
+    if (area === "settings") {
+      if (method === "GET" && !id)
+        return response(await getWorkspaceSettings(user.id));
+      if (method === "PUT" && !id)
+        return response(
+          await saveWorkspaceSettings(
+            user.id,
+            await readJson(request, 4096),
+          ),
+        );
+      if (method === "POST" && id === "password") {
+        const data = z
+          .object({
+            currentPassword: z.string().min(1).max(256),
+            newPassword: z.string().min(12).max(256),
+          })
+          .strict()
+          .parse(await readJson(request, 4096));
+        return response(
+          await changePassword(
+            user.id,
+            data.currentPassword,
+            data.newPassword,
+          ),
+        );
+      }
     }
     if (area === "templates") {
       if (method === "GET" && !id)

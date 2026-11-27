@@ -178,6 +178,19 @@ test("workspace shell stays usable and selected from phone through desktop", asy
       ).toHaveAttribute("aria-current", "page");
     }
 
+    await page.goto(appPath("/settings"));
+    await expect(page).toHaveURL(/\/settings\/?$/);
+    await expect(
+      page.getByRole("heading", { name: "Settings", exact: true }),
+    ).toBeVisible();
+    await expect(page.getByText("Account security", { exact: true })).toBeVisible();
+    await assertNoViewportOverflow(page);
+    await page.getByRole("button", { name: "Account menu", exact: true }).click();
+    await expect(
+      page.getByRole("menuitem", { name: "Settings", exact: true }),
+    ).toBeVisible();
+    await page.keyboard.press("Escape");
+
     await page.goto(appPath("/templates"));
     await expect(page).toHaveURL(/\/templates\/?$/);
     await expect(

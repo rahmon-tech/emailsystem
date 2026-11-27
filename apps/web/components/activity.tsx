@@ -141,6 +141,7 @@ export function Activity() {
     [selected, setSelected] = useState(params.get("campaignId") ?? "");
   const [summary, setSummary] = useState<Summary | null>(null),
     [names, setNames] = useState<Record<string, string>>({});
+  const [timezone, setTimezone] = useState("UTC");
   const [error, setError] = useState(""),
     [loading, setLoading] = useState(true),
     [toast, setToast] = useState(""),
@@ -174,11 +175,13 @@ export function Activity() {
       api<Page<Campaign>>("campaigns"),
       api<{ id: string; name: string }[]>("providers"),
       selected ? api<Summary>("campaigns/" + selected) : Promise.resolve(null),
+      api<{ timezone: string }>("settings"),
     ])
-      .then(([data, providers, detail]) => {
+      .then(([data, providers, detail, workspace]) => {
         if (live) {
           setCampaigns(data.items);
           setNext(data.nextCursor);
+          setTimezone(workspace.timezone);
           setSummary(detail);
           setNames(Object.fromEntries(providers.map((p) => [p.id, p.name])));
         }
@@ -443,7 +446,7 @@ export function Activity() {
                   sx={{ fontSize: 12, mt: 1.5 }}
                 >
                   {c.intendedRecipientCount.toLocaleString()} recipients ·{" "}
-                  {date(c.createdAt)}
+                  {date(c.createdAt, timezone)}
                 </Typography>
               </Card>
             ))}
@@ -507,7 +510,7 @@ export function Activity() {
                       color="text.secondary"
                       sx={{ fontSize: 13, mt: 1 }}
                     >
-                      Scheduled {date(summary.scheduledAt)}
+                      Scheduled {date(summary.scheduledAt, timezone)}
                     </Typography>
                   </Box>
                   <Stack sx={{ gap: 1, flexWrap: "wrap" }} direction="row">
@@ -1104,7 +1107,7 @@ export function Activity() {
                   {s.email}
                 </Typography>
                 <Typography sx={{ fontSize: 12 }} color="text.secondary">
-                  {label(s.reason)} · {date(s.createdAt)}
+                  {label(s.reason)} · {date(s.createdAt, timezone)}
                 </Typography>
               </Box>
             ))

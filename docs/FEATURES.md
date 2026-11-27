@@ -49,6 +49,19 @@ Using a template opens the existing campaign composer and preloads its message f
 
 Source-mode templates reopen in source mode so complex imported layouts are not silently rewritten by the rich editor. Rich-mode templates remain visually editable.
 
+## Workspace settings and account security
+
+The account menu exposes a focused `/settings` workspace rather than duplicating sending controls.
+
+Workspace settings include:
+
+- an organization/workspace name shown beneath the EmailBlast product name;
+- an IANA timezone used when Activity timestamps are displayed.
+
+Account security includes an authenticated password change. The current password must be verified, attempts are rate-limited, the replacement uses the same salted scrypt policy as account creation, and every existing session is invalidated after a successful change.
+
+Provider, tracking, safety and campaign controls stay on their existing operational surfaces.
+
 ## Standard campaigns
 
 The standard composer at `/blast` supports both visual authoring and developer-supplied HTML.
