@@ -182,31 +182,54 @@ export async function importRecipients(
       });
     }
     parsed.stats.sendable = parsed.emails.length - parsed.stats.suppressed;
-    // Contacts are canonical address-book records. ImportRecipient remains the
-    // immutable campaign/list snapshot so historical campaigns are never
-    // rewritten when a contact name or profile changes later.
-    await db.$executeRaw`
-      INSERT INTO "Contact" (
-        "id","userId","email","firstName","lastName","attributes",
-        "source","createdAt","updatedAt"
-      )
-      SELECT
-        gen_random_uuid()::text,
-        "userId",
-        email,
-        '',
-        '',
-        '{}'::jsonb,
-        'import',
-        CURRENT_TIMESTAMP,
-        CURRENT_TIMESTAMP
-      FROM "ImportRecipient"
-      WHERE "importId"=${record.id} AND "userId"=${userId}
-      ON CONFLICT ("userId","email") DO NOTHING
-    `;
-    return await db.contactImport.update({
-      where: { id: record.id },
-      data: { state: "READY", stats: json(parsed.stats) },
+    // Contacts and editable audience membership are committed only after the
+    // immutable import snapshot has been built successfully.
+    return await db.$transaction(async (tx) => {
+      await tx.$executeRaw`
+        INSERT INTO "Contact" (
+          "id","userId","email","firstName","lastName","attributes",
+          "source","createdAt","updatedAt"
+        )
+        SELECT
+          gen_random_uuid()::text,
+          "userId",
+          email,
+          '',
+          '',
+          '{}'::jsonb,
+          'import',
+          CURRENT_TIMESTAMP,
+          CURRENT_TIMESTAMP
+        FROM "ImportRecipient"
+        WHERE "importId"=${record.id} AND "userId"=${userId}
+        ON CONFLICT ("userId","email") DO NOTHING
+      `;
+      await tx.audienceList.create({
+        data: {
+          id: record.id,
+          userId,
+          name: filename.slice(0, 150),
+        },
+      });
+      await tx.$executeRaw`
+        INSERT INTO "AudienceMembership" (
+          "userId","listId","contactId","createdAt"
+        )
+        SELECT
+          r."userId",
+          ${record.id},
+          c.id,
+          CURRENT_TIMESTAMP
+        FROM "ImportRecipient" r
+        JOIN "Contact" c
+          ON c."userId"=r."userId" AND c.email=r.email
+        WHERE r."importId"=${record.id} AND r."userId"=${userId}
+        ON CONFLICT ("listId","contactId") DO NOTHING
+      `;
+      return tx.contactImport.update({
+        where: { id: record.id },
+        data: { state: "READY", stats: json(parsed.stats) },
+      });
     });
   } catch (error) {
     await db.contactImport.update({
