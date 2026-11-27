@@ -1,6 +1,7 @@
-import { access } from "node:fs/promises";
+import { access, readFile } from "node:fs/promises";
 import { spawnSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
+import { parse } from "dotenv";
 import {
   createDockerEnvironment,
   validateBasePath,
@@ -11,6 +12,11 @@ export type DockerInstallPlan = {
   domain: string;
   basePath: string;
   appUrl: string;
+};
+
+export type DockerInstallOptions = {
+  resume?: boolean;
+  skipAdmin?: boolean;
 };
 
 export function dockerInstallPlan(
@@ -42,39 +48,65 @@ function runDocker(args: string[], label: string) {
     );
 }
 
-async function assertFreshInstall() {
+async function environmentExists() {
   try {
     await access(".env");
-    throw new Error(
-      "A .env file already exists. The fresh installer will not overwrite or reuse an existing installation. Follow the documented upgrade procedure instead.",
-    );
+    return true;
   } catch (error) {
-    if (
-      error instanceof Error &&
-      error.message.startsWith("A .env file already exists")
-    )
-      throw error;
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return false;
+    throw error;
   }
+}
+
+async function prepareEnvironment(
+  plan: DockerInstallPlan,
+  resume: boolean,
+) {
+  const exists = await environmentExists();
+  if (!exists) {
+    if (resume)
+      throw new Error(
+        "--resume requires the protected .env created by the original installation attempt.",
+      );
+    await createDockerEnvironment(plan.domain, plan.basePath);
+    console.log(
+      `\nCreated a protected .env for ${plan.appUrl}. Back this file up securely after installation.`,
+    );
+    return;
+  }
+
+  if (!resume)
+    throw new Error(
+      "A .env file already exists. For a failed first installation, rerun with --resume. For an existing production installation, follow the documented upgrade procedure instead.",
+    );
+
+  const current = parse(await readFile(".env", "utf8"));
+  if (
+    current.DOMAIN !== plan.domain ||
+    (current.NEXT_PUBLIC_BASE_PATH ?? "") !== plan.basePath ||
+    current.APP_URL !== plan.appUrl
+  )
+    throw new Error(
+      "The supplied domain/base path does not match the existing .env. Resume only the same installation attempt.",
+    );
+  console.log(
+    `\nResuming the existing installation for ${plan.appUrl}; protected keys and database credentials are unchanged.`,
+  );
 }
 
 export async function installDocker(
   domainInput: string,
   basePathInput = "",
+  options: DockerInstallOptions = {},
 ) {
   const plan = dockerInstallPlan(domainInput, basePathInput);
-  await assertFreshInstall();
+  await prepareEnvironment(plan, Boolean(options.resume));
 
   runDocker(["compose", "version"], "Check Docker Compose");
-  await createDockerEnvironment(plan.domain, plan.basePath);
-
-  console.log(
-    `\nCreated a protected .env for ${plan.appUrl}. Back this file up securely after installation.`,
-  );
-
   runDocker(["compose", "config", "--quiet"], "Validate production configuration");
   runDocker(["compose", "build"], "Build EmailBlast containers");
   runDocker(
-    ["compose", "up", "-d", "postgres", "redis"],
+    ["compose", "up", "-d", "--wait", "postgres", "redis"],
     "Start PostgreSQL and Redis",
   );
   runDocker(
@@ -91,22 +123,28 @@ export async function installDocker(
     "Apply versioned database migrations",
   );
 
-  console.log(
-    "\nCreate the first administrator. The password is read interactively and is not written to shell history.",
-  );
-  runDocker(
-    [
-      "compose",
-      "run",
-      "--rm",
-      "web",
-      "node",
-      "--import",
-      "tsx",
-      "scripts/create-user.ts",
-    ],
-    "Create first administrator",
-  );
+  if (!options.skipAdmin) {
+    console.log(
+      "\nCreate the first administrator. The password is read interactively and is not written to shell history.",
+    );
+    runDocker(
+      [
+        "compose",
+        "run",
+        "--rm",
+        "web",
+        "node",
+        "--import",
+        "tsx",
+        "scripts/create-user.ts",
+      ],
+      "Create first administrator",
+    );
+  } else {
+    console.log(
+      "\nSkipping administrator creation. Use this only when the original install attempt already created the intended administrator.",
+    );
+  }
 
   runDocker(
     ["compose", "up", "-d", "--wait", "web", "worker", "proxy"],
@@ -149,12 +187,25 @@ export async function installDocker(
 }
 
 async function main() {
-  const domain = process.argv[2];
-  if (!domain)
+  const args = process.argv.slice(2);
+  const resume = args.includes("--resume");
+  const skipAdmin = args.includes("--skip-admin");
+  const unknown = args.filter(
+    (value) => value.startsWith("--") &&
+      value !== "--resume" &&
+      value !== "--skip-admin",
+  );
+  if (unknown.length)
+    throw new Error("Unknown installer option: " + unknown.join(", "));
+  const positional = args.filter((value) => !value.startsWith("--"));
+  const domain = positional[0];
+  if (!domain || positional.length > 2)
     throw new Error(
-      "Usage: pnpm install:docker -- mail.your-domain.com [/emailblast]",
+      "Usage: pnpm install:docker -- mail.your-domain.com [/emailblast] [--resume] [--skip-admin]",
     );
-  await installDocker(domain, process.argv[3] ?? "");
+  if (skipAdmin && !resume)
+    throw new Error("--skip-admin is allowed only with --resume.");
+  await installDocker(domain, positional[1] ?? "", { resume, skipAdmin });
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
