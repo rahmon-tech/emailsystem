@@ -89,6 +89,46 @@ test("workspace shell stays usable and selected from phone through desktop", asy
 
   for (const width of widths) {
     await page.setViewportSize({ width, height: width < 600 ? 844 : 900 });
+    await page.goto(appPath("/dashboard"));
+    await expect(page).toHaveURL(/\/dashboard\/?$/);
+    await expect(
+      page.getByRole("heading", { name: "Dashboard", exact: true }),
+    ).toBeVisible();
+    await expect(page.getByText("Sending health", { exact: true })).toBeVisible();
+    await assertNoViewportOverflow(page);
+    if (width < 900) {
+      const mobileDashboardTrigger = page.getByRole("button", {
+        name: "Open navigation",
+        exact: true,
+      });
+      await mobileDashboardTrigger.click();
+      const drawerNav = page
+        .getByRole("navigation", { name: "Main navigation" })
+        .filter({ visible: true });
+      await expect(
+        drawerNav.getByRole("link", { name: "Dashboard", exact: true }),
+      ).toHaveAttribute("aria-current", "page");
+      await page.keyboard.press("Escape");
+    } else {
+      const desktopNav = page
+        .getByRole("navigation", { name: "Main navigation" })
+        .filter({ visible: true });
+      await expect(
+        desktopNav.getByRole("link", { name: "Dashboard", exact: true }),
+      ).toHaveAttribute("aria-current", "page");
+    }
+    if (width === 320 || width === 1440) {
+      await page.screenshot({
+        path: `test-results/ux-review/dashboard-${width}.jpg`,
+        type: "jpeg",
+        quality: 80,
+        fullPage: true,
+        animations: "disabled",
+      });
+    }
+
+
+    await page.setViewportSize({ width, height: width < 600 ? 844 : 900 });
     await page.goto(appPath("/providers"));
     await expect(page).toHaveURL(/\/providers\/?$/);
     await expect(
