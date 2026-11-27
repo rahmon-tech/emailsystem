@@ -1,5 +1,20 @@
 # EmailBlast features
 
+## Dashboard and first-run readiness
+
+The authenticated workspace opens on `/dashboard`. It intentionally presents product-level status instead of queue internals.
+
+The dashboard shows:
+
+- current-month delivered, hard-bounce and complaint results;
+- saved recipient-list and suppression totals;
+- sending-service, verified-domain and usable From-address readiness;
+- active account/domain safety attention;
+- a four-step first-run checklist for service, sender, recipients and first campaign;
+- recent campaigns with compact delivery outcomes.
+
+Technical provider, pacing and reconciliation details remain available in their operational screens rather than being duplicated on the dashboard.
+
 This document describes the product behavior behind the shorter project overview in the root README.
 
 EmailBlast deliberately separates campaign authoring, durable delivery state, provider transport, and downstream delivery events. The same delivery engine is used by standard and Image-first campaigns.
@@ -274,9 +289,12 @@ Complaint and hard-bounce thresholds can trigger protected sending pauses after 
 
 The configured brake scope can be:
 
+- sending domain (recommended/default for new installations);
 - account;
 - campaign;
-- both.
+- both account and campaign.
+
+Domain-scoped protection uses the actual sending domain recorded on delivery attempts, so a hard-bounce or complaint problem on one domain does not automatically block an unrelated healthy domain. Account-wide locks remain available for stricter incidents.
 
 A safety review requires explicit operator acknowledgement. Recording the review does **not** automatically resume the campaign; resume is a separate action.
 
