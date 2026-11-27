@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 export default async function Page({
   searchParams,
 }: {
-  searchParams: Promise<{ importId?: string }>;
+  searchParams: Promise<{ importId?: string; templateId?: string }>;
 }) {
   const params = await searchParams;
   const store = await cookies();
@@ -25,7 +25,10 @@ export default async function Page({
   return (
     <>
       <SavedImports />
-      <Blast initialImportId={params.importId ?? ""} />
+      <Blast
+        initialImportId={params.importId ?? ""}
+        initialTemplateId={params.templateId ?? ""}
+      />
     </>
   );
 }

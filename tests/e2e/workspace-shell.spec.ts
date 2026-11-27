@@ -178,6 +178,33 @@ test("workspace shell stays usable and selected from phone through desktop", asy
       ).toHaveAttribute("aria-current", "page");
     }
 
+    await page.goto(appPath("/templates"));
+    await expect(page).toHaveURL(/\/templates\/?$/);
+    await expect(
+      page.getByRole("heading", { name: "Templates", exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("tab", { name: /Starter templates/ }),
+    ).toBeVisible();
+    await assertNoViewportOverflow(page);
+    if (width < 900) {
+      await mobileTrigger.click();
+      const drawerNav = page
+        .getByRole("navigation", { name: "Main navigation" })
+        .filter({ visible: true });
+      await expect(
+        drawerNav.getByRole("link", { name: "Templates", exact: true }),
+      ).toHaveAttribute("aria-current", "page");
+      await page.keyboard.press("Escape");
+    } else {
+      const desktopNav = page
+        .getByRole("navigation", { name: "Main navigation" })
+        .filter({ visible: true });
+      await expect(
+        desktopNav.getByRole("link", { name: "Templates", exact: true }),
+      ).toHaveAttribute("aria-current", "page");
+    }
+
     await page.goto(appPath("/audience"));
     await expect(page).toHaveURL(/\/audience\/?$/);
     await expect(

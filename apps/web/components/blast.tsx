@@ -87,10 +87,22 @@ type Flight = {
   snapshotHash: string;
 };
 type Attachment = { filename: string; content: string; contentType: string };
+type EmailTemplate = {
+  id: string;
+  name: string;
+  category: string;
+  subject: string;
+  preheader: string;
+  html: string;
+  text: string;
+  editorMode: "rich" | "source";
+};
 export function Blast({
   initialImportId = "",
+  initialTemplateId = "",
 }: {
   initialImportId?: string;
+  initialTemplateId?: string;
 }) {
   const router = useRouter();
   const [trackingConfig, setTrackingConfig] = useState<TrackingConfig | null>(
@@ -136,7 +148,10 @@ export function Blast({
     [testOpen, setTestOpen] = useState(false),
     [testRecipient, setTestRecipient] = useState(""),
     [testProvider, setTestProvider] = useState(""),
-    [testResult, setTestResult] = useState("");
+    [testResult, setTestResult] = useState(""),
+    [templateOpen, setTemplateOpen] = useState(false),
+    [templateName, setTemplateName] = useState(""),
+    [templateCategory, setTemplateCategory] = useState("Custom");
   const generation = useRef(0),
     startKey = useRef(crypto.randomUUID());
   const invalid = () => {
@@ -224,6 +239,38 @@ export function Blast({
       active = false;
     };
   }, [initialImportId]);
+  useEffect(() => {
+    if (!initialTemplateId) return;
+    let active = true;
+    setBusy("template");
+    setError("");
+    void api<EmailTemplate>(
+      "templates/" + encodeURIComponent(initialTemplateId),
+    )
+      .then((template) => {
+        if (!active) return;
+        setForm((current) => ({
+          ...current,
+          subject: template.subject,
+          preheader: template.preheader,
+          text: template.text,
+        }));
+        setMarkup(template.html);
+        setMode(template.editorMode);
+        generation.current++;
+        setFlight(null);
+      })
+      .catch((reason) => {
+        if (active) setError((reason as Error).message);
+      })
+      .finally(() => {
+        if (active) setBusy("");
+      });
+    return () => {
+      active = false;
+    };
+  }, [initialTemplateId]);
+
   const split = (s: string) =>
     s
       .split(/[,;\n]/)
@@ -511,16 +558,35 @@ export function Blast({
             <Stack
               direction="row"
               spacing={1.5}
-              sx={{ alignItems: "center", mb: 3 }}
+              sx={{
+                alignItems: "center",
+                justifyContent: "space-between",
+                mb: 3,
+                flexWrap: "wrap",
+              }}
             >
-              <Typography
-                variant="caption"
-                color="text.secondary"
-                sx={{ fontWeight: 600 }}
+              <Stack direction="row" spacing={1.5} sx={{ alignItems: "center" }}>
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  sx={{ fontWeight: 600 }}
+                >
+                  02
+                </Typography>
+                <Typography variant="h6">Message</Typography>
+              </Stack>
+              <Button
+                size="small"
+                startIcon={<EditNoteOutlined />}
+                disabled={!!busy || !markup.trim()}
+                onClick={() => {
+                  setTemplateName(form.name || form.subject || "");
+                  setTemplateCategory("Custom");
+                  setTemplateOpen(true);
+                }}
               >
-                02
-              </Typography>
-              <Typography variant="h6">Message</Typography>
+                Save as template
+              </Button>
             </Stack>
             <Stack spacing={2}>
               <TextField
@@ -1167,6 +1233,59 @@ export function Blast({
           </Card>
         </Stack>
       </Box>
+      <ResponsiveDialog
+        open={templateOpen}
+        onClose={() => setTemplateOpen(false)}
+        busy={busy === "template-save"}
+        title="Save as template"
+        width={520}
+      >
+        <DialogContent>
+          <Stack spacing={2}>
+            <Typography variant="body2" color="text.secondary">
+              Save this message layout and defaults for future campaigns.
+              Recipients, sending domains, attachments and schedule are not saved.
+            </Typography>
+            <TextField
+              label="Template name"
+              required
+              value={templateName}
+              onChange={(event) => setTemplateName(event.target.value)}
+            />
+            <TextField
+              label="Category"
+              value={templateCategory}
+              onChange={(event) => setTemplateCategory(event.target.value)}
+              helperText="Examples: Newsletter, Event, Welcome, Sales."
+            />
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setTemplateOpen(false)} disabled={!!busy}>
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            disabled={!!busy || !templateName.trim()}
+            onClick={() =>
+              void run("template-save", async () => {
+                await api("templates", {
+                  name: templateName,
+                  category: templateCategory.trim() || "Custom",
+                  subject: form.subject,
+                  preheader: form.preheader,
+                  html: markup,
+                  text: form.text,
+                  editorMode: mode,
+                });
+                setTemplateOpen(false);
+              })
+            }
+          >
+            {busy === "template-save" ? "Saving…" : "Save template"}
+          </Button>
+        </DialogActions>
+      </ResponsiveDialog>
       <ResponsiveDialog
         open={confirm}
         onClose={() => setConfirm(false)}

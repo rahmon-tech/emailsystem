@@ -1,6 +1,6 @@
 "use client";
 import { ResponsiveDialog } from "./shared";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { EditorContent, useEditor, useEditorState } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import LinkExtension from "@tiptap/extension-link";
@@ -90,6 +90,10 @@ export function RichEditor({
       },
     },
   });
+  useEffect(() => {
+    if (editor && editor.getHTML() !== initialHtml)
+      editor.commands.setContent(initialHtml, { emitUpdate: false });
+  }, [editor, initialHtml]);
   const state = useEditorState({
     editor,
     selector: ({ editor }) => ({

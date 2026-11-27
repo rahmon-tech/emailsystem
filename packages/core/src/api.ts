@@ -43,6 +43,13 @@ import {
 import { absoluteAppUrl } from "./server-paths";
 import { dashboard } from "./dashboard";
 import {
+  listTemplates,
+  getTemplate,
+  createTemplate,
+  updateTemplate,
+  deleteTemplate,
+} from "./templates";
+import {
   listContacts,
   saveContact,
   updateContact,
@@ -93,6 +100,27 @@ export async function api(request: Request, parts: string[]) {
           },
         },
       );
+    }
+    if (area === "templates") {
+      if (method === "GET" && !id)
+        return response(await listTemplates(user.id));
+      if (method === "GET" && id)
+        return response(await getTemplate(user.id, id));
+      if (method === "POST" && !id)
+        return response(
+          await createTemplate(user.id, await readJson(request, 550000)),
+          201,
+        );
+      if (method === "PUT" && id)
+        return response(
+          await updateTemplate(
+            user.id,
+            id,
+            await readJson(request, 550000),
+          ),
+        );
+      if (method === "DELETE" && id)
+        return response(await deleteTemplate(user.id, id));
     }
     if (area === "dashboard" && method === "GET" && !id)
       return response(await dashboard(user.id));
