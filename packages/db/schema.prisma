@@ -266,6 +266,7 @@ model ContactImport {
   userId String
   user User @relation(fields:[userId],references:[id],onDelete:Cascade)
   filename String
+  kind String @default("LIST_IMPORT")
   state String @default("PREPARING")
   stats Json
   createdAt DateTime @default(now())
