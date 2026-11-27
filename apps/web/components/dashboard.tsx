@@ -18,7 +18,7 @@ import {
   CheckCircleOutline,
   ErrorOutline,
   HubOutlined,
-  MailOutline,
+  MailOutlined,
   RocketLaunchOutlined,
   ShieldOutlined,
 } from "@mui/icons-material";
@@ -395,7 +395,7 @@ export function Dashboard() {
             <Divider />
             {!data.recentCampaigns.length ? (
               <EmptyState
-                icon={<MailOutline />}
+                icon={<MailOutlined />}
                 title="No campaigns yet"
                 description="Create your first campaign when your sending service and recipients are ready."
                 action={
