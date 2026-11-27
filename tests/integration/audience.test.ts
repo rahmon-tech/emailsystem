@@ -57,6 +57,8 @@ test("audience lists stay editable while campaign snapshots remain immutable", a
   assert.equal(suppressedView.items[0]?.status, "SUPPRESSED");
 
   const firstSnapshot = await snapshotAudienceList(user.id, lists[0].id);
+  assert.equal(firstSnapshot.kind, "CAMPAIGN_SNAPSHOT");
+  assert.equal(original.kind, "LIST_IMPORT");
   assert.equal((firstSnapshot.stats as Record<string, number>).sendable, 2);
   assert.equal(
     await db.importRecipient.count({ where: { importId: firstSnapshot.id } }),
