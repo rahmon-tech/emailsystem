@@ -54,10 +54,6 @@ CREATE INDEX "AudienceMembership_userId_listId_createdAt_idx"
   ON "AudienceMembership"("userId","listId","createdAt");
 
 ALTER TABLE "AudienceMembership"
-  ADD CONSTRAINT "AudienceMembership_userId_fkey"
-  FOREIGN KEY ("userId") REFERENCES "User"("id")
-  ON DELETE CASCADE ON UPDATE CASCADE;
-ALTER TABLE "AudienceMembership"
   ADD CONSTRAINT "AudienceMembership_listId_userId_fkey"
   FOREIGN KEY ("listId","userId") REFERENCES "AudienceList"("id","userId")
   ON DELETE CASCADE ON UPDATE CASCADE;
