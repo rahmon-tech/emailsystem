@@ -182,6 +182,28 @@ export async function importRecipients(
       });
     }
     parsed.stats.sendable = parsed.emails.length - parsed.stats.suppressed;
+    // Contacts are canonical address-book records. ImportRecipient remains the
+    // immutable campaign/list snapshot so historical campaigns are never
+    // rewritten when a contact name or profile changes later.
+    await db.$executeRaw`
+      INSERT INTO "Contact" (
+        "id","userId","email","firstName","lastName","attributes",
+        "source","createdAt","updatedAt"
+      )
+      SELECT
+        gen_random_uuid()::text,
+        "userId",
+        email,
+        '',
+        '',
+        '{}'::jsonb,
+        'import',
+        CURRENT_TIMESTAMP,
+        CURRENT_TIMESTAMP
+      FROM "ImportRecipient"
+      WHERE "importId"=${record.id} AND "userId"=${userId}
+      ON CONFLICT ("userId","email") DO NOTHING
+    `;
     return await db.contactImport.update({
       where: { id: record.id },
       data: { state: "READY", stats: json(parsed.stats) },
