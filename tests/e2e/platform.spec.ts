@@ -54,7 +54,9 @@ test("login, provider setup, HTML import, preview, test, campaign controls, reco
   await page.getByLabel("Email address").fill(E2E_EMAIL);
   await page.getByLabel("Password").fill(E2E_PASSWORD);
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
-  await expect(page).toHaveURL(/providers/);
+  await expect(page).toHaveURL(/dashboard/);
+  await expect(page.getByRole("heading", { name: "Dashboard", exact: true })).toBeVisible();
+  await page.goto(appPath("/providers"));
   const authCookie = (await context.cookies()).find(
     (c) => c.name === "emailsystem_session",
   );
