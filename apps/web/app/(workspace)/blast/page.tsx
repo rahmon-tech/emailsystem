@@ -7,7 +7,12 @@ import { Blast } from "../../../components/blast";
 import { SavedImports } from "../../../components/saved-imports";
 export const metadata = { title: "Create campaign" };
 export const dynamic = "force-dynamic";
-export default async function Page() {
+export default async function Page({
+  searchParams,
+}: {
+  searchParams: Promise<{ importId?: string }>;
+}) {
+  const params = await searchParams;
   const store = await cookies();
   const resolved = await userFromTokens(
     store.getAll(sessionCookie).map((cookie) => cookie.value),
@@ -20,7 +25,7 @@ export default async function Page() {
   return (
     <>
       <SavedImports />
-      <Blast />
+      <Blast initialImportId={params.importId ?? ""} />
     </>
   );
 }
