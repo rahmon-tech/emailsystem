@@ -61,7 +61,6 @@ model User {
   imports ContactImport[]
   contacts Contact[]
   audienceLists AudienceList[]
-  audienceMemberships AudienceMembership[]
   campaigns Campaign[]
   suppressions Suppression[]
   audit AuditEvent[]
@@ -252,7 +251,6 @@ model AudienceList {
 
 model AudienceMembership {
   userId String
-  user User @relation(fields:[userId],references:[id],onDelete:Cascade)
   listId String
   list AudienceList @relation(fields:[listId,userId],references:[id,userId],onDelete:Cascade)
   contactId String
