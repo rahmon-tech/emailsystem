@@ -14,7 +14,12 @@ export async function DELETE(
     const user = await requireUser(request);
     const id = z.uuid().parse((await params).id);
     const existing = await db.contactImport.findFirst({
-      where: { id, userId: user.id, state: "READY" },
+      where: {
+        id,
+        userId: user.id,
+        state: "READY",
+        kind: "LIST_IMPORT",
+      },
       select: { id: true },
     });
     if (!existing)
@@ -23,6 +28,12 @@ export async function DELETE(
       await tx.contactImport.update({
         where: { id },
         data: { state: "ARCHIVED" },
+      });
+      // Imported reusable lists share their ID with the editable Audience list.
+      // Removing the saved list drops membership only; canonical contacts and
+      // historical campaign snapshots remain intact.
+      await tx.audienceList.deleteMany({
+        where: { id, userId: user.id },
       });
       await tx.auditEvent.create({
         data: {
