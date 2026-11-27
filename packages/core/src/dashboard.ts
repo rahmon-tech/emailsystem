@@ -31,7 +31,7 @@ export async function dashboard(userId: string, now = new Date()) {
       orderBy: { createdAt: "desc" },
     }),
     listSenders(userId),
-    db.contactImport.count({ where: { userId, state: "READY" } }),
+    db.audienceList.count({ where: { userId } }),
     db.campaign.count({ where: { userId } }),
     db.campaign.findMany({
       where: { userId },

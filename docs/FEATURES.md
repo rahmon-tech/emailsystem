@@ -19,6 +19,18 @@ This document describes the product behavior behind the shorter project overview
 
 EmailBlast deliberately separates campaign authoring, durable delivery state, provider transport, and downstream delivery events. The same delivery engine is used by standard and Image-first campaigns.
 
+## Audience
+
+The `/audience` workspace separates long-lived audience management from campaign delivery snapshots.
+
+It provides three simple surfaces:
+
+- **Contacts** — canonical email records with optional first/last name and suppression state;
+- **Lists** — editable reusable groups populated by imports or manual contacts;
+- **Suppressed** — account-level do-not-send addresses from bounces, complaints, unsubscribes, or manual blocks.
+
+CSV, TXT, XLSX and pasted imports still create an immutable `ContactImport` snapshot for the existing campaign pipeline, while also updating the canonical contact/list layer. When an editable Audience list is chosen for a campaign, EmailBlast creates a new filtered snapshot that excludes archived or suppressed contacts. Later list edits cannot alter that snapshot or a campaign already using it.
+
 ## Standard campaigns
 
 The standard composer at `/blast` supports both visual authoring and developer-supplied HTML.

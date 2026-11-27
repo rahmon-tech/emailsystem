@@ -59,6 +59,8 @@ model User {
   senderIdentities SenderIdentity[]
   providerDomainAuthorizations ProviderDomainAuthorization[]
   imports ContactImport[]
+  contacts Contact[]
+  audienceLists AudienceList[]
   campaigns Campaign[]
   suppressions Suppression[]
   audit AuditEvent[]
@@ -215,11 +217,56 @@ model ProviderTestDelivery {
   createdAt DateTime @default(now())
   @@index([providerId,createdAt])
 }
+model Contact {
+  id String @id @default(uuid())
+  userId String
+  user User @relation(fields:[userId],references:[id],onDelete:Cascade)
+  email String
+  firstName String @default("")
+  lastName String @default("")
+  attributes Json @default("{}")
+  source String @default("import")
+  archivedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  memberships AudienceMembership[]
+  @@unique([id,userId])
+  @@unique([userId,email])
+  @@index([userId,archivedAt,email])
+  @@index([userId,createdAt,id])
+}
+
+model AudienceList {
+  id String @id @default(uuid())
+  userId String
+  user User @relation(fields:[userId],references:[id],onDelete:Cascade)
+  name String
+  description String @default("")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  memberships AudienceMembership[]
+  @@unique([id,userId])
+  @@index([userId,createdAt,id])
+}
+
+model AudienceMembership {
+  userId String
+  listId String
+  list AudienceList @relation(fields:[listId,userId],references:[id,userId],onDelete:Cascade)
+  contactId String
+  contact Contact @relation(fields:[contactId,userId],references:[id,userId],onDelete:Cascade)
+  createdAt DateTime @default(now())
+  @@id([listId,contactId])
+  @@index([userId,contactId])
+  @@index([userId,listId,createdAt])
+}
+
 model ContactImport {
   id String @id @default(uuid())
   userId String
   user User @relation(fields:[userId],references:[id],onDelete:Cascade)
   filename String
+  kind String @default("LIST_IMPORT")
   state String @default("PREPARING")
   stats Json
   createdAt DateTime @default(now())
