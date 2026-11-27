@@ -296,6 +296,7 @@ export async function snapshotAudienceList(userId: string, id: string) {
         data: {
           userId,
           filename: list.name.slice(0, 150),
+          kind: "CAMPAIGN_SNAPSHOT",
           state: "PREPARING",
           stats: json(stats),
         },
