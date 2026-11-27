@@ -19,6 +19,7 @@ It combines campaign composition, recipient imports, provider-aware routing, bac
 - **Operational dashboard** — first-run readiness, sending health, monthly delivery outcomes, safety attention, and recent campaign status without exposing internal queue complexity.
 - **Standard + Image-first campaigns** — rich text, imported HTML/source mode, attachments, scheduling, or a primary CID-embedded image with optional click-through.
 - **Reusable recipient imports** — CSV, TXT, XLSX, or pasted addresses with normalization, deduplication, suppression checks, and import statistics.
+- **Audience workspace** — canonical contacts, editable reusable lists, manual contacts, suppressions, and immutable campaign snapshots so later list edits cannot change a prepared campaign.
 - **Verified sender pools** — multiple domains and From addresses with provider/domain authorization and optional multi-connection routing.
 - **Durable background sending** — PostgreSQL owns campaign/delivery state; Redis and BullMQ coordinate asynchronous work, pacing, and concurrency.
 - **Conservative retry semantics** — definitive failures can be retried; uncertain post-transport outcomes are held for reconciliation.
