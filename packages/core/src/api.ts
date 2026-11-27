@@ -41,6 +41,7 @@ import {
   setSenderEnabled,
 } from "./senders";
 import { absoluteAppUrl } from "./server-paths";
+import { dashboard } from "./dashboard";
 const uuid = (s: string) => z.uuid().parse(s);
 export async function api(request: Request, parts: string[]) {
   try {
@@ -82,6 +83,8 @@ export async function api(request: Request, parts: string[]) {
         },
       );
     }
+    if (area === "dashboard" && method === "GET" && !id)
+      return response(await dashboard(user.id));
     if (area === "me" && method === "GET")
       return response({
         ...user,
