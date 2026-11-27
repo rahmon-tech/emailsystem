@@ -16,6 +16,7 @@ It combines campaign composition, recipient imports, provider-aware routing, bac
 ## Highlights
 
 - **Multi-provider delivery** — Resend, Amazon SES, Mailgun, SendGrid, Brevo, Postmark, Mailjet, SMTP2GO, Elastic Email, and Custom SMTP.
+- **Operational dashboard** — first-run readiness, sending health, monthly delivery outcomes, safety attention, and recent campaign status without exposing internal queue complexity.
 - **Standard + Image-first campaigns** — rich text, imported HTML/source mode, attachments, scheduling, or a primary CID-embedded image with optional click-through.
 - **Reusable recipient imports** — CSV, TXT, XLSX, or pasted addresses with normalization, deduplication, suppression checks, and import statistics.
 - **Verified sender pools** — multiple domains and From addresses with provider/domain authorization and optional multi-connection routing.
