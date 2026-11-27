@@ -42,6 +42,7 @@ import {
 } from "./senders";
 import { absoluteAppUrl } from "./server-paths";
 import { dashboard } from "./dashboard";
+import { listContacts, saveContact, updateContact } from "./audience";
 const uuid = (s: string) => z.uuid().parse(s);
 export async function api(request: Request, parts: string[]) {
   try {
@@ -257,6 +258,25 @@ export async function api(request: Request, parts: string[]) {
             take: 20,
             orderBy: { createdAt: "desc" },
           }),
+        );
+    }
+    if (area === "contacts") {
+      if (method === "GET" && !id)
+        return response(
+          await listContacts(user.id, {
+            search: url.searchParams.get("search") ?? undefined,
+            cursor: url.searchParams.get("cursor") ?? undefined,
+          }),
+        );
+      if (method === "POST" && !id)
+        return response(
+          await saveContact(user.id, await readJson(request, 4096)),
+          201,
+        );
+      if (id) uuid(id);
+      if (method === "PUT" && id)
+        return response(
+          await updateContact(user.id, id, await readJson(request, 4096)),
         );
     }
     if (area === "imports") {
