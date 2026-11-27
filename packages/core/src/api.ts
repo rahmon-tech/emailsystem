@@ -331,7 +331,11 @@ export async function api(request: Request, parts: string[]) {
       if (method === "GET")
         return response(
           await db.contactImport.findMany({
-            where: { userId: user.id, state: "READY" },
+            where: {
+              userId: user.id,
+              state: "READY",
+              kind: "LIST_IMPORT",
+            },
             orderBy: { createdAt: "desc" },
             take: 30,
           }),
