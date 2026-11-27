@@ -18,6 +18,7 @@ import {
   HubOutlined,
   DashboardOutlined,
   PeopleOutlined,
+  EditNoteOutlined,
   SendOutlined,
   TerminalOutlined,
   MenuRounded,
@@ -35,6 +36,7 @@ const sections = [
   { label: "Dashboard", path: "/dashboard", icon: DashboardOutlined },
   { label: "Create campaign", path: "/blast", icon: SendOutlined },
   { label: "Audience", path: "/audience", icon: PeopleOutlined },
+  { label: "Templates", path: "/templates", icon: EditNoteOutlined },
   { label: "Sending services", path: "/providers", icon: HubOutlined },
   { label: "Activity", path: "/activity", icon: TerminalOutlined },
 ];
