@@ -15,11 +15,11 @@ import {
 } from "@mui/material";
 import {
   ArrowForward,
-  CheckCircleOutline,
-  ErrorOutline,
+  CheckCircleOutlined,
+  RadioButtonUnchecked,
   HubOutlined,
   MailOutlined,
-  RocketLaunchOutlined,
+  SendOutlined,
   ShieldOutlined,
 } from "@mui/icons-material";
 import { api } from "./api-client";
@@ -112,7 +112,7 @@ export function Dashboard() {
             component={Link}
             href="/blast"
             variant="contained"
-            startIcon={<RocketLaunchOutlined />}
+            startIcon={<SendOutlined />}
           >
             Create campaign
           </Button>
@@ -266,12 +266,12 @@ export function Dashboard() {
                       }}
                     >
                       {step.complete ? (
-                        <CheckCircleOutline
+                        <CheckCircleOutlined
                           color="success"
                           sx={{ mt: 0.15 }}
                         />
                       ) : (
-                        <ErrorOutline color="action" sx={{ mt: 0.15 }} />
+                        <RadioButtonUnchecked color="action" sx={{ mt: 0.15 }} />
                       )}
                       <Box>
                         <Typography sx={{ fontWeight: 650 }}>
