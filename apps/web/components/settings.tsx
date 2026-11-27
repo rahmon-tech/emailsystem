@@ -92,7 +92,7 @@ export function Settings() {
                 <Typography variant="h6">Workspace</Typography>
                 <Typography variant="body2" color="text.secondary">
                   Name this installation and choose the timezone used for
-                  operational context.
+                  Activity timestamps.
                 </Typography>
               </Stack>
             </Stack>
