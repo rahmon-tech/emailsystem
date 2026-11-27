@@ -221,6 +221,14 @@ Choose the deployment model that matches the host:
 
 Production guidance covers environment generation, migrations, first-user creation, reverse proxying, health checks, backups, upgrades, and rollback boundaries.
 
+For a brand-new Docker installation, the guided path is:
+
+```sh
+pnpm install:docker -- mail.example.com
+```
+
+It creates protected secrets, applies only versioned migrations, prompts for the first administrator, and verifies web/worker readiness. Interrupted fresh installs can be resumed safely without rotating keys.
+
 Deploy exact CI-verified SHAs rather than an unpinned moving branch.
 
 ## Repository layout

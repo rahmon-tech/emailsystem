@@ -40,6 +40,44 @@ If the application is mounted below a path such as `/emailblast`, `APP_URL` must
 
 ## Docker Compose installation
 
+### Guided fresh install
+
+For a new dedicated installation, point the intended hostname at the server, open ports 80/443, then run:
+
+```sh
+corepack enable
+corepack prepare pnpm@11.19.0 --activate
+pnpm install --frozen-lockfile
+
+pnpm install:docker -- mail.example.com
+```
+
+For a path-prefixed installation:
+
+```sh
+pnpm install:docker -- mail.example.com /emailblast
+```
+
+The guided installer creates a protected `.env` with independent random secrets, validates Docker Compose, builds the exact checkout, starts PostgreSQL/Redis, applies versioned migrations, prompts for the first administrator password through stdin, starts web/worker/proxy, and requires local readiness checks to pass.
+
+It never creates a default password and never uses `prisma db push`.
+
+If a fresh installation was interrupted after `.env` was created, resume the same domain/path:
+
+```sh
+pnpm install:docker -- mail.example.com --resume
+```
+
+If the administrator was already created before the interruption:
+
+```sh
+pnpm install:docker -- mail.example.com --resume --skip-admin
+```
+
+Resume refuses a different domain or base path. For an existing production installation, do **not** use the installer; follow the upgrade procedure below.
+
+### Manual installation
+
 From a clean checkout:
 
 ```sh
