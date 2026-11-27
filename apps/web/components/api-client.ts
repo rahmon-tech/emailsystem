@@ -39,6 +39,14 @@ export async function api<T>(
   }
   return data as T;
 }
-export const date = (v: string | null | undefined) =>
-  v ? new Date(v).toLocaleString() : "—";
+export const date = (
+  v: string | null | undefined,
+  timezone?: string,
+) =>
+  v
+    ? new Date(v).toLocaleString(
+        undefined,
+        timezone ? { timeZone: timezone } : undefined,
+      )
+    : "—";
 import { appPath } from "@emailsystem/core/paths";
