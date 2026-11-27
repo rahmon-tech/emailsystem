@@ -1,0 +1,1 @@
+ALTER TABLE "User" ADD COLUMN "workspaceSettings" JSONB NOT NULL DEFAULT '{}';
