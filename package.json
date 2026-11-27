@@ -29,7 +29,8 @@
     "secrets:scan": "node --import tsx scripts/secret-scan.ts",
     "audit:prod": "pnpm audit --prod --audit-level high",
     "check": "pnpm lint && pnpm typecheck && pnpm test",
-    "secrets:scan:history": "node --import tsx scripts/secret-scan.ts --history"
+    "secrets:scan:history": "node --import tsx scripts/secret-scan.ts --history",
+    "install:docker": "node --import tsx scripts/install-docker.ts"
   },
   "dependencies": {
     "@aws-sdk/client-sesv2": "3.1127.0",
