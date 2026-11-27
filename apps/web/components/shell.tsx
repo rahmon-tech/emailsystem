@@ -16,6 +16,7 @@ import {
 } from "@mui/material";
 import {
   HubOutlined,
+  DashboardOutlined,
   SendOutlined,
   TerminalOutlined,
   MenuRounded,
@@ -30,6 +31,7 @@ import { api } from "./api-client";
 const SIDEBAR_WIDTH = 232;
 
 const sections = [
+  { label: "Dashboard", path: "/dashboard", icon: DashboardOutlined },
   { label: "Create campaign", path: "/blast", icon: SendOutlined },
   { label: "Sending services", path: "/providers", icon: HubOutlined },
   { label: "Activity", path: "/activity", icon: TerminalOutlined },

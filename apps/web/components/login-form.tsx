@@ -41,7 +41,7 @@ export function LoginForm() {
             setError("");
             try {
               await api("auth/login", { email, password });
-              router.replace("/blast");
+              router.replace("/dashboard");
               router.refresh();
             } catch (e) {
               setError((e as Error).message);
