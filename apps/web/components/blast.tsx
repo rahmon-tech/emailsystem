@@ -87,7 +87,11 @@ type Flight = {
   snapshotHash: string;
 };
 type Attachment = { filename: string; content: string; contentType: string };
-export function Blast() {
+export function Blast({
+  initialImportId = "",
+}: {
+  initialImportId?: string;
+}) {
   const router = useRouter();
   const [trackingConfig, setTrackingConfig] = useState<TrackingConfig | null>(
     null,
@@ -169,6 +173,11 @@ export function Blast() {
         if (active) {
           setProviders(p);
           setImports(i);
+          if (
+            initialImportId &&
+            i.some((item) => item.id === initialImportId)
+          )
+            setImportId(initialImportId);
           setSenderCatalog(senderData);
           const firstDomain = senderData.domains.find(
             (domain) =>
@@ -214,7 +223,7 @@ export function Blast() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [initialImportId]);
   const split = (s: string) =>
     s
       .split(/[,;\n]/)
