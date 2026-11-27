@@ -31,6 +31,24 @@ It provides three simple surfaces:
 
 CSV, TXT, XLSX and pasted imports still create an immutable `ContactImport` snapshot for the existing campaign pipeline, while also updating the canonical contact/list layer. When an editable Audience list is chosen for a campaign, EmailBlast creates a new filtered snapshot that excludes archived or suppressed contacts. Later list edits cannot alter that snapshot or a campaign already using it.
 
+## Templates
+
+The `/templates` workspace provides six built-in starter messages and user-saved templates.
+
+A template stores only reusable message defaults:
+
+- name and category;
+- subject and preview text;
+- HTML/message body;
+- optional plain-text fallback;
+- authoring mode (rich text or source HTML).
+
+Templates never store recipients, sending domains, provider selections, attachments, tags, schedule, or campaign safety state.
+
+Using a template opens the existing campaign composer and preloads its message fields. The campaign still passes through the same HTML normalization, preflight, sender/provider authorization, safety governor and background delivery engine as a message written from scratch.
+
+Source-mode templates reopen in source mode so complex imported layouts are not silently rewritten by the rich editor. Rich-mode templates remain visually editable.
+
 ## Standard campaigns
 
 The standard composer at `/blast` supports both visual authoring and developer-supplied HTML.
