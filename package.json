@@ -33,7 +33,7 @@
     "install:docker": "node --import tsx scripts/install-docker.ts"
   },
   "dependencies": {
-    "@aws-sdk/client-sesv2": "3.1127.0",
+    "@aws-sdk/client-sesv2": "3.1176.0",
     "@codemirror/lang-html": "6.4.12",
     "@emotion/cache": "11.14.0",
     "@emotion/react": "11.14.0",
