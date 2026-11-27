@@ -75,7 +75,9 @@ test("workspace shell stays usable and selected from phone through desktop", asy
   await page.getByLabel("Email address").fill(E2E_EMAIL);
   await page.getByLabel("Password").fill(E2E_PASSWORD);
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
-  await expect(page).toHaveURL(/providers/);
+  await expect(page).toHaveURL(/dashboard/);
+  await expect(page.getByRole("heading", { name: "Dashboard", exact: true })).toBeVisible();
+  await expect(page.getByText("Get ready to send", { exact: true })).toBeVisible();
   const authCookie = (await page.context().cookies()).find(
     (cookie) => cookie.name === "emailsystem_session",
   );
