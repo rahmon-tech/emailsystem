@@ -132,6 +132,64 @@ export function assertSameOrigin(request: Request) {
   if (request.headers.get("origin") !== new URL(config().APP_URL).origin)
     throw new AppError(403, "ORIGIN", "Request origin is not allowed.");
 }
+export async function changePassword(
+  userId: string,
+  currentPassword: string,
+  newPassword: string,
+) {
+  if (
+    !(await consumeLimit(
+      `password-change:user:${digest(userId)}`,
+      8,
+      900,
+    ))
+  )
+    throw new AppError(
+      429,
+      "THROTTLED",
+      "Too many password attempts. Try again in 15 minutes.",
+    );
+  if (currentPassword.length > 256)
+    throw new AppError(401, "INVALID_PASSWORD", "Current password is incorrect.");
+  const user = await db.user.findUnique({
+    where: { id: userId },
+    select: { passwordHash: true },
+  });
+  if (!user || !(await checkPassword(currentPassword, user.passwordHash)))
+    throw new AppError(401, "INVALID_PASSWORD", "Current password is incorrect.");
+  if (currentPassword === newPassword)
+    throw new AppError(
+      400,
+      "PASSWORD_UNCHANGED",
+      "Choose a new password that is different from the current password.",
+    );
+  let passwordHash: string;
+  try {
+    passwordHash = await hashPassword(newPassword);
+  } catch (error) {
+    throw new AppError(
+      400,
+      "PASSWORD",
+      error instanceof Error ? error.message : "New password is invalid.",
+    );
+  }
+  await db.$transaction(async (tx) => {
+    await tx.user.update({
+      where: { id: userId },
+      data: { passwordHash },
+    });
+    await tx.session.deleteMany({ where: { userId } });
+    await tx.auditEvent.create({
+      data: {
+        userId,
+        action: "account.password_changed",
+        resourceId: userId,
+      },
+    });
+  });
+  return { changed: true };
+}
+
 export async function createUser(email: string, password: string) {
   return db.user.create({
     data: {
